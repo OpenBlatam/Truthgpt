@@ -1,0 +1,1 @@
+⚠️ API no disponible (Illegal header value b'Bearer '). Verifica saldo, API key o conexión de red.

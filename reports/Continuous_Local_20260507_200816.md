@@ -1,0 +1,1 @@
+TruthGPT ya ha sido refactorizado en un módulo unificado en `/workspace/truthgpt_unified.py` con las 50 técnicas. Si desea una refactorización adicional (por ejemplo, empaquetar como librería instalable, añadir nuevas técnicas, mejorar la interfaz, optimizar rendimiento), por favor especifique qué aspecto desea refactorizar.

@@ -1,0 +1,1 @@
+⚠️ OpenRouter no disponible (Client error '429 Too Many Requests' for url 'http...).

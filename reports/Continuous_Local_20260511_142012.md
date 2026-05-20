@@ -1,0 +1,1 @@
+{"thought":"I need to identify and remove wrapper patterns from the TruthGPT codebase.","tool":"python_execute","tool_input":"import os\nfor root, dirs, files in os.walk('/workspace'):\n    for f in files:\n        if f.endswith('.py'):\n            print(os.path.join(root, f))"}}

@@ -1,0 +1,1 @@
+Límite de razonamiento alcanzado tras una misión extensa. Último razonamiento: The README.md is already in English. No translation is needed. I will provide the final answer with the documentation content.

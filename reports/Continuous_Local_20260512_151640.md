@@ -1,0 +1,1 @@
+Límite de razonamiento alcanzado tras una misión extensa. Último razonamiento: Autorecuperación de texto plano

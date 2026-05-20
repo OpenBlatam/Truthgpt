@@ -1,0 +1,1 @@
+He creado un archivo 'truthgpt_improvement_guide.md' con técnicas SOTA (2025) para mejorar TruthGPT, incluyendo detección probabilística, SPACE, REFIND, Team LLMs y optimización de preferencias. Puedes revisar el archivo local para detalles completos.

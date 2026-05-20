@@ -1,0 +1,1 @@
+{'description': 'Universal model for an LLM reasoning step or action.', 'properties': {'thought': 'I need to list all TruthGPT Python files to identify potential wrapper patterns for removal.', 'tool': 'system_bash', 'tool_input': 'ls /workspace/truthgpt*.py', 'final_answer': None, 'handoff': None}, 'title': 'AgentAction', 'type': 'object'}

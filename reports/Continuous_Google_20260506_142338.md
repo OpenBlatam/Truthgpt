@@ -1,0 +1,1 @@
+The RuntimeWarning indicates the `duckduckgo_search` package has been renamed to `ddgs`. To fix: 1. Run `pip install ddgs` 2. Update `tools.py` line 140 from `from duckduckgo_search import DDGS` to `from ddgs import DDGS` 3. Optionally uninstall `duckduckgo_search`. The rest of the log shows normal HTTP 200 responses and successful model inference calls.

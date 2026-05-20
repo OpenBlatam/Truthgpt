@@ -1,0 +1,1 @@
+Traces creados exitosamente en /workspace/truthgpt_traces.jsonl. Contienen 6 entradas simuladas con técnicas como DoLA, REFIND RAG, Probabilistic Distance Detection, Consistency Teaming, y Chain-of-Verification. Revisa el archivo y dime si necesitas ajustes.

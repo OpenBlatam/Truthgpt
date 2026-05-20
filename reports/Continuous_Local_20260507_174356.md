@@ -1,0 +1,1 @@
+TruthGPT ya incorpora 12 técnicas SOTA para mejora factual (listadas en respuestas anteriores). No se encontraron nuevas técnicas adicionales en la revisión más reciente debido a un límite de tasa en arXiv. Por favor, inténtalo de nuevo más tarde o especifica un dominio concreto para explorar.

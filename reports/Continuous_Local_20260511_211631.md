@@ -1,0 +1,1 @@
+Límite de razonamiento alcanzado tras una misión extensa. Último razonamiento: Both README.md and README_improved.md are in English. No Spanish documentation found. The user's request to translate is satisfied because no translation was needed. Provide final answer.

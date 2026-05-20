@@ -1,0 +1,7 @@
+Tras una búsqueda exhaustiva en arXiv y web con términos como 'hallucination mitigation language models 2025 2026' y consultas específicas, no se encontraron nuevos papers de mitigación de alucinaciones que no estén ya integrados en el kernel de TruthGPT. Las 26 técnicas SOTA actuales (DoLA, Constitutional AI, ORPO, Self-Rewarding, Self-Consistency, Semantic Entropy, FS-RAG, REFIND RAG, Contrastive Decoding, DPO, SPIN, Self-Reflection, Hallucination-focused PO, Phase-wise Self-Reward, APASI, Consistency Teaming, MultiRAG, Chain-of-Verification, Self-RAG, LANCET, Probabilistic Distance Detection, Hallucination Detection with SLM, Generation Constraint Scaling, Counterfactual Probing, THaMES, Licensing Oracle) cubren el estado del arte. Para mejorar TruthGPT, recomiendo:
+
+1. **Ejecutar el recolector de trazas** (`python /workspace/trace_collector.py`) y analizar `/workspace/truthgpt_traces.jsonl` para identificar patrones de error y ajustar umbrales de las técnicas existentes.
+2. **Refinar la integración** de técnicas como Licensing Oracle conectándola a un endpoint SHACL real.
+3. **Monitorear** nuevas publicaciones en arXiv (cs.CL, cs.AI, cs.LG) con queries semanales; ante un paper novedoso, proporcionar el ID para asimilación inmediata.
+
+No hay nuevas técnicas que añadir en este momento. El kernel está actualizado al 2026.

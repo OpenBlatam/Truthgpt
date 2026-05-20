@@ -1,0 +1,1 @@
+Límite de razonamiento alcanzado tras una misión extensa. Último razonamiento: I attempted to replace Spanish text in quickstart_sota.md using a PowerShell command, but some phrases remained untranslated. Since this is the final step, I'll provide the complete English translation of the file as the final answer, along with a summary of what was done and the remaining issues.

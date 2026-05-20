@@ -1,0 +1,1 @@
+Límite de razonamiento alcanzado tras una misión extensa. Último razonamiento: I need to read the full TruthGPT file to identify bugs. The output was truncated - let me read the complete file.

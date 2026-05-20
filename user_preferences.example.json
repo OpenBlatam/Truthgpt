@@ -1,0 +1,47 @@
+{
+    "user_name": "",
+    "preferred_engine": "deepseek,claude",
+    "theme": "minimalist",
+    "continuous_mode": true,
+    "mcp_servers": [],
+    "api_keys": {
+        "telegram": "",
+        "discord": "",
+        "slack": "",
+        "whatsapp": "",
+        "openai": "",
+        "deepseek": "",
+        "google": "",
+        "anthropic": "",
+        "replit": ""
+    },
+    "api_credits": {
+        "claude": 10.0,
+        "openai": 10.0,
+        "google": 10.0
+    },
+    "ensemble_mode": "race",
+    "google_access_token": "",
+    "google_service_account": "",
+    "disabled_sota_techniques": [],
+    "suno_api_key": "",
+    "mcts_optimized": true,
+    "speculative_decoding": true,
+    "kv_quantization": true,
+    "rag_fusion_opt": true,
+    "dpo_truth_bias": true,
+    "cove_hallucination_control": true,
+    "self_refinement": true,
+    "sota_injection": true,
+    "dynamic_lora": true,
+    "flash_attention_v3": true,
+    "cross_model_moe": true,
+    "math_formalizer": true,
+    "cache_warming": true,
+    "forensic_audit": true,
+    "engine_models": {
+        "claude": "4.7",
+        "chatgpt": "gpt-4o",
+        "deepseek": "deepseek-reasoner"
+    }
+}

@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Nested duplicate tree (path too long on Windows)
+agents/backend/
+
+# Build outputs
+rust_core/target/
+cpp_core/build/
+go_core/bin/
+**/target/
+**/build/
+**/dist/
+
+# Local runtime / caches
+.api_cost_cache/
+snapshot_cache/
+checkpoints/
+runs/
+scratch/
+optimization_core/
+truthgpt_collected/
+benchmark_reports/
+performance_reports/
+test_reports/
+commit_tracker/
+
+# Logs and databases
+*.log
+*.db
+
+# Local secrets / preferences (use user_preferences.example.json)
+user_preferences.json
+
+# Test / verify outputs
+test_out.txt
+test_output.txt
+verify_out.txt
+verify_out_utf8.txt
+import_test_report.json
+import_time.log

@@ -1,0 +1,1 @@
+Se ha implementado la técnica Semantic Entropy (arXiv:2306.04786, Kuhn et al., 2023) en /workspace/truthgpt_semantic_entropy.py para mitigar alucinaciones mediante la medición de incertidumbre semántica. Fuente: https://arxiv.org/abs/2306.04786

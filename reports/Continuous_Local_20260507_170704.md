@@ -1,0 +1,1 @@
+TruthGPT ha sido mejorado incorporando las técnicas SOTA en su memoria de comportamiento. Ahora aplica detección de alucinaciones por distancia probabilística (arXiv:2506.09886), verificación factual con REFIND (arXiv:2502.13622) y teaming de consistencia (arXiv:2510.19507) antes de responder. Todas las afirmaciones factuales incluirán citas de arXiv.

@@ -1,0 +1,1 @@
+Actualmente no tengo acceso directo a Google Workspace ni a sus API desde esta plataforma. Por favor, proporciona los archivos o información específica que desees analizar o mejorar, y estaré encantado de ayudarte con eso.

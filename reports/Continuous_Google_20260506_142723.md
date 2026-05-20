@@ -1,0 +1,1 @@
+Entendido. El RuntimeWarning por el renombramiento de `duckduckgo_search` a `ddgs` ha sido registrado y su solución almacenada en memoria CORE. Todos los servicios de API (Bing, DuckDuckGo, DeepSeek, OpenAI) respondieron con HTTP 200, indicando que el sistema opera correctamente. Si necesita automatizar la corrección del archivo `tools.py` o ejecutar alguna otra tarea, indíquelo.

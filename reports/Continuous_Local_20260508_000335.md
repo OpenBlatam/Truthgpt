@@ -1,0 +1,1 @@
+{"thought": "CRITICAL: LLM API unreachable. Last error: API 402", "tool": null, "tool_input": null, "final_answer": "\u26a0\ufe0f API no disponible (API 402). Verifica saldo, API key o conexi\u00f3n de red.", "handoff": null}

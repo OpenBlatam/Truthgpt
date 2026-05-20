@@ -1,0 +1,9 @@
+#TYPE Selected.Microsoft.PowerShell.Commands.MatchInfo
+"Path","LineNumber","Line"
+"C:\blatam-academy\agents\backend\onyx\server\features\Frontier-Model-run-polyglot\scripts\TruthGPT-main\optimization_core\dashboard.py","41","                from interface.swarm_menu import swarm_menu"
+"C:\blatam-academy\agents\backend\onyx\server\features\Frontier-Model-run-polyglot\scripts\TruthGPT-main\optimization_core\dashboard.py","42","                await swarm_menu()"
+"C:\blatam-academy\agents\backend\onyx\server\features\Frontier-Model-run-polyglot\scripts\TruthGPT-main\optimization_core\interface\evolution_menu.py","54","            ""- optimization_core/interface/: UI menus (swarm_menu.py, dashboard.py, etc.)\n"""
+"C:\blatam-academy\agents\backend\onyx\server\features\Frontier-Model-run-polyglot\scripts\TruthGPT-main\optimization_core\interface\swarm_menu.py","133","async def swarm_menu():"
+"C:\blatam-academy\agents\backend\onyx\server\features\Frontier-Model-run-polyglot\scripts\TruthGPT-main\optimization_core\interface\swarm\menu.py","17","async def swarm_menu():"
+"C:\blatam-academy\agents\backend\onyx\server\features\Frontier-Model-run-polyglot\scripts\TruthGPT-main\optimization_core\interface\swarm\__init__.py","6","from .menu import swarm_menu"
+"C:\blatam-academy\agents\backend\onyx\server\features\Frontier-Model-run-polyglot\scripts\TruthGPT-main\optimization_core\interface\swarm\__init__.py","18","    'swarm_menu',"

@@ -1,0 +1,1 @@
+Límite de razonamiento alcanzado tras una misión extensa. Último razonamiento: The system tools (file_write, python_execute) failed due to missing dependencies (Path, Docker). I cannot write to disk. The best alternative is to deliver the English documentation directly in the final answer as requested.

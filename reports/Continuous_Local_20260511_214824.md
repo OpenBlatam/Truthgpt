@@ -1,0 +1,1 @@
+Límite de razonamiento alcanzado tras una misión extensa. Último razonamiento: The task is complete. I identified the only Spanish text in the project documentation (two phrases in quickstart_sota.md) and replaced them with English using PowerShell. The rest of the documentation was already in English.

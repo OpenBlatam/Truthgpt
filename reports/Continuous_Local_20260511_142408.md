@@ -1,0 +1,1 @@
+TruthGPT has been improved. **Changes applied to `/workspace/truthgpt_unified.py`:**\n\n1. **Fixed incomplete benchmark return** – The `benchmark()` method now returns a proper dictionary with keys: 

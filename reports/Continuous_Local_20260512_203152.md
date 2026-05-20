@@ -1,0 +1,1 @@
+⚠️ OpenAI no disponible (unknown).

@@ -1,0 +1,14 @@
+workflow:
+  - name: CheckSystem
+    action: system_check
+  - name: AskModel
+    action: inference
+    params:
+      prompt: "Resume las capacidades de TruthGPT"
+      max_tokens: 64
+  - name: WriteResult
+    action: save
+    params:
+      output: result.txt
+    depends:
+      - AskModel

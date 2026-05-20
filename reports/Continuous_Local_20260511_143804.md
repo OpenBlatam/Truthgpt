@@ -1,0 +1,1 @@
+⚠️ Se detectó un fallo crítico en el motor de IA (posible falta de API keys o error de red).

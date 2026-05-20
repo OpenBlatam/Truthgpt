@@ -1,0 +1,5 @@
+**TruthGPT mejorado con Adaptive Bayesian Semantic Entropy (arXiv:2603.22812, AAAI 2026 Oral)**
+
+Se ha implementado el módulo `/workspace/truthgpt_adaptive_bayesian_semantic_entropy.py`. Esta técnica SOTA de detección de alucinaciones utiliza un marco jerárquico bayesiano que ajusta dinámicamente el número de muestras según la incertidumbre observada, reduciendo hasta un 50% de muestras respecto a métodos de presupuesto fijo y mejorando el AUROC en un 12.6% promedio. La clase `AdaptiveBayesianSemanticEntropy` puede integrarse directamente en el pipeline de TruthGPT para reemplazar o complementar el módulo de Entropía Semántica existente.
+
+**Próximo paso:** Se recomienda calibrar los hiperparámetros (`variance_threshold`, `max_samples`) con trazas reales y ejecutar `python /workspace/analyze_traces.py` para recalibrar umbrales del kernel.

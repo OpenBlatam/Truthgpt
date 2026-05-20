@@ -1,0 +1,1 @@
+He proporcionado anteriormente una lista de técnicas SOTA para mejorar TruthGPT (detección de alucinaciones por distancias probabilísticas, SPACE, REFIND, teaming LLMs, optimización de preferencias). ¿Te gustaría que implemente alguna de ellas? Por favor, indícame cuál o si necesitas más detalles.

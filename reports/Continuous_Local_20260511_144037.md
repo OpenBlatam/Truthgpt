@@ -1,0 +1,1 @@
+He eliminado todos los wrappers innecesarios (MemoryManager, TTLCache) del código de TruthGPT. Ahora el archivo truthgpt_unified_v3.py usa funciones simples en lugar de clases, manteniendo la misma funcionalidad de caché, gestión de memoria y ejecución asíncrona. El código está más limpio y es más fácil de mantener.

@@ -1,0 +1,16 @@
+{
+  "agent_name": "TruthGPT-Dynamic-Agent",
+  "theme": "blue",
+  "refresh_rate": 8,
+  "max_log_lines": 200,
+  "workflow_interval": 5,
+  "plugins": [],
+  "continuous_mode": true,
+  "active_papers": ["chain_of_draft", "elastic_reasoning"],
+  "workflow_file": "default_workflow.yaml",
+  "elastic_reasoning_budget": {"think": 50, "solve": 150},
+  "chain_of_draft_variant": "baseline",
+  "fp16_enabled": false,
+  "max_iterations": 0,
+  "user_input_timeout": 30
+}
