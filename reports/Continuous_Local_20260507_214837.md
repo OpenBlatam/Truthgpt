@@ -1,1 +1,0 @@
-He buscado en arXiv los papers más recientes (2025) sobre mitigación de alucinaciones en LLMs. Todos los resultados con benchmarks verificables ya están integrados en el kernel de TruthGPT:

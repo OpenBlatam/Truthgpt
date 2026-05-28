@@ -1,1 +1,0 @@
-TruthGPT has been improved to v13. The new version integrates TUM-MiKaNi (arXiv:2507.00579) for multilingual hallucination detection, an enhanced probabilistic distance function with sigmoid normalization, and an adaptive Bayesian estimation module. All source files are in /workspace/. Documentation is updated in /workspace/README.md.

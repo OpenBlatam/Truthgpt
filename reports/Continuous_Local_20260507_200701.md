@@ -1,1 +1,0 @@
-TruthGPT ya ha sido refactorizado en un módulo unificado (`/workspace/truthgpt_unified.py`) que integra las 50 técnicas SOTA de mitigación de alucinaciones. Puede invocar cualquier técnica mediante `detect_hallucination(nombre_técnica, **kwargs)`. ¿Desea agregar una nueva técnica, ejecutar benchmarks, probar combinaciones o realizar otra mejora específica?

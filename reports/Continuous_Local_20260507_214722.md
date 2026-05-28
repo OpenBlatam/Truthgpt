@@ -1,1 +1,0 @@
-No se encontró el archivo de trazas '/workspace/truthgpt_traces.jsonl'. Para proceder con la refactorización basada en trazas y papers, necesito que me proporciones las trazas o me indiques si debo generarlas sintéticamente a partir de los papers de la memoria (hay más de 20 técnicas listadas). Por favor, confirma cómo deseas continuar.

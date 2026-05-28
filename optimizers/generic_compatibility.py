@@ -7,7 +7,7 @@ Provides backward compatibility for old generic optimizer classes.
 import warnings
 from typing import Dict, Any
 
-from optimizers.generic_optimizer import (
+from .core.generic_optimizer import (
     UnifiedGenericOptimizer,
     GenericOptimizationLevel,
     GenericOptimizationResult,

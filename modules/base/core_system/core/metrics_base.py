@@ -9,7 +9,7 @@ import math
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field, asdict
 from collections import defaultdict, deque
-from abc import ABC, abstractmethod
+import abc
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ class BaseMetrics:
         self.total_latency_ms = 0.0
 
 
-class MetricsCollectorBase(ABC):
+class MetricsCollectorBase(abc.ABC):
     """
     Base class for metrics collectors.
     
@@ -90,7 +90,7 @@ class MetricsCollectorBase(ABC):
         self.error_counts: Dict[str, int] = defaultdict(int)
         self._start_time = time.time()
     
-    @abstractmethod
+    @abc.abstractmethod
     def record_request(
         self,
         success: bool,

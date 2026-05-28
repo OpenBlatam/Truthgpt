@@ -1,3 +1,0 @@
-TruthGPT ha sido mejorado con la técnica **Consistency Teaming** (arXiv:2510.19507, Till et al., 2025). Esta técnica utiliza 'consortium consistency' combinando respuestas de múltiples LLMs con diferentes datos de entrenamiento, esquemas de entrenamiento y arquitecturas para detectar y mitigar alucinaciones. Se ha creado el archivo `/workspace/truthgpt_consistency_teaming.py`. La actualización del registro en `truthgpt_unified.py` (versión 2.6) está pendiente para la próxima ejecución. Ahora TruthGPT cuenta con **18 técnicas SOTA** de mitigación de alucinaciones (se ha añadido Consistency Teaming a la lista existente de 17 técnicas).
-
-**Fuente verificable:** [arXiv:2510.19507](https://arxiv.org/abs/2510.19507)

@@ -1,132 +1,168 @@
-# 🔄 Especificación de Polyglot Core - Optimization Core
+# 🔄 Polyglot Core Specification - Optimization Core
 
-## 📋 Resumen
+## 📋 Executive Summary
 
-Este documento especifica el módulo `polyglot_core`, el cual actúa como una capa de abstracción ágil y de ultra bajo retardo (Zero-Overhead Abstraction) para acceder a backends de alto rendimiento (Rust, C++, Go) desde código Python. Su enfoque es la orquestación de tensores, cachés y llamadas a sistemas de forma transparente y asíncrona.
+This document specifies the routing engine and memory bridge within `polyglot_core`. The module acts as an ultra-low-overhead abstraction layer, facilitating zero-copy memory transfers between Python memory structures and native heaps (Rust, C++, Go) while coordinating graceful runtime degradation fallbacks.
 
-## 🎯 Objetivos
+---
 
-1. **API Unificada y Asíncrona**: Interfaces Python robustas y `async-first` para operaciones no bloqueantes.
-2. **Auto-Selección Activa**: Negociación automática del mejor backend en tiempo de ejecución.
-3. **Mínima Sobrecarga (Zero-Overhead)**: Uso de `PyO3` (Rust) y `pybind11` (C++) con acceso a memoria compartida (`memoryviews`/`Arrow`).
-4. **Fallback Resistente**: Degradación gradual (graceful degradation) hacia Python puro si los binarios compilados fallan al cargar.
-5. **Observabilidad Inyectada**: Trazabilidad de qué backend ejecuta qué operación y cuánto tarda.
+## 🎯 Primary Objectives
 
-## 🏗️ Arquitectura
+1.  **Asynchronous Orchestration**: Expose asynchronous adapters (`aput`, `aget`) that dispatch blocking native operations to executor threads, keeping the Python event loop active.
+2.  **Adaptive Routing**: Automatically discover available compiled modules in the host environment and route execution to the fastest backend.
+3.  **Zero-Copy Shared Buffers**: Interface with native memory layouts using Python's raw buffer protocol (`memoryview` or `bytes`) to eliminate data serialization:
+    $$Serialization_{Overhead} \approx 0$$
+4.  **Graceful Degradation Boundaries**: Implement transparent error boundaries that fallback to equivalent Python implementations if a compiled backend fails.
+5.  **Observability Instrumentation**: Log FFI latency and record backend selection metrics.
 
-### Diagrama de Secuencia de Resolución de Backend
+---
+
+## 🏗️ Architectural Topology
+
+### Dynamic Backend Routing Flow
 
 ```mermaid
 sequenceDiagram
-    participant User
+    participant User as Caller Loop
     participant Factory as PolyglotFactory
     participant Registry as BackendRegistry
-    participant Rust as RustExtension (PyO3)
-    participant Cpp as CppExtension (pybind11)
-    participant Py as PythonFallback
+    participant Rust as Rust Extension (PyO3)
+    participant Python as Python Fallback Class
 
     User->>Factory: create("kv_cache", backend="AUTO")
-    Factory->>Registry: get_best_available("kv_cache")
+    Factory->>Registry: get_best_backend("kv_cache")
     Registry-->>Factory: Returns Backend.RUST
     
     Factory->>Rust: load_module()
-    alt Carga Exitosa
-        Rust-->>Factory: Module Ready
-        Factory-->>User: RustKVCache Instance
-    else Carga Fallida (ImportError)
-        Factory->>Registry: Request fallback
+    alt Load Success
+        Rust-->>Factory: Module Loaded
+        Factory-->>User: Returns RustKVCache Instance
+    else Load Failed (ImportError)
+        Factory->>Registry: Request fallback backend
         Registry-->>Factory: Returns Backend.PYTHON
-        Factory->>Py: load_module()
-        Py-->>Factory: Module Ready
-        Factory-->>User: PythonKVCache Instance (Fallback)
+        Factory->>Python: load_module()
+        Python-->>Factory: Module Loaded
+        Factory-->>User: Returns PythonKVCache Instance
     end
 ```
 
-## 📦 Componentes Principales
+---
 
-### Excepciones Base
+## 📦 Technical Specification
 
-```python
-class PolyglotError(Exception):
-    """Base exception for polyglot routing errors."""
-    pass
-
-class BackendNotAvailableError(PolyglotError):
-    """Requested backend is not installed or failed to load."""
-    pass
-
-class ComponentCreationError(PolyglotError):
-    """All available backends failed to initialize for the requested component."""
-    pass
-```
-
-### Registry & Backend Detection
-
-**Propósito**: Mantener un estado global de qué binarios compilados están realmente presentes en el entorno en tiempo de arranque.
+### Interface Definitions
 
 ```python
 from enum import Enum
-from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any, Type
+from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field
 import logging
 import sys
+from optimization_core.core.exceptions import OptimizationCoreError
 
 logger = logging.getLogger(__name__)
 
+class PolyglotError(OptimizationCoreError):
+    """Base exception for all polyglot FFI routing operations."""
+    pass
+
+class BackendNotAvailableError(PolyglotError):
+    """Raised when the requested native module is not installed or fails to load."""
+    pass
+
+class ComponentCreationError(PolyglotError):
+    """Raised when all backends (including fallbacks) fail initialization."""
+    pass
+
 class Backend(Enum):
-    """Supported execution backends."""
+    """Supported compilation and execution backends."""
     AUTO = "auto"
     RUST = "rust"
     CPP = "cpp"
     GO = "go"
-    PYTHON = "python"  # Universal fallback
+    PYTHON = "python"  # Pure Python fallback
+```
 
-@dataclass
-class BackendInfo:
-    """Telemetry and status for a specific backend payload."""
-    name: str
-    available: bool
-    version: Optional[str] = None
-    capabilities: List[str] = field(default_factory=list)
-    performance_score: float = 0.0  # 0.0-1.0 (Higher is better)
-    error: Optional[str] = None
+### Backend Discovery Registry
+
+```python
+class BackendInfo(BaseModel):
+    """Metadata containing status and capabilities of a probed engine backend."""
+    name: str = Field(..., description="Name of the backend.")
+    available: bool = Field(..., description="Availability status.")
+    version: Optional[str] = Field(default=None, description="Semantic version string.")
+    capabilities: List[str] = Field(default_factory=list, description="Supported operations.")
+    performance_score: float = Field(default=0.0, ge=0.0, le=1.0, description="Normalized scoring.")
+    error_message: Optional[str] = Field(default=None, description="Import error diagnostic.")
 
 class BackendRegistry:
-    """Central registry for discovering and ranking backends."""
+    """Central registry for discovering and verifying compiler backends."""
     
     _cached_status: Dict[str, BackendInfo] = {}
 
     @classmethod
     def initialize_discovery(cls) -> None:
-        """Probes the environment for compiled extensions."""
+        """Probes the current environment to identify active compiler extensions."""
         cls._cached_status["rust"] = cls._probe_rust()
         cls._cached_status["cpp"] = cls._probe_cpp()
         cls._cached_status["go"] = cls._probe_go()
         cls._cached_status["python"] = BackendInfo(
-            name="python", available=True, version=sys.version.split(" ")[0],
-            capabilities=["kv_cache", "compression", "attention", "inference"], performance_score=0.1
+            name="python",
+            available=True,
+            version=sys.version.split(" ")[0],
+            capabilities=["kv_cache", "compression", "attention", "inference"],
+            performance_score=0.1
         )
 
     @staticmethod
     def _probe_rust() -> BackendInfo:
         try:
             import truthgpt_rust
-            return BackendInfo(name="rust", available=True, version=getattr(truthgpt_rust, "__version__", "1.0"), capabilities=["kv_cache", "compression", "tokenization"], performance_score=0.95)
-        except ImportError as e:
-            return BackendInfo(name="rust", available=False, error=str(e), performance_score=0.0)
+            version = getattr(truthgpt_rust, "__version__", "1.1.0")
+            return BackendInfo(
+                name="rust",
+                available=True,
+                version=version,
+                capabilities=["kv_cache", "compression", "tokenization"],
+                performance_score=0.95
+            )
+        except ImportError as err:
+            return BackendInfo(
+                name="rust",
+                available=False,
+                error_message=str(err),
+                performance_score=0.0
+            )
 
     @staticmethod
     def _probe_cpp() -> BackendInfo:
         try:
             import _cpp_core
-            return BackendInfo(name="cpp", available=True, version=getattr(_cpp_core, "__version__", "1.0"), capabilities=["attention", "cuda_kernels", "inference"], performance_score=0.98)
-        except ImportError as e:
-            return BackendInfo(name="cpp", available=False, error=str(e), performance_score=0.0)
+            version = getattr(_cpp_core, "__version__", "1.1.0")
+            return BackendInfo(
+                name="cpp",
+                available=True,
+                version=version,
+                capabilities=["attention", "cuda_kernels", "inference"],
+                performance_score=0.98
+            )
+        except ImportError as err:
+            return BackendInfo(
+                name="cpp",
+                available=False,
+                error_message=str(err),
+                performance_score=0.0
+            )
 
     @staticmethod
     def _probe_go() -> BackendInfo:
-        # Go usually operates over RPC/gRPC/CGO
-        return BackendInfo(name="go", available=False, error="Go microservices not actively probed at import", performance_score=0.0)
+        # Go usually operates over RPC/gRPC or CGO bridges
+        return BackendInfo(
+            name="go",
+            available=False,
+            error_message="Go RPC servers are not probed during initialization",
+            performance_score=0.0
+        )
 
     @classmethod
     def get_status(cls, backend: Backend) -> BackendInfo:
@@ -139,13 +175,10 @@ class BackendRegistry:
         return cls.get_status(backend).available
 ```
 
-### Component Factory (Routing Engine)
-
-**Propósito**: Proveer el componente correcto basado en las capacidades listadas.
+### Component Factory Routing Matrix
 
 ```python
 FEATURE_ROUTING_TABLE = {
-    # Feature -> List of backends in preference order
     "kv_cache": [Backend.RUST, Backend.CPP, Backend.PYTHON],
     "compression": [Backend.RUST, Backend.CPP, Backend.PYTHON],
     "attention": [Backend.CPP, Backend.RUST, Backend.PYTHON],
@@ -153,24 +186,23 @@ FEATURE_ROUTING_TABLE = {
 }
 
 class PolyglotFactory:
-    """Instantiates the optimal cross-language component for a given feature."""
+    """Instantiates the optimal cross-language component based on environmental availability."""
     
     @classmethod
     def get_best_backend(cls, feature: str) -> Backend:
         if feature not in FEATURE_ROUTING_TABLE:
-            raise ValueError(f"Feature '{feature}' is not recognized by the routing table.")
+            raise ValueError(f"Feature '{feature}' is not defined in the routing configuration table.")
             
         preferred_backends = FEATURE_ROUTING_TABLE[feature]
-        
         for backend in preferred_backends:
             if BackendRegistry.is_available(backend):
                 return backend
                 
-        logger.warning(f"No optimized backend available for {feature}, falling back to Python.")
+        logger.warning(f"No compiled backend found for feature: {feature}. Falling back to Python.")
         return Backend.PYTHON
 
     @classmethod
-    def create_kv_cache(cls, max_size: int = 8192, backend: Backend = Backend.AUTO, **kwargs) -> Any:
+    def create_kv_cache(cls, max_size: int = 8192, backend: Backend = Backend.AUTO, **kwargs: Any) -> Any:
         target_backend = cls.get_best_backend("kv_cache") if backend == Backend.AUTO else backend
         
         if target_backend == Backend.RUST:
@@ -184,7 +216,7 @@ class PolyglotFactory:
             return PythonKVCache(max_size=max_size, **kwargs)
 
     @classmethod
-    def create_attention(cls, d_model: int, n_heads: int, backend: Backend = Backend.AUTO, **kwargs) -> Any:
+    def create_attention(cls, d_model: int, n_heads: int, backend: Backend = Backend.AUTO, **kwargs: Any) -> Any:
         target_backend = cls.get_best_backend("attention") if backend == Backend.AUTO else backend
         
         if target_backend == Backend.CPP:
@@ -195,93 +227,91 @@ class PolyglotFactory:
             return PythonAttention(d_model=d_model, n_heads=n_heads, **kwargs)
 ```
 
-### Interfaz Políglota Asíncrona (`KVCache` Wrapper)
-
-**Propósito**: Envolver las extensiones crudas de C++/Rust en una API tolerante a fallos y compatible con asincronía (si la librería compilada requiere liberar el GIL).
+### Asynchronous Polyglot Wrapper
 
 ```python
 class UnifiedKVCache:
-    """
-    High-level facade for KV Cache operations.
-    Handles GIL release and async thread dispatching for heavy operations.
+    """High-level facade for Key-Value Cache operations.
+    
+    Bridges FFI calls using zero-copy memoryviews and offloads heavy writes
+    to background threads to prevent blocking the event loop.
     """
     
-    def __init__(self, max_size: int = 8192, backend: Backend = Backend.AUTO, **kwargs):
+    def __init__(self, max_size: int = 8192, backend: Backend = Backend.AUTO, **kwargs: Any) -> None:
         self._impl = PolyglotFactory.create_kv_cache(max_size=max_size, backend=backend, **kwargs)
         self.active_backend = backend if backend != Backend.AUTO else PolyglotFactory.get_best_backend("kv_cache")
         
     def put(self, layer_idx: int, position: int, data: memoryview) -> None:
-        """
-        Synchronous put. Uses memoryview to ensure zero-copy transfer to Rust/C++.
+        """Stores data into cache using a zero-copy memoryview.
+
+        Args:
+            layer_idx: Target transformer layer index.
+            position: Token index position in sequence.
+            data: Buffer pointer.
         """
         self._impl.put(layer_idx, position, data)
         
     async def aput(self, layer_idx: int, position: int, data: memoryview) -> None:
-        """Asynchronous put for large bulk operations."""
-        import asyncio
+        """Asynchronously stores data into the cache, releasing the event loop.
+
+        Args:
+            layer_idx: Target transformer layer index.
+            position: Token index position.
+            data: Buffer pointer.
+        """
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, lambda: self._impl.put(layer_idx, position, data))
         
     def get(self, layer_idx: int, position: int) -> Optional[memoryview]:
-        """Returns zero-copy memoryview from backend."""
+        """Retrieves cached activation data.
+
+        Args:
+            layer_idx: Target transformer layer index.
+            position: Token index position.
+
+        Returns:
+            A zero-copy memoryview pointing to the cached buffer, or None if missing.
+        """
         return self._impl.get(layer_idx, position)
 
     def get_telemetry(self) -> Dict[str, Any]:
-        """Observability data including backend info."""
         stats = self._impl.get_stats() if hasattr(self._impl, "get_stats") else {}
         stats["backend"] = self.active_backend.value
         return stats
 ```
 
-## 📊 Ejemplos de Uso
+---
 
-### Uso Básico con Auto-Selección
+## 🧪 Integration Verification
 
-```python
-from optimization_core.polyglot import UnifiedKVCache, UnifiedAttention
-
-# Automáticamente usará Rust (truthgpt_rust) si está instalado
-cache = UnifiedKVCache(max_size=8192)
-
-telemetry = cache.get_telemetry()
-print(f"Usando backend: {telemetry['backend']}") # 'rust' o 'python'
-```
-
-### Tolerancia a Fallos Probada
-
-Si desinstalamos el paquete `truthgpt_rust` del entorno virtual:
+Verify fallback capabilities when compiled native modules fail to load:
 
 ```python
-from optimization_core.polyglot import BackendRegistry, PolyglotFactory
-
-BackendRegistry.initialize_discovery()
-print(BackendRegistry.is_available(Backend.RUST)) # False
-
-# Automáticamente hará degradación a Python sin causar caídas en producción
-cache = UnifiedKVCache()
-print(cache.active_backend) # Backend.PYTHON
-```
-
-## 🧪 Testing
-
-### Test Backend Fallback
-
-```python
-from unittest.mock import patch
 import pytest
+from unittest.mock import patch
+from optimization_core.polyglot import UnifiedKVCache
+from optimization_core.polyglot import Backend
 
-def test_fallback_to_python_when_rust_fails():
-    with patch('optimization_core.polyglot.BackendRegistry.is_available') as mock_available:
-        # Simulate Rust/C++ not being installed
-        mock_available.side_effect = lambda b: b == Backend.PYTHON 
+def test_polyglot_fallback_chain_trigger():
+    """Verify routing fallbacks when imports fail."""
+    # Force ImportError on target extensions
+    with patch("builtins.__import__") as mock_import:
+        def import_side_effect(name, *args, **kwargs):
+            if name in ("truthgpt_rust", "_cpp_core"):
+                raise ImportError(f"Missing FFI module: {name}")
+            return patch.stop
+            
+        mock_import.side_effect = import_side_effect
         
-        cache = UnifiedKVCache(backend=Backend.AUTO)
+        # Instantiate cache facade
+        cache = UnifiedKVCache(max_size=1024, backend=Backend.AUTO)
         
-        # Verify it gracefully fell back to Python
+        # Validate that the active backend is Python
         assert cache.active_backend == Backend.PYTHON
 ```
 
 ---
 
-**Versión**: 1.1.0  
-**Última actualización**: Marzo 2026
+**Specification Version**: 1.1.0  
+**Last Updated**: March 2026  
+**Architectural Scope**: FFI Bridge and Router Subsystem

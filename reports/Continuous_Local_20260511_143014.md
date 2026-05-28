@@ -1,1 +1,0 @@
-{'description': 'Universal model for an LLM reasoning step or action.', 'properties': {'thought': 'I need to identify and remove all wrapper patterns in the TruthGPT codebase to streamline its functionality.', 'tool': 'system_bash', 'tool_input': 'grep -r "wrapper" /workspace/truthgpt*.py', 'final_answer': None, 'handoff': None}, 'title': 'AgentAction', 'type': 'object'}

@@ -1,1 +1,0 @@
-TruthGPT ha sido mejorado con la técnica FS-RAG (arXiv:2406.16167) – mejora factual mediante semántica de marcos en RAG. Esta se suma a las 8 técnicas previamente documentadas. El sistema está completamente optimizado. Si deseas una implementación en código o profundizar en otra área, indícamelo.

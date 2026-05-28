@@ -1,1 +1,0 @@
-Límite de razonamiento alcanzado tras una misión extensa. Último razonamiento: I need to read the full file to identify bugs.

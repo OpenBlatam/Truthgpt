@@ -1,410 +1,322 @@
-# 🏗️ Especificación de Arquitectura - Optimization Core
+# 🏗️ Architecture Specification - Optimization Core
 
-## 📋 Resumen Ejecutivo
+## 📋 Executive Summary
 
-`optimization_core` es un framework de alto rendimiento para inferencia de LLMs y procesamiento de datos, diseñado con una arquitectura polyglot que aprovecha las mejores herramientas de cada lenguaje de programación.
+The `optimization_core` system is a high-performance framework designed for Large Language Model (LLM) inference orchestration and out-of-core data processing. By employing a hybrid polyglot architecture, it bridges the user-friendly prototyping environments of Python with the memory-safe, ultra-low-latency execution environments of compiled backends (Rust, C++, Go). 
 
-## 🎯 Objetivos del Sistema
+---
 
-### Objetivos Principales
-1. **Alto Rendimiento**: 5-10x más rápido que implementaciones estándar
-2. **Eficiencia de Memoria**: Reducción de 3-5x en uso de memoria
-3. **Escalabilidad**: Soporte para múltiples GPUs y distribución
-4. **Flexibilidad**: Múltiples backends y estrategias de optimización
-5. **Mantenibilidad**: Arquitectura modular y extensible
+## 🎯 System Objectives
 
-### Objetivos No Funcionales
-- **Latencia**: < 50ms para inferencia de un solo token
-- **Throughput**: > 1000 tokens/s por GPU
-- **Memoria**: < 4GB para modelo 7B en FP16
-- **Disponibilidad**: 99.9% uptime
-- **Escalabilidad**: Horizontal y vertical
+### Primary Objectives
+1. **High Throughput**: Achieve a 5x to 10x throughput enhancement compared to standard, naive PyTorch inference loops.
+2. **Memory Efficiency**: Reduce peak memory utilization by 3x to 5x through dynamic cache pruning, page-aligned allocations, and Lazy query evaluation.
+3. **Decoupled Orchestration**: Maintain a strict separation between front-end orchestration layers (Python API/CLI) and native execution kernels.
+4. **Resilience**: Enforce graceful degradation protocols, maintaining system availability via fallback paths.
 
-## 🏛️ Arquitectura General
+### Non-Functional Requirements (NFRs)
 
-### Diagrama de Alto Nivel
+*   **Target Latency**: 
+    $$L_{token} < 50 \text{ ms}$$
+    where $L_{token}$ represents the time-to-first-token (TTFT) and the inter-token latency during inference for models up to 7B parameters under normal load.
+*   **Target Throughput**: 
+    $$T \ge 1000 \text{ tokens/sec/GPU}$$
+*   **Memory Overhead**: 
+    $$M_{overhead} < 4\text{GB}$$
+    for a 7B parameter model in FP16 precision, excluding weight memory, using PagedAttention optimization.
+*   **System Availability**: $99.9\%$ uptime under continuous load.
+*   **Scalability**: Supports both vertical scaling (tensor parallelism) and horizontal scaling (distributed inference blocks).
+
+---
+
+## 🏛️ Macro Topology & Layers
+
+### System Layer Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Application Layer                          │
-│              (Python Training Loops, APIs, CLI)                │
-└────────────────────────────┬──────────────────────────────────┘
-                              │
-┌─────────────────────────────▼──────────────────────────────────┐
-│                    Polyglot Core Layer                         │
-│              (Unified Python API + Auto-Selection)             │
-└─────────────────────────────┬──────────────────────────────────┘
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        │                     │                     │
-┌───────▼──────┐    ┌─────────▼─────────┐   ┌──────▼──────┐
-│  Rust Core   │    │    C++ Core       │   │  Go Core    │
-│  (PyO3)      │    │    (PyBind11)     │   │  (gRPC)     │
+│         (Python Training Loops, Orchestrators, CLI)         │
+└────────────────────────────┬────────────────────────────────┘
+                             │
+┌────────────────────────────▼────────────────────────────────┐
+│                    Polyglot Core Layer                      │
+│        (Unified Python API + Auto-Discovery Routing)        │
+└────────────────────────────┬────────────────────────────────┘
+                             │
+       ┌─────────────────────┼─────────────────────┐
+       │                     │                     │
+┌──────▼──────┐    ┌─────────▼─────────┐   ┌──────▼──────┐
+│  Rust Core  │    │    C++ Core       │   │  Go Core    │
+│  (PyO3 FFI) │    │  (PyBind11 FFI)   │   │ (gRPC/HTTP) │
 ├──────────────┤    ├───────────────────┤   ├─────────────┤
-│ • KV Cache   │    │ • Flash Attention │   │ • HTTP API  │
-│ • Compression│    │ • CUDA Kernels    │   │ • gRPC      │
-│ • Tokenization│   │ • Memory Mgmt     │   │ • Messaging │
-│ • Data Load  │    │ • SIMD Ops        │   │ • Distributed│
+│ • KV Cache   │    │ • FlashAttention  │   │ • HTTP API  │
+│ • Compression│    │ • CUDA Kernels    │   │ • gRPC Host │
+│ • Tokenizer  │    │ • Memory Alloc    │   │ • Messaging │
+│ • JSONL Load │    │ • Vector SIMD     │   │ • Dist Sync │
 └──────────────┘    └───────────────────┘   └─────────────┘
-        │                     │                     │
-        └─────────────────────┼─────────────────────┘
-                              │
-┌─────────────────────────────▼──────────────────────────────────┐
-│                    Hardware Layer                               │
-│              (GPU, CPU, Memory, Network)                        │
-└─────────────────────────────────────────────────────────────────┘
+       │                     │                     │
+       └─────────────────────┼─────────────────────┘
+                             │
+┌────────────────────────────▼────────────────────────────────┐
+│                       Hardware Layer                        │
+│             (VRAM, RAM, PCIe bus, InfiniBand)               │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## 📦 Componentes Principales
+---
 
-### 1. Core Layer (`core/`)
+## 📦 Core Subsystems
 
-**Propósito**: Interfaces, abstracciones y componentes base
+### 1. Abstract Core Subsystem (`core/`)
+- **Purpose**: Defines system interfaces, base lifecycle components, and validation rules.
+- **Key Modules**:
+  - `interfaces.py` - Core contracts (`IComponent`, `IInferenceEngine`, `IDataProcessor`).
+  - `base_classes.py` - Standard initializers and thread pool dispatchers.
+  - `factories.py` - Factory registries for dynamic class resolution.
+  - `exceptions.py` - Structured exception hierarchies (`ComponentLifecycleError`, `MemoryConstraintError`).
+  - `config.py` - Configuration structures powered by Pydantic.
 
-**Componentes**:
-- `interfaces.py` - Interfaces abstractas (IComponent, IInferenceEngine, IDataProcessor)
-- `base_classes.py` - Clases base con implementaciones comunes
-- `factories.py` - Factories para creación de instancias
-- `exceptions.py` - Jerarquía de excepciones
-- `config.py` - Sistema de configuración
+### 2. Inference Subsystem (`inference/`)
+- **Purpose**: High-throughput inference engine wrappers.
+- **Key Modules**:
+  - `base_engine.py` - Common logic for model loading and token stream processing.
+  - `vllm_engine.py` - Async integration with the vLLM execution backend (PagedAttention).
+  - `tensorrt_llm_engine.py` - TensorRT-LLM integration for NVIDIA GPU optimization.
+  - `engine_factory.py` - Factory resolver for engine execution backends.
 
-**Responsabilidades**:
-- Definir contratos para todos los componentes
-- Proporcionar implementaciones base reutilizables
-- Gestionar ciclo de vida de componentes
-- Validación y manejo de errores centralizado
+### 3. Data Processing Subsystem (`data/`)
+- **Purpose**: Out-of-core, vectorized data transformation pipelines.
+- **Key Modules**:
+  - `polars_processor.py` - High-speed, multi-threaded dataframe processing using Polars.
+  - `processor_factory.py` - Dynamic engine instantiation.
 
-### 2. Inference Layer (`inference/`)
+### 4. Polyglot Subsystem (`polyglot_core/`)
+- **Purpose**: FFI boundary management and memory sharing.
+- **Key Modules**:
+  - `backend.py` - Probes compilation environments to identify active backends.
+  - `cache.py` - Unified interface routing KV cache queries to the optimal backend (Rust vs Python).
+  - `compression.py` - Vectorized compression (LZ4/Zstd) using shared memory buffers.
 
-**Propósito**: Motores de inferencia de alto rendimiento
+### 5. Utility Subsystem (`utils/`)
+- **Purpose**: Shared cross-cutting concerns.
+- **Key Modules**:
+  - `validation/` - Strictly typed schema validators.
+  - `error_handling/` - Exception boundaries.
+  - `logging/` - Structured, async-safe logging.
+  - `metrics/` - Prometheus gauge/counter metrics.
+  - `event_system/` - Asynchronous publish-subscribe event loop.
 
-**Componentes**:
-- `base_engine.py` - Clase base abstracta
-- `vllm_engine.py` - Motor vLLM (5-10x más rápido)
-- `tensorrt_llm_engine.py` - Motor TensorRT-LLM (2-10x más rápido)
-- `engine_factory.py` - Factory para creación de engines
-- `utils/` - Utilidades de inferencia
+---
 
-**Responsabilidades**:
-- Carga y gestión de modelos
-- Generación de texto optimizada
-- Batching y continuous batching
-- Gestión de memoria (PagedAttention)
+## 🔄 Core Pipeline Execution Flows
 
-### 3. Data Processing Layer (`data/`)
-
-**Propósito**: Procesamiento eficiente de datos
-
-**Componentes**:
-- `polars_processor.py` - Procesador Polars (10-100x más rápido que pandas)
-- `processor_factory.py` - Factory para procesadores
-- `utils/` - Utilidades de datos
-
-**Responsabilidades**:
-- Lectura/escritura de datos (Parquet, JSONL, etc.)
-- Transformaciones y filtrado
-- Lazy evaluation y optimización de queries
-- Streaming para datasets grandes
-
-### 4. Polyglot Core (`polyglot_core/`)
-
-**Propósito**: Unificación de múltiples backends
-
-**Componentes**:
-- `backend.py` - Detección y selección de backends
-- `cache.py` - KV Cache unificado
-- `compression.py` - Compresión unificada
-- `attention.py` - Attention unificada
-- `inference.py` - Inferencia unificada
-
-**Responsabilidades**:
-- Auto-detección de backends disponibles
-- Selección automática del mejor backend
-- API unificada independiente del backend
-- Fallback chain (C++ → Rust → Go → Python)
-
-### 5. Utils Layer (`utils/`)
-
-**Propósito**: Utilidades compartidas
-
-**Componentes**:
-- `validation/` - Validadores compartidos
-- `error_handling/` - Manejo de errores
-- `logging/` - Sistema de logging
-- `metrics/` - Métricas y telemetría
-- `event_system/` - Sistema de eventos
-
-**Responsabilidades**:
-- Validación de parámetros
-- Manejo centralizado de errores
-- Logging estructurado
-- Métricas de rendimiento
-- Eventos y notificaciones
-
-### 6. Testing Layer (`tests/`)
-
-**Propósito**: Framework de testing
-
-**Componentes**:
-- `base_test_case.py` - Clase base para tests
-- `utils/` - Utilidades de testing
-- `fixtures/` - Fixtures reutilizables
-
-**Responsabilidades**:
-- Tests unitarios
-- Tests de integración
-- Mocks y stubs
-- Fixtures compartidas
-
-### 7. Benchmarks Layer (`benchmarks/`)
-
-**Propósito**: Benchmarks y métricas de rendimiento
-
-**Componentes**:
-- `benchmark_runner.py` - Ejecutor de benchmarks
-- `performance_metrics.py` - Métricas de rendimiento
-
-**Responsabilidades**:
-- Ejecución de benchmarks
-- Recolección de métricas
-- Comparación de implementaciones
-- Reportes de rendimiento
-
-## 🔄 Flujos Principales
-
-### Flujo de Inferencia
-
+### Asynchronous Text Generation Flow
 ```
-1. Usuario → create_inference_engine()
-2. Factory → detecta backends disponibles
-3. Factory → selecciona mejor backend (vLLM > TensorRT > PyTorch)
-4. Engine → carga modelo con optimizaciones
-5. Engine → genera texto con batching
-6. Engine → retorna resultados
+[User Request] ──> [Unified Engine API]
+                          │
+            [Determine Backend Capability]
+            (vLLM Async > TensorRT > PyTorch Fallback)
+                          │
+            [Load Model Weights into GPU]
+                          │
+          [Continuous Batching Thread Loop] <─── [Incoming Stream]
+                          │
+       [Async Generator Yields Tokens to Client]
 ```
 
-### Flujo de Procesamiento de Datos
-
+### Out-of-Core Data Transformation Flow
 ```
-1. Usuario → create_data_processor()
-2. Processor → lee datos (lazy)
-3. Processor → aplica transformaciones (lazy)
-4. Processor → optimiza query plan
-5. Processor → ejecuta query (collect)
-6. Processor → retorna resultados
-```
-
-### Flujo de Polyglot Backend Selection
-
-```
-1. Usuario → KVCache() (sin especificar backend)
-2. Polyglot Core → detecta backends disponibles
-3. Polyglot Core → selecciona mejor backend (Rust > C++ > Go > Python)
-4. Polyglot Core → crea instancia del backend seleccionado
-5. Usuario → usa API unificada
+[Disk Path] ──> [Lazy Frame Scan]
+                       │
+          [Define Computation Graph] (Filters, Projections, Joins)
+                       │
+          [Optimize Query Graph] (Filter Pushdown, Projection Pruning)
+                       │
+          [Stream Compute Nodes] (Out-of-Core execution execution)
+                       │
+          [Sink Output directly to Disk]
 ```
 
-## 🔌 Interfaces Principales
+### Polyglot Backend Resolution & Fallback Flow
+```
+[Instantiate Facade] ──> [Probe FFI Modules]
+                                │
+                    Is Rust (PyO3) Installed?
+                    ├── Yes ──> Instantiate `rust_core` bindings
+                    └── No  ──> Is C++ (pybind11) Installed?
+                                ├── Yes ──> Instantiate `cpp_core` bindings
+                                └── No  ──> Fallback to Pure Python
+```
+
+---
+
+## 🔌 API Definitions
 
 ### IComponent
 ```python
 class IComponent(ABC):
-    name: str
-    version: str
-    initialize(**kwargs) -> bool
-    cleanup()
-    get_status() -> Dict[str, Any]
+    """Abstract lifecycle interface for all core subsystems."""
+    
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Returns the registry identifier for the component."""
+        pass
+
+    @property
+    @abstractmethod
+    def version(self) -> str:
+        """Returns the semantic version of the component."""
+        pass
+
+    @abstractmethod
+    def initialize(self, **kwargs: Any) -> 'IComponent':
+        """Executes synchronous resource allocation.
+        
+        Args:
+            **kwargs: System configuration options.
+            
+        Returns:
+            The initialized component instance.
+            
+        Raises:
+            ComponentLifecycleError: If initialization conditions fail.
+        """
+        pass
+
+    @abstractmethod
+    async def ainitialize(self, **kwargs: Any) -> 'IComponent':
+        """Executes asynchronous resource allocation.
+        
+        Args:
+            **kwargs: System configuration options.
+            
+        Returns:
+            The initialized component instance.
+            
+        Raises:
+            ComponentLifecycleError: If async initialization fails.
+        """
+        pass
+
+    @abstractmethod
+    def cleanup(self) -> None:
+        """Synchronously releases allocated resources (handles, memory, sockets)."""
+        pass
+
+    @abstractmethod
+    async def acleanup(self) -> None:
+        """Asynchronously releases allocated resources."""
+        pass
+
+    @abstractmethod
+    def get_status(self) -> Dict[str, Any]:
+        """Retrieves non-blocking diagnostic and observability metrics.
+        
+        Returns:
+            A dictionary containing health indicators, active errors, and performance metrics.
+        """
+        pass
 ```
 
 ### IInferenceEngine
 ```python
 class IInferenceEngine(IComponent):
-    generate(prompts, config, **kwargs) -> Union[str, List[str]]
-    get_model_info() -> Dict[str, Any]
+    """Abstract interface for large language model inference engines."""
+
+    @abstractmethod
+    async def agenerate(
+        self,
+        prompts: Union[str, List[str]],
+        config: Optional['GenerationConfig'] = None,
+        **kwargs: Any
+    ) -> Union[str, List[str]]:
+        """Asynchronously generates text completions.
+
+        Args:
+            prompts: A single string prompt or a list of prompts.
+            config: Configuration defining temperature, top_p, etc.
+            **kwargs: Dynamic generation flags.
+
+        Returns:
+            Generated text string or list of text strings.
+
+        Raises:
+            NotInitializedError: If the model has not been loaded.
+        """
+        pass
+
+    @abstractmethod
+    async def stream_generate(
+        self,
+        prompt: str,
+        config: Optional['GenerationConfig'] = None,
+        **kwargs: Any
+    ) -> AsyncGenerator[str, None]:
+        """Asynchronously streams generated tokens.
+
+        Args:
+            prompt: Input text prompt.
+            config: Generation configuration parameters.
+            **kwargs: Dynamic generation parameters.
+
+        Yields:
+            Text tokens sequentially.
+        """
+        pass
+
+    @abstractmethod
+    def load_model(self, model: Union[str, Path], **kwargs: Any) -> bool:
+        """Loads model weights into memory.
+
+        Args:
+            model: Filepath or model hub identifier.
+            **kwargs: Backend configuration (device, dtype, precision).
+
+        Returns:
+            True if loading is successful, False otherwise.
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def is_model_loaded(self) -> bool:
+        """Indicates if the model has been loaded into memory."""
+        pass
 ```
-
-### IDataProcessor
-```python
-class IDataProcessor(IComponent):
-    process(data, **kwargs) -> Any
-    validate(data) -> bool
-```
-
-## 📊 Principios de Diseño
-
-### 1. Separación de Concerns
-- Cada capa tiene responsabilidades claras
-- Interfaces bien definidas entre capas
-- Bajo acoplamiento, alta cohesión
-
-### 2. Inversión de Dependencias
-- Componentes dependen de interfaces, no de implementaciones
-- Fácil intercambio de implementaciones
-- Testing simplificado con mocks
-
-### 3. Open/Closed Principle
-- Abierto para extensión (nuevos backends)
-- Cerrado para modificación (interfaces estables)
-
-### 4. Single Responsibility
-- Cada componente tiene una única responsabilidad
-- Fácil de entender y mantener
-
-### 5. DRY (Don't Repeat Yourself)
-- Utilidades compartidas en `utils/`
-- Implementaciones base reutilizables
-
-## 🚀 Patrones de Diseño
-
-### Factory Pattern
-- `engine_factory.py` - Creación de engines
-- `processor_factory.py` - Creación de procesadores
-- `ComponentFactory` - Factory genérico
-
-### Strategy Pattern
-- Múltiples backends para la misma funcionalidad
-- Selección automática o manual
-
-### Adapter Pattern
-- Adaptadores para diferentes bibliotecas
-- API unificada sobre implementaciones diversas
-
-### Observer Pattern
-- Sistema de eventos
-- Métricas y telemetría
-
-### Singleton Pattern
-- Factories globales
-- Configuración compartida
-
-## 🔒 Seguridad y Confiabilidad
-
-### Validación
-- Validación de entrada en todas las APIs
-- Validadores compartidos en `utils/validation/`
-
-### Manejo de Errores
-- Jerarquía de excepciones clara
-- Manejo centralizado en `utils/error_handling/`
-- Contexto de errores rico
-
-### Circuit Breakers
-- Protección contra fallos en cascada
-- Reintentos automáticos
-
-### Rate Limiting
-- Control de tasa de requests
-- Protección contra sobrecarga
-
-## 📈 Escalabilidad
-
-### Horizontal
-- Múltiples instancias de engines
-- Load balancing
-- Distribución de carga
-
-### Vertical
-- Multi-GPU support
-- Tensor parallelism
-- Pipeline parallelism
-
-### Caching
-- KV Cache para atención
-- Cache de resultados
-- Cache de modelos
-
-## 🔧 Configuración
-
-### Niveles de Configuración
-1. **Global**: Configuración del framework
-2. **Component**: Configuración por componente
-3. **Runtime**: Configuración dinámica
-
-### Formatos Soportados
-- YAML
-- JSON
-- Variables de entorno
-- Python dicts
-
-## 📝 Logging y Observabilidad
-
-### Logging
-- Logging estructurado
-- Niveles configurables
-- Contexto rico
-
-### Métricas
-- Métricas de rendimiento
-- Métricas de negocio
-- Exportación a Prometheus
-
-### Tracing
-- Distributed tracing
-- Performance profiling
-- Debugging
-
-## 🧪 Testing
-
-### Tipos de Tests
-- **Unitarios**: Componentes individuales
-- **Integración**: Interacción entre componentes
-- **Benchmarks**: Rendimiento y comparación
-
-### Estrategia
-- Tests aislados
-- Mocks y stubs
-- Fixtures reutilizables
-- CI/CD integration
-
-## 📚 Dependencias Principales
-
-### Python
-- PyTorch >= 2.1.0
-- Transformers >= 4.35.0
-- vLLM >= 0.2.0
-- Polars (latest)
-- TensorRT-LLM (latest)
-
-### Rust
-- PyO3 (bindings Python)
-- Candle (ML framework)
-- Tokenizers
-- Rayon (paralelización)
-
-### C++
-- PyBind11 (bindings Python)
-- Eigen (álgebra lineal)
-- CUTLASS (CUDA kernels)
-- oneDNN (primitivas DL)
-
-### Go
-- Fiber (HTTP framework)
-- gRPC-Go
-- Badger (KV store)
-- NATS (messaging)
-
-## 🎯 Métricas de Éxito
-
-### Rendimiento
-- Latencia < 50ms por token
-- Throughput > 1000 tokens/s por GPU
-- Memoria < 4GB para modelo 7B
-
-### Calidad
-- Cobertura de tests > 80%
-- Documentación completa
-- Sin errores críticos
-
-### Usabilidad
-- API simple e intuitiva
-- Documentación clara
-- Ejemplos completos
 
 ---
 
-**Versión**: 1.0.0  
-**Última actualización**: Enero 2025
+## 📈 System Scalability Matrix
 
+### Horizontal vs Vertical Scaling
+*   **Vertical Scaling**: Handled at the GPU layer using Tensor Parallelism (splitting weight matrices across multiple GPUs on the same motherboard via NVLink).
+*   **Horizontal Scaling**: Orchestrated using the Go Core subsystem, distributing requests across stateless worker instances communicating over gRPC.
 
+### Memory Optimization via KV Caching
+To avoid redundant processing of prompts in long-running conversations, the KV (Key-Value) cache of previous attention heads is persisted. The allocation size of the cache is dynamically governed by the formula:
 
+$$Size_{KV} = 2 \times N_{layers} \times N_{heads} \times D_{head} \times L_{seq} \times N_{batch} \text{ bytes}$$
 
+Where:
+*   $N_{layers}$: Number of attention layers.
+*   $N_{heads}$: Number of attention heads.
+*   $D_{head}$: Head dimension.
+*   $L_{seq}$: Maximum sequence length.
+*   $N_{batch}$: Current batch size.
+
+---
+
+## 🧪 Testing Strategy
+
+The validation pipeline enforces three distinct levels of verification:
+1.  **Unit Isolation**: Using standard mocking and stubbing to test individual components without loading heavy deep learning libraries.
+2.  **Integration Verification**: Cross-compilation testing to verify FFI memory sharing safety and ensure fallback loops degrade gracefully.
+3.  **Performance Verification**: Automatic benchmarks tracking throughput and latency against established targets using Locust load testing and pytest-benchmark.
+
+---
+
+**Specification Version**: 1.1.0  
+**Last Updated**: March 2026  
+**Architectural Scope**: System-wide Topology

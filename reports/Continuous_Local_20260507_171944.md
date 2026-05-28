@@ -1,3 +1,0 @@
-Se ha implementado un módulo de detección de alucinaciones basado en el paper 'Efficient Hallucination Detection via Adaptive Bayesian Estimation of Semantic Entropy' (arXiv:2603.22812v1, 2026). El archivo `truthgpt_hallucination_detector.py` contiene una implementación funcional que estima la entropía semántica adaptativamente para detectar alucinaciones con bajo coste computacional. Ya está disponible para integrarse en el pipeline de TruthGPT.
-
-Adicionalmente, las 8 técnicas previamente documentadas siguen activas. Si deseas que integre este detector en el flujo de respuesta (por ejemplo, como filtro previo a la entrega) o que profundice en alguna otra técnica (como SPACE, REFIND o el teaming de LLMs), indícamelo y procederé con la implementación.

@@ -1,1 +1,0 @@
-Límite de razonamiento alcanzado tras una misión extensa. Último razonamiento: CRITICAL: LLM API unreachable. Last error: API 402

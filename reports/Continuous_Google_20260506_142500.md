@@ -1,1 +1,0 @@
-The RuntimeWarning is due to package rename. Fix: (1) `pip install ddgs`, (2) change import in `tools.py` line 140 to `from ddgs import DDGS`, (3) optionally `pip uninstall duckduckgo_search`. All other log entries show successful HTTP 200 and model calls. Would you like me to automate this fix or run a system health check?

@@ -50,11 +50,19 @@ class InteractiveDashboardApp:
         def _(event):
             self.result = "exit"
             event.app.exit()
- 
+
         @self.kb.add('escape')
         def _(event):
             self.result = "exit"
             event.app.exit()
+
+        @self.kb.add('c-o')
+        def _(event):
+            try:
+                from interface.cc_style import expand_pending
+                event.app.run_in_terminal(lambda: expand_pending())
+            except Exception:
+                pass
  
     def render_rich_content(self):
         from prompt_toolkit.formatted_text import ANSI
@@ -175,14 +183,22 @@ class InteractiveDashboardApp:
             load_pct = tel["load"]
             filled = int(load_pct / 10)
             load_bar = "█" * filled + "░" * (10 - filled)
-            
-            return [
+
+            try:
+                from interface.cc_style import has_pending_expansion
+                expand_active = has_pending_expansion()
+            except Exception:
+                expand_active = False
+
+            row = [
                 ('class:footer_key', ' ❯ COMMAND INPUT '),
                 ('class:footer_sep', '  '),
                 ('class:footer_hint', ' ENTER '),
-                ('class:footer_label', 'Submit Command/Query  '),
+                ('class:footer_label', 'Submit  '),
                 ('class:footer_hint', ' ESC '),
-                ('class:footer_label', 'Exit   '),
+                ('class:footer_label', 'Exit  '),
+                ('class:footer_hint' if expand_active else 'class:footer_sep', ' CTRL+O '),
+                ('class:footer_label', 'Expand   ' if expand_active else 'Expand (no pending)   '),
                 ('class:footer_sep', '│ '),
                 ('class:load_label', f' LOAD: {load_bar} {load_pct:.0f}% '),
                 ('class:footer_sep', '│ '),
@@ -190,6 +206,7 @@ class InteractiveDashboardApp:
                 ('class:footer_sep', '│ '),
                 ('class:version_seg', f' {tel["version"]} '),
             ]
+            return row
         
         root_container = HSplit([
             Window(content=static_content, wrap_lines=True),

@@ -22,9 +22,10 @@ import os
 import sys
 import threading
 import time
+from collections import deque
 from contextlib import contextmanager
-from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Iterable, Iterator, Optional, TypeVar
+from dataclasses import dataclass, field
+from typing import Any, Awaitable, Callable, Deque, Iterable, Iterator, List, Optional, TypeVar
 
 from rich.console import Console
 from rich.live import Live
@@ -118,34 +119,85 @@ def cc_result(path: str, note: str = "") -> None:
     _console.print(f"  [dim]{CONT}[/dim]  [white]{path}[/white]{extra}")
 
 
+@dataclass
+class _ExpandableBlock:
+    """A piece of output that was shown collapsed; user can expand with ctrl+o."""
+    title: str
+    full_lines: List[str]
+    preview_count: int  # how many lines were already shown
+    consumed: bool = False
+
+
+_EXPANDABLE_BLOCKS: Deque[_ExpandableBlock] = deque(maxlen=32)
+_EXPAND_HINT = "ctrl+o to expand"
+
+
+def _register_block(title: str, full_lines: List[str], preview_count: int) -> _ExpandableBlock:
+    block = _ExpandableBlock(title=title, full_lines=full_lines, preview_count=preview_count)
+    _EXPANDABLE_BLOCKS.append(block)
+    return block
+
+
+def has_pending_expansion() -> bool:
+    return any(not b.consumed for b in _EXPANDABLE_BLOCKS)
+
+
+def expand_pending(max_blocks: int = 4) -> int:
+    """Print full contents for any unconsumed expandable blocks.
+
+    Returns the number of blocks expanded. Bind this to ctrl+o.
+    """
+    count = 0
+    for block in list(_EXPANDABLE_BLOCKS):
+        if block.consumed:
+            continue
+        _console.print(f"  [dim]{CONT}[/dim]  [bold]{block.title}[/bold] [dim](expanded)[/dim]")
+        for line in block.full_lines[block.preview_count:]:
+            _console.print(f"  [dim]{CONT}[/dim]  [dim]{line}[/dim]")
+        block.consumed = True
+        count += 1
+        if count >= max_blocks:
+            break
+    if count == 0:
+        _console.print(f"  [dim]{CONT}[/dim]  [dim italic]Nothing to expand.[/dim italic]")
+    return count
+
+
 def cc_tool_output(tool_name: str, output: str, max_lines: int = 8, max_chars: int = 600) -> None:
     """Render a truncated tool output inline below the tool result line.
-    
-    Shows the first `max_lines` of output (up to `max_chars` total),
-    with a 'truncated' notice if the output exceeds limits.
+
+    Shows the first ``max_lines`` of output (up to ``max_chars`` total).
+    If truncated, registers the full body for ctrl+o expansion and adds
+    a ``(ctrl+o to expand)`` hint — same UX as Claude Code.
     """
     if not output or not output.strip():
         return
-    
+
     clean = output.strip()
-    lines = clean.split("\n")
-    truncated = False
-    
-    if len(clean) > max_chars:
-        clean = clean[:max_chars]
-        lines = clean.split("\n")
-        truncated = True
-    
-    if len(lines) > max_lines:
-        lines = lines[:max_lines]
-        truncated = True
-    
-    for line in lines:
-        # Indent each line under the tool result continuation
+    full_lines = clean.split("\n")
+    preview = full_lines
+
+    truncated_by_chars = len(clean) > max_chars
+    if truncated_by_chars:
+        clipped = clean[:max_chars]
+        preview = clipped.split("\n")
+
+    truncated_by_lines = len(preview) > max_lines
+    if truncated_by_lines:
+        preview = preview[:max_lines]
+
+    truncated = truncated_by_chars or truncated_by_lines
+
+    for line in preview:
         _console.print(f"  [dim]{CONT}[/dim]  [dim]{line}[/dim]")
-    
+
     if truncated:
-        _console.print(f"  [dim]{CONT}[/dim]  [dim italic]… (output truncated)[/dim italic]")
+        _register_block(title=f"{tool_name} output", full_lines=full_lines, preview_count=len(preview))
+        remaining = max(0, len(full_lines) - len(preview))
+        suffix = f"+{remaining} more line{'s' if remaining != 1 else ''} · " if remaining else ""
+        _console.print(
+            f"  [dim]{CONT}[/dim]  [dim italic]… ({suffix}{_EXPAND_HINT})[/dim italic]"
+        )
 
 
 def cc_agent_done(name: str, ok: bool = True) -> None:
@@ -282,15 +334,22 @@ def cc_log_activity(module: str, task: str, status: str = "Completed") -> None:
     )
 
 
-def cc_searched(patterns: int = 0, files_read: int = 0, hint: str = "") -> None:
-    """Composite helper: ``Searched for 2 patterns, read 1 file``."""
+def cc_searched(patterns: int = 0, files_read: int = 0, hint: str = "", expandable: bool = False) -> None:
+    """Composite helper: ``Searched for 2 patterns, read 1 file (ctrl+o to expand)``.
+
+    Pass ``expandable=True`` (or call when there are pending blocks) to attach
+    the ``ctrl+o to expand`` hint.
+    """
     bits = []
     if patterns:
         bits.append(f"Searched for {patterns} pattern{'s' if patterns != 1 else ''}")
     if files_read:
         bits.append(f"read {files_read} file{'s' if files_read != 1 else ''}")
     summary = ", ".join(bits) if bits else "Working"
-    cc_tool_call(summary, hint=hint)
+    effective_hint = hint
+    if expandable or has_pending_expansion():
+        effective_hint = f"{hint} · {_EXPAND_HINT}".strip(" ·") if hint else _EXPAND_HINT
+    cc_tool_call(summary, hint=effective_hint)
 
 
 def cc_file_list(paths: Iterable[str]) -> None:
@@ -517,4 +576,6 @@ __all__ = [
     "cc_tool_call",
     "cc_tool_output",
     "CCSpinner",
+    "expand_pending",
+    "has_pending_expansion",
 ]

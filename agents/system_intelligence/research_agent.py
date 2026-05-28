@@ -72,13 +72,13 @@ class ResearchAgent(BaseAgent):
             Return ONLY the refined English query. 
             """
             
-            with console.status("[bold cyan]Refining Temporal Research Intent...[/bold cyan]"):
-                refined_query = await llm(refine_prompt)
-                refined_query = refined_query.strip().strip("'").strip('"')
-                if "[EMERGENCY MOCK]" in refined_query:
-                    logger.warning("ResearchAgent: Using original prompt as refined query due to LLM failure.")
-                    refined_query = prompt
-                logger.info(f"Refined Query: {refined_query}")
+            console.print("[bold cyan]Refining Temporal Research Intent...[/bold cyan]")
+            refined_query = await llm(refine_prompt)
+            refined_query = refined_query.strip().strip("'").strip('"')
+            if "[EMERGENCY MOCK]" in refined_query:
+                logger.warning("ResearchAgent: Using original prompt as refined query due to LLM failure.")
+                refined_query = prompt
+            logger.info(f"Refined Query: {refined_query}")
             
             # Step 2: Determine Search Source & Temporal Filters
             use_scholar = "scholar" in prompt.lower()
@@ -94,8 +94,8 @@ class ResearchAgent(BaseAgent):
                 # For Scholar, append year if recent
                 if is_recent:
                     refined_query += " 2025..2026"
-                with console.status(f"[bold yellow]Searching Google Scholar for '{refined_query}'...[/bold yellow]"):
-                    results_text = await scholar_tool.run(refined_query)
+                console.print(f"[bold yellow]Searching Google Scholar for '{refined_query}'...[/bold yellow]")
+                results_text = await scholar_tool.run(refined_query)
             else:
                 # Use specific categories and temporal awareness for ArXiv
                 final_query = f"(abs:{refined_query} OR ti:{refined_query}) AND (cat:cs.AI OR cat:cs.LG OR cat:cs.CL)"
@@ -137,16 +137,16 @@ class ResearchAgent(BaseAgent):
                     for rc in top_n:
                         estimation_prompt += f"ID: {rc['id']}\nTitle: {rc['title']}\nSummary: {rc['summary']}\n---\n"
                     
-                    with console.status("[bold green]Analyzing Paper Architectures for SOTA Metrics...[/bold green]"):
-                        metrics_raw = await llm(estimation_prompt)
-                        try:
-                            # Clean JSON response
-                            import json
-                            import re
-                            json_str = re.search(r"\[.*\]", metrics_raw.replace("\n", ""), re.DOTALL).group()
-                            metrics_map = {m['id']: m for m in json.loads(json_str)}
-                        except:
-                            metrics_map = {}
+                    console.print("[bold green]Analyzing Paper Architectures for SOTA Metrics...[/bold green]")
+                    metrics_raw = await llm(estimation_prompt)
+                    try:
+                        # Clean JSON response
+                        import json
+                        import re
+                        json_str = re.search(r"\[.*\]", metrics_raw.replace("\n", ""), re.DOTALL).group()
+                        metrics_map = {m['id']: m for m in json.loads(json_str)}
+                    except:
+                        metrics_map = {}
                     
                     for rc in top_n:
                         m = metrics_map.get(rc['id'], {"speedup": "1.2x", "accuracy": "+5.0%"})

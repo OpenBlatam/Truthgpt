@@ -1,1 +1,0 @@
-Límite de razonamiento alcanzado tras una misión extensa. Último razonamiento: Fixed the truncated benchmark() method and added list_techniques() and __main__ block.

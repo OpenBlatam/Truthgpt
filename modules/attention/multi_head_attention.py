@@ -9,11 +9,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import logging
 from typing import Optional, Tuple, Union, Dict, Any
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 
 logger = logging.getLogger(__name__)
 
-class AttentionBase(ABC, nn.Module):
+class AttentionBase(nn.Module):
     """Abstract base class for attention mechanisms."""
     
     def __init__(self, d_model: int, n_heads: int, dropout: float = 0.1):

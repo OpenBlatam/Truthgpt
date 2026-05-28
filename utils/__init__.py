@@ -70,4 +70,39 @@ def __getattr__(name: str):
     if name in _import_cache:
         return _import_cache[name]
     
-    modul
+    module_path = _LAZY_IMPORTS[name]
+    try:
+        module = __import__(module_path, fromlist=[name], level=1)
+        _import_cache[name] = module
+        return module
+    except (ImportError, AttributeError) as e:
+        raise AttributeError(
+            f"module '{__name__}' has no attribute '{name}'. "
+            f"Failed to import: {e}"
+        ) from e
+
+
+def list_available_utility_modules() -> list[str]:
+    """List all available utility submodules."""
+    return list(_LAZY_IMPORTS.keys())
+
+
+__all__ = [
+    "visualize_checkpoints",
+    "summarize_run",
+    "compare_runs",
+    "get_run_info",
+    "truthgpt",
+    "optimizers",
+    "systems",
+    "training_tools",
+    "adapters",
+    "ai",
+    "enterprise",
+    "gpu",
+    "memory",
+    "monitoring",
+    "quantum",
+    "training",
+    "list_available_utility_modules",
+]

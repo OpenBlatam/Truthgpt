@@ -147,8 +147,38 @@ async def research_menu():
             wait_for_user(force=True)
         elif choice == "T":
             query = Prompt.ask("Research Query")
-            console.print(f"[cyan]➤ Querying Tavily for {query}...[/cyan]")
-            time.sleep(1)
+            if query:
+                from optimization_core.utils.internet_search import search_internet
+                from rich.table import Table
+                from rich.panel import Panel
+                
+                with console.status(f"[bold cyan]➤ Querying Internet for '{query}'...[/bold cyan]"):
+                    try:
+                        results = await search_internet(query, max_results=5)
+                    except Exception as e:
+                        results = []
+                        console.print(f"[red]Error performing web search: {e}[/red]")
+                
+                if results:
+                    clear_screen()
+                    console.print(Panel(f"[bold magenta]Web Search Results for:[/bold magenta] {query}", border_style="magenta"))
+                    
+                    table = Table(box=None)
+                    table.add_column("Idx", style="dim", width=4)
+                    table.add_column("Title", style="white bold")
+                    table.add_column("Link", style="cyan")
+                    
+                    for i, r in enumerate(results, 1):
+                        table.add_row(str(i), r["title"], r["link"])
+                    
+                    console.print(table)
+                    console.print("\n[bold magenta]Details:[/bold magenta]")
+                    for i, r in enumerate(results, 1):
+                        console.print(f"\n[bold cyan][{i}] {r['title']}[/bold cyan]")
+                        console.print(f"[dim]{r['link']}[/dim]")
+                        console.print(f"{r['snippet']}")
+                else:
+                    console.print("[yellow]No results found on the internet.[/yellow]")
             wait_for_user(force=True)
 
 @cc_menu("Intelligence Labs")

@@ -36,10 +36,20 @@ def __getattr__(name: str):
     if name in _import_cache:
         return _import_cache[name]
     
+    import importlib
     module_path = _LAZY_IMPORTS[name]
     try:
-        module = __import__(module_path, fromlist=[name], level=2)
-        obj = getattr(module, name)
+        if module_path.startswith('..'):
+            module = importlib.import_module(module_path, package=__name__)
+        elif module_path.startswith('.'):
+            module = importlib.import_module(module_path, package=__name__)
+        else:
+            module = importlib.import_module(module_path)
+        
+        if hasattr(module, name):
+            obj = getattr(module, name)
+        else:
+            obj = module
         _import_cache[name] = obj
         return obj
     except (ImportError, AttributeError) as e:

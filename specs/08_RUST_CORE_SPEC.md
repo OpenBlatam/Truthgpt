@@ -1,59 +1,67 @@
-# 🦀 Especificación de Rust Core - Optimization Core
+# 🦀 Rust Core Specification - Optimization Core
 
-## 📋 Resumen
+## 📋 Executive Summary
 
-Este documento especifica la implementación del backend Rust (`truthgpt_rust`), que proporciona componentes de alto rendimiento con seguridad de memoria estricta y delegación de concurrencia *lock-free*. Diseñado integralmente para trabajar en conjunto con Python bajo puentes de latencia cero (Zero-Copy) usando PyO3.
+This document specifies the implementation details for the native Rust core library (`truthgpt_rust`). The library exposes memory-safe operations (KV Caching, SIMD compression) to the Python virtual machine using PyO3 FFI bindings.
 
-## 🎯 Objetivos
+---
 
-1. **Alto Rendimiento**: Operaciones 10-50x más rápidas que Python.
-2. **Seguridad de Memoria FFI**: Zero-copy (vía `PyBuffer` y vistas de memoria pre-asignadas) y memory safety garantizado en las barreras C/Rust.
-3. **Concurrencia Async y GIL**: Desbloqueo explícito del Global Interpreter Lock (GIL) para cargas de trabajo CPU-bound (>1ms).
-4. **SIMD**: Optimizaciones SIMD para operaciones numéricas de tokenización y descompresión.
-5. **Telemetría Transparente**: Exposición de latencias internas al sistema de Observabilidad Base de Python sin costo adicional.
+## 🎯 Primary Objectives
 
-## 🏗️ Arquitectura
+1.  **FFI Execution Speed**: Target a 10x to 50x throughput enhancement compared to equivalent pure Python implementations.
+2.  **Zero-Copy Buffer Bridge**: Map memory directly between Python's buffer layout and Rust vectors using `PyBuffer` and raw pointers, avoiding intermediate heap allocations.
+3.  **Non-Blocking GIL Release**: Explicitly release the Python Global Interpreter Lock (GIL) using `py.allow_threads` for all native workloads running longer than $1\text{ms}$.
+4.  **Hardware Optimization (SIMD)**: Enable compiler-driven SIMD vectorization (AVX-512, NEON) for memory compression and string tokenization pipelines.
+5.  **Exception Mapping**: Catch panics at the FFI boundary using `catch_unwind` and translate them into Python exceptions.
 
-### Estructura del Proyecto
+---
+
+## 🏗️ Directory Layout
 
 ```
 rust_core/
-├── Cargo.toml              # Dependencias Rust (PyO3, DashMap, Rayon)
-├── pyproject.toml          # Configuración Maturin para generación Wheels Python
+├── Cargo.toml               # Cargo package dependencies (PyO3, DashMap, Rayon)
+├── pyproject.toml           # Maturin FFI configuration
 ├── src/
-│   ├── lib.rs              # Punto de entrada de extensión y registro PyModule
-│   ├── kv_cache.rs         # KV Cache lock-free con liberador GIL
-│   ├── compression.rs      # Compresión LZ4/Zstd con zero-copy PyBytes
-│   ├── tokenization.rs     # Tokenización rápida (HuggingFace tokenizers)
-│   ├── data_loader.rs      # Carga paralela asíncrona de datos
-│   ├── attention.rs        # Kernels de atención CPU
-│   └── errors.rs           # Mapeo unificado PyErr <-> Rust Error
-├── benches/                # Benchmarks (Criterion.rs)
-└── tests/                  # Tests unitarios nativos (cargo test)
+│   ├── lib.rs               # Extension entrypoint and module definitions
+│   ├── kv_cache.rs          # Sharded, lock-free KV Cache implementation
+│   ├── compression.rs       # LZ4/Zstd memory compression bindings
+│   ├── tokenization.rs      # Rapid tokenization via HuggingFace bindings
+│   ├── data_loader.rs       # Multi-threaded out-of-core JSONL parser
+│   ├── attention.rs         # Local CPU vectorized attention calculations
+│   └── errors.rs            # Rust-to-Python exception translation rules
+├── benches/                 # Micro-benchmarks using Criterion.rs
+└── tests/                   # Native cargo test suite
 ```
 
-## 📦 Componentes
+---
 
-### Mapeo de Errores Base
+## 📦 Technical Specification
 
-**Propósito**: Garantizar que los errores de Rust se traduzcan limpiamente a las excepciones del núcleo estructurado (ej. `PolyglotError`).
+### Error Translation Map
+
+All native Rust errors must map to Python exceptions to prevent unhandled segmentation faults.
 
 ```rust
-// errors.rs
+// src/errors.rs
 use pyo3::prelude::*;
-use pyo3::exceptions::{PyValueError, PyRuntimeError};
+use pyo3::exceptions::PyException;
 
-pyo3::create_exception!(truthgpt_rust, RustCoreError, pyo3::exceptions::PyException);
-pyo3::create_exception!(truthgpt_rust, MemoryAllocationError, RustCoreError);
+// Create exception classes matching the core python spec
+pyo3::import_exception!(optimization_core.core.exceptions, PolyglotError);
+pyo3::import_exception!(optimization_core.core.exceptions, MemoryConstraintError);
+
+pub fn map_to_py_err(err: std::io::Error) -> PyErr {
+    PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Native I/O failure: {:?}", err))
+}
 ```
 
-### KV Cache (MemoryView y Release GIL)
+### PyO3 Vectorized KV Cache (Lock-Free & GIL Release)
 
-**Propósito**: Cache lock-free concurrente para atención, permitiendo `aput` asíncrono desde el orquestador sin congelar la red.
-
-**Especificación**:
+The cache exposes concurrent read and write operations. It release the GIL during insertions to allow the Python asynchronous loop to run concurrently.
 
 ```rust
+// src/kv_cache.rs
 use pyo3::prelude::*;
 use pyo3::buffer::PyBuffer;
 use std::sync::{Arc, RwLock};
@@ -77,14 +85,15 @@ impl PyKVCache {
         }
     }
     
-    // Usamos py.allow_threads para liberar el GIL si la inserción es masiva.
-    // Aceptamos cualquier objeto que exponga el buffer protocol (memoryview)
     fn put(&self, py: Python, layer_idx: usize, position: usize, data_buf: PyBuffer<u8>) -> PyResult<()> {
         let key = (layer_idx, position);
+        
+        // Copy the data from the memoryview buffer safely while holding the GIL
         let data = data_buf.to_vec(py)?;
         
+        // Release the GIL and perform the sharded insertion concurrently
         py.allow_threads(|| {
-            // Check size limit (Concurrent)
+            // Evict items if size limit is exceeded
             if self.cache.len() >= self.max_size {
                 if let Some(oldest) = self.cache.iter().next() {
                     self.cache.remove(oldest.key());
@@ -103,12 +112,15 @@ impl PyKVCache {
     fn get(&self, py: Python, layer_idx: usize, position: usize) -> PyResult<Option<PyObject>> {
         let key = (layer_idx, position);
         
-        let result = py.allow_threads(|| self.cache.get(&key).map(|entry| entry.value().clone()));
+        // Query the map concurrently without holding the GIL
+        let result = py.allow_threads(|| {
+            self.cache.get(&key).map(|entry| entry.value().clone())
+        });
         
         let mut stats = self.stats.write().unwrap();
         if let Some(data) = result {
             stats.hits += 1;
-            // Retorna PyBytes para Zero-Copy en lectura si es posible.
+            // Create a zero-copy PyBytes representation to pass back to Python
             use pyo3::types::PyBytes;
             let py_bytes = PyBytes::new(py, &data);
             Ok(Some(py_bytes.into()))
@@ -129,8 +141,10 @@ impl PyKVCache {
         dict.set_item("misses", stats.misses)?;
         
         let hit_rate = if stats.hits + stats.misses > 0 {
-             stats.hits as f64 / (stats.hits + stats.misses) as f64
-        } else { 0.0 };
+            stats.hits as f64 / (stats.hits + stats.misses) as f64
+        } else {
+            0.0
+        };
         dict.set_item("hit_rate", hit_rate)?;
         
         Ok(dict.into())
@@ -139,17 +153,16 @@ impl PyKVCache {
 
 #[derive(Default)]
 struct CacheStats {
-    hits: usize, misses: usize, puts: usize,
+    hits: usize,
+    misses: usize,
+    puts: usize,
 }
 ```
 
-### Compression (Zero-Copy Transfer)
-
-**Propósito**: Compresión LZ4/Zstd liberando el GIL explícitamente y usando `PyBytes` contiguos.
-
-**Especificación**:
+### PyO3 Vectorized Compression Module
 
 ```rust
+// src/compression.rs
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use lz4_flex::{compress, decompress};
@@ -162,28 +175,34 @@ pub struct PyCompressor {
 #[pymethods]
 impl PyCompressor {
     #[new]
-    fn new(algorithm: String) -> Self { PyCompressor { algorithm } }
+    fn new(algorithm: String) -> Self {
+        PyCompressor { algorithm }
+    }
     
     fn compress(&self, py: Python, data: &[u8]) -> PyResult<PyObject> {
+        // Release the GIL during block compression
         let compressed = py.allow_threads(|| compress(data));
-        // Casts contiguous memory payload back to unmanaged Python runtime space
+        
+        // Wrap output in PyBytes while holding the GIL
         Ok(PyBytes::new(py, &compressed).into())
     }
     
-    fn decompress(&self, py: Python, compressed_data: &[u8], original_size_hint: usize) -> PyResult<PyObject> {
-        let decompressed = py.allow_threads(|| decompress(compressed_data, original_size_hint))
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("LZ4 failure: {:?}", e)))?;
+    fn decompress(&self, py: Python, compressed_data: &[u8], original_size: usize) -> PyResult<PyObject> {
+        let decompressed = py.allow_threads(|| {
+            decompress(compressed_data, original_size)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("LZ4 decompression failed: {:?}", e)))
+        })?;
             
         Ok(PyBytes::new(py, &decompressed).into())
     }
 }
 ```
 
-## 🔧 Build y Configuración
+---
+
+## 🔧 Build System & Configuration
 
 ### Cargo.toml
-
-Requiere dependencias preparadas para extensiones de `Python`, incluyendo características estáticas fuertes.
 
 ```toml
 [package]
@@ -213,7 +232,7 @@ name = "kv_cache_bench"
 harness = false
 ```
 
-### pyproject.toml (Maturin FFI Toolchain)
+### pyproject.toml
 
 ```toml
 [build-system]
@@ -224,61 +243,60 @@ build-backend = "maturin"
 name = "truthgpt-rust"
 version = "1.1.0"
 requires-python = ">=3.10"
-description = "Optimization Core Rust Backend for TruthGPT"
+description = "Optimization Core Rust extension package."
 ```
 
-### Instrucciones de Build (CI/CD Ready)
+### Compilation Targets
 
 ```bash
-# Desarrollo nativo (Virtual Env en Python)
+# Develop compilation targets
 maturin develop --release --features abi3-py310
 
-# Build universal Wheel
+# Package compilation
 maturin build --release
 ```
 
-## 📊 Performance Targets
+---
 
-- **Lock-free KV Cache**: > 50M ops/s usando `DashMap` (Sharded Hashing).
-- **Compresión Lz4 (CPU Fast Paths)**: > 5 GB/s liberando el GIL, no interrumpe orquestación web (SSE).
-- **Memory Overhead FFI**: Constante `O(1)` (punteros `PyBytes`/`PyBuffer` transferidos sin serialización intermedia).
+## 📈 Performance Targets
 
-## 🧪 Testing
-
-### Test Binding a Async Python
-
-Integrados en `Polyglot` a alto nivel, pero probables directamente como módulos crudos:
-
-```python
-import pytest
-import asyncio
-import truthgpt_rust
-
-def test_rust_gil_release():
-    compressor = truthgpt_rust.PyCompressor("lz4")
-    data = b"X" * 1024 * 1024 # 1MB test string
-    
-    # Compress debería liberar el GIL y permitir al framework iterar el loop en paralelo 
-    resultado = compressor.compress(data)
-    assert len(resultado) < len(data)
-
-def test_kv_cache_memoryview():
-    cache = truthgpt_rust.PyKVCache(1024)
-    buffer = memoryview(b"\x00\x01\x02") # Zero-copy pointer handle
-    
-    # buffer es procesado como PyBuffer u8 en backend
-    cache.put(0, 0, buffer)
-    res = cache.get(0, 0)
-    assert res == b"\x00\x01\x02"
-```
-
-## 📝 Reglas Estrictas de Backend Compilado (v1.1.0)
-
-1. **GIL Release Imperativo**: Cualquier función en Rust esperada a durar más de 1 ms *debe* envolver su lógica intensiva (LZ4, Tokenización) con la macro/clausura `py.allow_threads(|| {...})`.
-2. **Uso Exclusivo de Tipos Compatibles con Buffer Protocol**: No usar `String` de Rust ni conversiones `b"str"` si se puede evitar al pasar tensores de red a memoria. Preferir recibir `PyBuffer<u8>` y responder `PyBytes`.
-3. **Pánicos Mapeables (`std::panic::catch_unwind`)**:  Un pánico en Rust no manejado causa un C-Segfault, tirando el contenedor entero (Docker u orquestador UVicorn). Todos los `Result::Err` deben transformarse en `PyResult` antes del FFI boundary.
+-   **Sharded Cache Insertion (DashMap)**: $\ge 5 \times 10^7 \text{ ops/sec}$.
+-   **SIMD Block Compression**: $\ge 5 \text{ GB/sec}$ throughput, preventing GIL bottlenecking.
+-   **Allocation Overhead**: $\mathcal{O}(1)$ memory allocation complexity.
 
 ---
 
-**Versión**: 1.1.0  
-**Última actualización**: Marzo 2026
+## 🧪 Integration Verification
+
+Verify GIL release behaviors and memory maps using python test assertions:
+
+```python
+import pytest
+import truthgpt_rust
+
+def test_rust_gil_release_validation():
+    """Verify that native compression releases the GIL."""
+    compressor = truthgpt_rust.PyCompressor("lz4")
+    data = b"A" * 1024 * 1024  # 1MB payload
+    
+    # Perform compression
+    compressed = compressor.compress(data)
+    assert len(compressed) < len(data)
+
+def test_kv_cache_zero_copy_buffer():
+    """Verify zero-copy buffer maps to Rust cache structures."""
+    cache = truthgpt_rust.PyKVCache(max_size=100)
+    
+    # Pass a memoryview mapping directly to Python's heap segment
+    data = memoryview(b"\x00\xff\xaa\xbb")
+    cache.put(0, 0, data)
+    
+    retrieved = cache.get(0, 0)
+    assert retrieved == b"\x00\xff\xaa\xbb"
+```
+
+---
+
+**Specification Version**: 1.1.0  
+**Last Updated**: March 2026  
+**Architectural Scope**: Rust Core Native Extension

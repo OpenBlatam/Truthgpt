@@ -1,1 +1,0 @@
-TruthGPT ya implementa 50 técnicas SOTA de mitigación de alucinaciones (lista completa disponible en las respuestas anteriores). Para añadir una nueva técnica, por favor indique el nombre del paper o su arXiv ID (ej. 'Self-RAG (arXiv:2310.11511)' ya está incluido). Si desea refactorizar, probar combinaciones o ejecutar benchmarks, también puedo ayudarle. ¿Qué prefiere hacer?

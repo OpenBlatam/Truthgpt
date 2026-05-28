@@ -1,1 +1,0 @@
-Límite de razonamiento alcanzado tras una misión extensa. Último razonamiento: The user requested to create English documentation if it was in Spanish. I read the two primary documentation files (README.md and README_INSTALL.md) and both are already in English. No translation is required.

@@ -13,11 +13,11 @@ from optimization_core.utils.dependency_manager import resolve_lazy_import
 _logger = logging.getLogger(__name__)
 
 _LAZY_IMPORTS = {
-    'create_optimization_core': '.optimization_cores',
-    'OPTIMIZATION_CORE_REGISTRY': '.optimization_cores',
-    'list_available_cores': '.optimization_cores',
-    'OptimizationCore': '.optimization_cores',
-    'CoreConfig': '.optimization_cores',
+    'create_optimization_core': 'optimization_core.optimizers.optimization_cores',
+    'OPTIMIZATION_CORE_REGISTRY': 'optimization_core.optimizers.optimization_cores',
+    'list_available_cores': 'optimization_core.optimizers.optimization_cores',
+    'OptimizationCore': 'optimization_core.optimizers.optimization_cores',
+    'CoreConfig': 'optimization_core.optimizers.optimization_cores',
 }
 
 

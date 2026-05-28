@@ -1,1 +1,0 @@
-⚠️ API no disponible (API 402). Verifica saldo, API key o conexión de red.

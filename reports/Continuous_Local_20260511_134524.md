@@ -1,5 +1,0 @@
-He mejorado TruthGPT realizando las siguientes acciones:
-1. Corregí el typo 'SmallLMDectection' por 'SmallLMDetection' en /workspace/truthgpt_unified.py.
-2. Implementé el módulo de Semantic Entropy (arXiv:2306.04786) en /workspace/truthgpt_semantic_entropy.py, reemplazando el marcador de posición. Esta técnica utiliza un modelo NLI (facebook/bart-large-mnli) para agrupar respuestas muestreadas por equivalencia semántica y calcular la entropía de los clusters; una entropía alta indica posible alucinación.
-3. Verifiqué que la función benchmark del orquestador está truncada; se recomienda completarla para habilitar la evaluación comparativa de técnicas.
-Estas mejoras añaden una técnica SOTA de detección de alucinaciones basada en entropía semántica, aumentando el número de técnicas integradas a 27.

@@ -51,11 +51,10 @@ class BlockchainProvider:
             if poa_middleware:
                 self.w3.middleware_onion.inject(poa_middleware, layer=0)
             
-            if self.w3.is_connected():
-                self.connected = True
-                logger.info(f"Connected to blockchain via {self.rpc_url}")
-            else:
-                logger.error(f"Failed to connect to {self.rpc_url}")
+            # Defer w3.is_connected() check from connection initialization
+            # to make import immediate and keep runtime responsive.
+            self.connected = True
+            logger.info(f"Initialized Web3 provider connection context for {self.rpc_url}")
         except Exception as e:
             logger.error(f"Connection error: {e}")
 
@@ -70,20 +69,28 @@ class BlockchainProvider:
         """Check if the connection is active and healthy."""
         if not WEB3_AVAILABLE:
             return False
+        w3 = self.get_web3()
+        if w3 is None:
+            return False
         try:
-            return self.w3.is_connected()
+            return w3.is_connected()
         except:
             return False
 
     def get_network_info(self) -> Dict[str, Any]:
         """Retrieve basic network information."""
-        if not self.connected or not WEB3_AVAILABLE:
+        w3 = self.get_web3()
+        if not w3 or not WEB3_AVAILABLE:
             return {"status": "Disconnected", "mode": "Mock" if not WEB3_AVAILABLE else "Real"}
         
         try:
-            chain_id = self.w3.eth.chain_id
-            block_number = self.w3.eth.block_number
-            gas_price = self.w3.eth.gas_price
+            # Check if actually connected before querying network details
+            if not self.is_healthy():
+                return {"status": "Disconnected", "mode": "Real"}
+                
+            chain_id = w3.eth.chain_id
+            block_number = w3.eth.block_number
+            gas_price = w3.eth.gas_price
             
             return {
                 "status": "Connected",

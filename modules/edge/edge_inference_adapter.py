@@ -2,8 +2,8 @@ import torch
 from typing import Optional
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from modules.memory.advanced_memory_manager import create_advanced_memory_manager
-from modules.attention.attn_autotune import choose_best_backend
+from ..memory.advanced_memory_manager import create_advanced_memory_manager
+from ..attention.attn_autotune import choose_best_backend
 
 
 class EdgeInferenceAdapter:

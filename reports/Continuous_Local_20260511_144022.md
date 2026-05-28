@@ -1,1 +1,0 @@
-He mejorado TruthGPT. El código se ha guardado en /workspace/truthgpt_unified_v4.py con las siguientes correcciones: ejecutor asíncrono completo, envoltura síncrona, pipeline concurrente y entrada CLI. La ejecución ahora maneja errores y utiliza caché TTL.

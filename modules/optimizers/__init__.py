@@ -32,6 +32,12 @@ __all__ = [
     'list_available_module_optimizers',
     'get_module_optimizer_info',
     'MODULE_OPTIMIZER_REGISTRY',
+    'computational_optimizations',
+    'triton_optimizations',
+    'create_truthgpt_optimizer',
+    'create_generic_optimizer',
+    'EnhancedOptimizationCore',
+    'HybridOptimizationCore',
 ]
 
 _LAZY_IMPORTS = {
@@ -59,6 +65,12 @@ _LAZY_IMPORTS = {
     'create_memory_optimizer': '..memory_optimizer',
     'create_memory_optimization_config': '..memory_optimizer',
     'create_memory_profiler': '..memory_optimizer',
+    'computational_optimizations': '.techniques.computational_optimizations',
+    'triton_optimizations': '.techniques.triton_optimizations',
+    'create_truthgpt_optimizer': 'optimization_core.optimizers',
+    'create_generic_optimizer': 'optimization_core.optimizers.core.generic_optimizer',
+    'EnhancedOptimizationCore': 'optimization_core.optimizers',
+    'HybridOptimizationCore': 'optimization_core.optimizers',
 }
 
 _import_cache = {}
@@ -75,10 +87,20 @@ def __getattr__(name: str):
     if name in _import_cache:
         return _import_cache[name]
     
+    import importlib
     module_path = _LAZY_IMPORTS[name]
     try:
-        module = __import__(module_path, fromlist=[name], level=2)
-        obj = getattr(module, name)
+        if module_path.startswith('..'):
+            module = importlib.import_module(module_path, package=__name__)
+        elif module_path.startswith('.'):
+            module = importlib.import_module(module_path, package=__name__)
+        else:
+            module = importlib.import_module(module_path)
+        
+        if hasattr(module, name):
+            obj = getattr(module, name)
+        else:
+            obj = module
         _import_cache[name] = obj
         return obj
     except (ImportError, AttributeError) as e:

@@ -1,1 +1,0 @@
-He implementado el detector de alucinaciones basado en distancias probabilísticas (arXiv:2506.09886) en /workspace/truthgpt_prob_dist.py. Esta técnica analiza la distribución de probabilidades del modelo para identificar alucinaciones. Si deseas integrar una técnica adicional de las 12 disponibles o explorar un dominio específico, indícalo.

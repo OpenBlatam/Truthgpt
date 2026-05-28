@@ -1,1 +1,0 @@
-{"thought":"I need to explore the codebase to identify wrapper patterns and improve TruthGPT.","tool":"system_bash","tool_input":"find /workspace -type f -name \"*.py\" | head -30"}}

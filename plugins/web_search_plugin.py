@@ -21,24 +21,44 @@ class AdvancedWebSearchPlugin(BaseTool):
     
     async def run(self, tool_input: str) -> ToolResult:
         """
-        Mock implementation of a deep search.
-        In a real scenario, this would use Tavily, Serper, or a custom crawler.
+        Runs internet search using search_internet.
         """
         print(f"DEBUG: AdvancedWebSearchPlugin running query: {tool_input}")
-        
-        # Simulate network latency
-        await asyncio.sleep(0.5)
-        
-        mock_results = (
-            f"--- Snippets for: {tool_input} ---\n"
-            "1. Comprehensive guide to AI Agents in 2025: TruthGPT is taking over.\n"
-            "2. OpenClaw framework achieves 100% SOTA performance in benchmarks.\n"
-            "3. SOTA 2025 Stack: A new era of autonomous plugin-driven systems."
-        )
-        
+        try:
+            try:
+                from utils.internet_search import search_internet
+            except ImportError:
+                try:
+                    from optimization_core.utils.internet_search import search_internet
+                except ImportError:
+                    import sys
+                    from pathlib import Path
+                    sys.path.append(str(Path(__file__).resolve().parent.parent))
+                    from utils.internet_search import search_internet
+
+            results = await search_internet(tool_input)
+            if results:
+                formatted_lines = []
+                for i, r in enumerate(results, 1):
+                    formatted_lines.append(
+                        f"{i}. **{r.get('title', '—')}**\n"
+                        f"   {r.get('snippet', '')}\n"
+                        f"   Link: {r.get('link', 'N/A')}"
+                    )
+                output_str = f"Resultados para '{tool_input}':\n\n" + "\n\n".join(formatted_lines)
+            else:
+                output_str = f"No se encontraron resultados en internet para: '{tool_input}'."
+        except Exception as e:
+            output_str = f"Error al buscar en internet para '{tool_input}': {str(e)}"
+            results = []
+
         return ToolResult(
-            output=mock_results,
-            metadata={"source": "advanced_search_plugin", "query": tool_input}
+            output=output_str,
+            metadata={
+                "source": "advanced_search_plugin",
+                "query": tool_input,
+                "results": results
+            }
         )
 
 # Factory function for dynamic loading

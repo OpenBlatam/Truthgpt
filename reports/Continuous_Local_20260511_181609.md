@@ -1,1 +1,0 @@
-Límite de razonamiento alcanzado tras una misión extensa. Último razonamiento: All attempts to read or list files timed out, so I cannot determine if Spanish documentation exists or translate it. The system appears unresponsive for file operations.

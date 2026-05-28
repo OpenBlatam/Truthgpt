@@ -1,1 +1,0 @@
-⚠️ OpenRouter no disponible (API 402...).

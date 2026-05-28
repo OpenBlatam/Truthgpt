@@ -5,18 +5,20 @@ Centralized access to all adapter classes in optimization_core.
 """
 
 # Import core adapters
-from ..core.adapters.optimizer_adapter import (
+from .base import BaseDynamicAdapter, ObjectStore, ObjectEntry
+from .training_adapter import TrainingAdapter
+from .optimizer_adapter import (
     OptimizerAdapter,
     PyTorchOptimizerAdapter,
 )
 
-from ..core.adapters.data_adapter import (
+from .data_adapter import (
     DataAdapter,
     HuggingFaceDataAdapter,
     JSONLDataAdapter,
 )
 
-from ..core.adapters.model_adapter import (
+from .model_adapter import (
     ModelAdapter,
     HuggingFaceModelAdapter,
 )
@@ -94,6 +96,9 @@ def create_adapter(
         "enterprise": {
             "default": lambda cfg: EnterpriseTruthGPTAdapter(**cfg) if EnterpriseTruthGPTAdapter else None,
         },
+        "training": {
+            "default": lambda cfg: TrainingAdapter(**cfg),
+        },
     }
     
     if adapter_type not in factory_map:
@@ -145,8 +150,15 @@ ADAPTER_REGISTRY = {
     "model": {
         "huggingface": {
             "class": HuggingFaceModelAdapter,
-            "module": "core.adapters.model_adapter",
+            "module": "adapters.model_adapter",
             "description": "HuggingFace model adapter",
+        },
+    },
+    "training": {
+        "default": {
+            "class": TrainingAdapter,
+            "module": "adapters.training_adapter",
+            "description": "Training adapter",
         },
     },
     "edge": {
@@ -241,6 +253,10 @@ def get_adapter_info(adapter_type: str, adapter_subtype: str = None) -> dict:
 
 
 __all__ = [
+    # Base
+    "BaseDynamicAdapter",
+    "ObjectStore",
+    "ObjectEntry",
     # Optimizer adapters
     "OptimizerAdapter",
     "PyTorchOptimizerAdapter",
@@ -251,6 +267,8 @@ __all__ = [
     # Model adapters
     "ModelAdapter",
     "HuggingFaceModelAdapter",
+    # Training adapters
+    "TrainingAdapter",
     # Edge adapters
     "EdgeInferenceAdapter",
     # TruthGPT adapters

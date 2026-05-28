@@ -47,6 +47,26 @@ class AgentAction(BaseModel):
         return v
 
     @classmethod
+    def parse_from_text(cls, text: str) -> 'AgentAction':
+        """
+        Robust JSON extraction from LLM output that may contain trailing characters.
+        Implements regex-based extraction: finds first '{' to last '}' to isolate JSON object.
+        Falls back to full text parse if extraction fails.
+        """
+        import re
+        import json as json_module
+        match = re.search(r'\{.*\}', text, re.DOTALL)
+        if match:
+            json_str = match.group(0)
+            try:
+                return cls(**json_module.loads(json_str))
+            except (json_module.JSONDecodeError, TypeError, ValueError):
+                # Try with escaped characters?
+                pass
+        # Final fallback: attempt to parse the entire text as JSON
+        return cls(**json_module.loads(text))
+
+    @classmethod
     def model_json_schema(cls, *args, **kwargs):
         """Override to ensure LLM-friendly descriptions."""
         schema = super().model_json_schema(*args, **kwargs)

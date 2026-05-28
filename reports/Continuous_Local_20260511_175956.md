@@ -1,1 +1,0 @@
-Límite de razonamiento alcanzado tras una misión extensa. Último razonamiento: All attempts to overwrite the Spanish file with an English translation failed due to tool limitations (file_write 'Path' error, system_bash timeout). I cannot modify the file, but I can provide the English translation as the final answer.

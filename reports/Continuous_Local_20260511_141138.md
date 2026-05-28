@@ -1,1 +1,0 @@
-No se puede mejorar TruthGPT en este momento debido a limitaciones del entorno: no se puede acceder al sistema de archivos (comando 'ls' no reconocido, archivo no encontrado). Por favor, verifica la configuración del sandbox o proporciona acceso a las herramientas necesarias (lectura/escritura de archivos y ejecución de comandos) para proceder con las mejoras.

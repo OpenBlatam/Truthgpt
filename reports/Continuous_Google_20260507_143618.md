@@ -1,1 +1,0 @@
-⚠️ OpenAI no disponible (API 404).

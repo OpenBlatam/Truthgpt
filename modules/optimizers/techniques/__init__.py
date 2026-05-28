@@ -16,6 +16,13 @@ _LAZY_IMPORTS = {
     'triton_optimizations': '.triton_optimizations',
     'ComputationalOptimizer': '.computational_optimizations',
     'TritonOptimizer': '.triton_optimizations',
+    'AdvancedRMSNorm': '.advanced_normalization',
+    'AdvancedNormalizationOptimizations': '.advanced_normalization',
+    'RotaryEmbedding': '.positional_encodings',
+    'SwiGLU': '.enhanced_mlp',
+    'RLPruning': '.rl_pruning',
+    'TritonOptimizations': '.triton_optimizations',
+    'PositionalEncodingOptimizations': '.positional_encodings',
 }
 
 
@@ -34,6 +41,13 @@ __all__ = [
     'triton_optimizations',
     'ComputationalOptimizer',
     'TritonOptimizer',
+    'AdvancedRMSNorm',
+    'AdvancedNormalizationOptimizations',
+    'RotaryEmbedding',
+    'SwiGLU',
+    'RLPruning',
+    'TritonOptimizations',
+    'PositionalEncodingOptimizations',
 ]
 
 __version__ = "1.0.0"

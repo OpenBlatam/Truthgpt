@@ -7,6 +7,7 @@ Designed for debugging, auditing, and performance optimisation.
 """
 
 import logging
+import threading
 import time
 import uuid
 import json
@@ -16,6 +17,9 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, computed_field
 
 logger = logging.getLogger(__name__)
+
+_INPUT_TRUNCATE = 500
+_OUTPUT_TRUNCATE = 500
 
 
 class Span(BaseModel):
@@ -44,8 +48,11 @@ class Span(BaseModel):
         return round((self.end_time - self.start_time) * 1000, 2)
 
     def finish(self, output: str = "", status: str = "ok", metadata: Optional[Dict[str, Any]] = None) -> None:
-        self.end_time = time.time()
-        self.output_data = output[:500]
+        # Guard against double-finish (a leaked span may already have a real end_time)
+        if self.end_time == 0.0:
+            self.end_time = time.time()
+        if output:
+            self.output_data = output[:_OUTPUT_TRUNCATE]
         self.status = status
         if metadata:
             self.metadata.update(metadata)
@@ -93,6 +100,10 @@ class Tracer:
         self._traces: Dict[str, List[Span]] = {}
         self._trace_order: List[str] = []
         self._persistence_loaded = False
+        self._lock = threading.Lock()
+        # Only the finish of a trace forces a disk write. start_trace / start_span
+        # update the in-memory store and rely on the eventual finish_trace flush,
+        # which avoids the O(n²) full-history rewrite per span.
 
     def _ensure_loaded(self) -> None:
         """Lazy-load persisted traces on first access."""
@@ -100,7 +111,13 @@ class Tracer:
             self._load_traces()
             self._persistence_loaded = True
 
-    def start_trace(self, name: str, agent_name: str = "") -> str:
+    def start_trace(
+        self,
+        name: str,
+        agent_name: str = "",
+        input_data: str = "",
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> str:
         """Create a new trace and return its ID."""
         self._ensure_loaded()
         trace_id = str(uuid.uuid4())[:12]
@@ -110,16 +127,16 @@ class Tracer:
             name=name,
             agent_name=agent_name,
             kind="internal",
+            input_data=(input_data or "")[:_INPUT_TRUNCATE],
+            metadata=dict(metadata or {}),
         )
-        self._traces[trace_id] = [root_span]
-        self._trace_order.append(trace_id)
-
-        # Evict old traces
-        while len(self._trace_order) > self.max_traces:
-            old_id = self._trace_order.pop(0)
-            self._traces.pop(old_id, None)
-
-        self._save_traces()
+        with self._lock:
+            self._traces[trace_id] = [root_span]
+            self._trace_order.append(trace_id)
+            # Evict old traces
+            while len(self._trace_order) > self.max_traces:
+                old_id = self._trace_order.pop(0)
+                self._traces.pop(old_id, None)
         return trace_id
 
     def start_span(
@@ -140,20 +157,33 @@ class Tracer:
             name=name,
             agent_name=agent_name,
             kind=kind,
-            input_data=input_data[:500],
-            metadata=metadata or {},
+            input_data=(input_data or "")[:_INPUT_TRUNCATE],
+            metadata=dict(metadata or {}),
         )
-        spans = self._traces.get(trace_id)
-        if spans is not None:
-            spans.append(span)
+        with self._lock:
+            spans = self._traces.get(trace_id)
+            if spans is not None:
+                spans.append(span)
         return span
 
-    def finish_trace(self, trace_id: str) -> None:
-        """Mark the root span of the trace as finished."""
-        spans = self._traces.get(trace_id)
-        if spans:
-            spans[0].finish()
-            self._save_traces()
+    def finish_trace(
+        self,
+        trace_id: str,
+        output: str = "",
+        status: str = "ok",
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Mark the root span of the trace as finished and persist."""
+        with self._lock:
+            spans = self._traces.get(trace_id)
+            if not spans:
+                return
+            root = spans[0]
+            if root.end_time != 0.0:
+                # Already finished — idempotent, skip persist.
+                return
+            root.finish(output=output, status=status, metadata=metadata)
+        self._save_traces()
 
     def get_trace(self, trace_id: str) -> List[dict]:
         """Return all spans for a trace as dicts."""
@@ -201,14 +231,22 @@ class Tracer:
     # ------------------------------------------------------------------
 
     def _save_traces(self) -> None:
-        """Serialize current traces to a JSON file via Pydantic model_dump."""
-        try:
-            data = {}
-            for tid, spans in self._traces.items():
-                data[tid] = [s.model_dump() for s in spans]
+        """Serialize current traces to a JSON file via Pydantic model_dump.
 
-            with open(self.persistence_path, "w", encoding="utf-8") as f:
+        Writes atomically via a sibling tmp file + os.replace so a crash mid-write
+        cannot corrupt traces_history.json.
+        """
+        import os
+        try:
+            with self._lock:
+                data = {
+                    tid: [s.model_dump() for s in spans]
+                    for tid, spans in self._traces.items()
+                }
+            tmp_path = self.persistence_path.with_suffix(self.persistence_path.suffix + ".tmp")
+            with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
+            os.replace(tmp_path, self.persistence_path)
         except Exception as e:
             logger.error("Failed to save trace history: %s", e)
 

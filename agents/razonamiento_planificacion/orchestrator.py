@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from agents.memoria_aprendizaje.core_memory import CoreMemory
     from agents.razonamiento_planificacion.tools import BaseTool, ToolResult
     from agents.engines import AsyncLLMEngine
+    from typing import AsyncIterator
 
 from agents.models import AgentAction, AgentResponse, InferenceResult, AgentConfig
 from agents.razonamiento_planificacion.config import settings
@@ -30,8 +31,6 @@ except ImportError:
     from ..observability import global_tracer
 
 logger = logging.getLogger(__name__)
-
-# AgentAction and AgentResponse are now imported from .models
 
 class MultiUserReActAgent:
     """
@@ -159,187 +158,24 @@ class MultiUserReActAgent:
         """Finaliza la ejecución del agente guardando en memoria y actualizando persistencia."""
         # 1. Guardar la respuesta en la memoria del chat (historial)
         await self.memory.add_message(user_id, "assistant", final_answer)
-        
+
         # 2. RAG Episodic Memory (si está habilitada)
         if self.vector_memory and self.vector_memory.enabled:
             await self.vector_memory.add_episodic(user_id, self.name, f"User: {message}\nAnswer: {final_answer}")
             # Compactar asíncronamente
             from agents.engines import safe_llm_call
             asyncio.create_task(self.vector_memory.compact_episodic_memory(user_id, safe_llm_call))
-            
-        # 3. Observabilidad
-        global_tracer.finish_trace(trace_id)
+
+        # 3. Observabilidad — close trace is handled by the unified loop, but cc_agent_done belongs here
         if CC_AVAILABLE:
             cc_agent_done(self.name, ok=True)
-            
+
         # 4. Actualizar estado de persistencia/tarea
         if self.persistent:
             from modules.persistence.task_manager import get_persistence_manager
             await get_persistence_manager().mark_completed(task_id)
-            
+
         return AgentResponse(content=final_answer, action_type="final_answer")
-
-    async def process_message(self, user_id: str, message: str) -> AgentResponse:
-        """
-        Procesa un mensaje de forma asíncrona aislando el contexto por usuario.
-        Platinum Edition: Modular, Traced, and Persistent.
-        """
-        logger.info(f"Iniciando proceso asíncrono para {user_id}")
-        await self.memory.add_message(user_id, "user", message)
-        
-        current_prompt = await self._build_initial_prompt(user_id, message)
-        
-        # Iniciar traza de observabilidad
-        trace_id = global_tracer.start_trace(name="process_message", agent_name="MultiUserReActAgent")
-        task_id = str(uuid.uuid4())
-        
-        for i in range(settings.MAX_ITERATIONS):
-            await self._checkpoint(task_id, user_id, message, current_prompt, i)
-
-            # Inferencia asíncrona robusta (con reintentos)
-            from agents.engines import safe_llm_call
-            response = await safe_llm_call(self.llm, current_prompt, trace_id)
-            
-            try:
-                action = self._parse_action(response)
-                clean_resp = response.strip() 
-                
-                if action.tool:
-                    if action.tool in self.tools:
-                        tool_instance = self.tools[action.tool]
-                        if tool_instance.requires_approval:
-                            logger.info(f"HITL PAUSE: Require aprobación para {action.tool}")
-                            await self.memory.add_message(user_id, "assistant", clean_resp)
-                            await self.memory.add_message(user_id, "assistant", f"⏳ Esperando aprobación manual para ejecutar: {action.tool}")
-                            return AgentResponse(
-                                content=f"⏳ Esperando aprobación para: {action.tool}",
-                                action_type="approval_required",
-                                metadata={"tool": action.tool, "cmd": action.tool_input}
-                            )
-                            
-                        if CC_AVAILABLE: cc_tool_call(f"Executing {action.tool}...")
-                        result = await self._execute_tool_action(trace_id, action, user_id)
-                        if CC_AVAILABLE:
-                            cc_result(action.tool, note="Success")
-                            cc_tool_output(action.tool, str(result))
-                    else:
-                        result = f"Error: La herramienta '{action.tool}' no existe."
-                    current_prompt += f"{clean_resp}\nTOOL_RESULT: {result}\nTRUTHGPT: "
-                    
-                elif action.final_answer:
-                    if self.use_reflexion:
-                        logger.info("Auto-Reflexion: Evaluando respuesta...")
-                        approved, critique = await self._run_reflexion(user_id, current_prompt, clean_resp, trace_id)
-                        
-                        if approved:
-                            return await self._finalize_completion(user_id, message, action.final_answer, task_id, trace_id)
-                        else:
-                            logger.info("Auto-Reflexion: Reintentando tras crítica...")
-                            current_prompt += f"\n{clean_resp}\n[CRÍTICA]: {critique}\nTRUTHGPT: "
-                    else:
-                        return await self._finalize_completion(user_id, message, action.final_answer, task_id, trace_id)
-                elif action.handoff:
-                    logger.info(f"Iniciando Swarm Handoff hacia: {action.handoff}")
-                    await self.memory.add_message(user_id, "assistant", f"Transferring control to {action.handoff}...")
-                    return AgentResponse(
-                        content=f"Transferring to {action.handoff}...",
-                        action_type="handoff",
-                        handoff_target=action.handoff
-                    )
-                else:
-                    raise ValueError("Debes proveer 'tool', 'respuesta_final' o 'handoff' en tu JSON.")
-                    
-            except Exception as e:
-                logger.warning(f"Error parseando Pydantic JSON: {e}")
-                err_msg = f"Tu respuesta violó el esquema JSON obligatorio. Detalle: {str(e)}"
-                current_prompt += f"\n[ERROR DE SISTEMA]: {err_msg}\nCorrige y responde solo en JSON.\nTRUTHGPT: "
-        
-        fallback = "Límite de razonamiento alcanzado. Por favor, simplifica tu petición."
-        await self.memory.add_message(user_id, "assistant", fallback)
-        global_tracer.finish_trace(trace_id)
-        return AgentResponse(content=fallback, action_type="final_answer")
-
-    from typing import AsyncIterator
-    
-    async def astream_process_message(self, user_id: str, message: str) -> 'AsyncIterator[str]':
-        """
-        Procesa un mensaje de forma asíncrona y hace yield de los pasos (Streaming / SSE).
-        Emite JSON strings que representan eventos o estados parciales.
-        """
-        logger.info(f"Iniciando proceso STREAMING para {user_id}")
-        await self.memory.add_message(user_id, "user", message)
-        
-        current_prompt = await self._build_initial_prompt(user_id, message)
-        
-        trace_id = global_tracer.start_trace(name="astream_process", agent_name="MultiUserReActAgent")
-        
-        for i in range(settings.MAX_ITERATIONS):
-            yield json.dumps({"event": "thinking", "iteration": i+1}) + "\n"
-            
-            from agents.engines import safe_llm_call
-            response = await safe_llm_call(self.llm, current_prompt, trace_id)
-            
-            try:
-                action = self._parse_action(response)
-                clean_resp = response.strip()
-                
-                if action.tool:
-                    if action.tool in self.tools:
-                        tool_instance = self.tools[action.tool]
-                        if tool_instance.requires_approval:
-                            logger.info(f"STREAMING HITL PAUSE: Require aprobación para {action.tool}")
-                            yield json.dumps({"event": "requires_approval", "tool": action.tool, "cmd": action.tool_input}) + "\n"
-                            await self.memory.add_message(user_id, "assistant", clean_resp)
-                            approval_msg = f"<WAITING_FOR_APPROVAL tool='{action.tool}' cmd='{action.tool_input}'/>"
-                            await self.memory.add_message(user_id, "assistant", f"⏳ Esperando aprobación manual para ejecutar: {action.tool}")
-                            yield json.dumps({"event": "final_answer", "content": approval_msg}) + "\n"
-                            return
-                            
-                        yield json.dumps({"event": "tool_call", "tool": action.tool, "cmd": action.tool_input}) + "\n"
-                        result = await self._execute_tool_action(trace_id, action, user_id)
-                    else:
-                        yield json.dumps({"event": "tool_call", "tool": action.tool, "cmd": action.tool_input}) + "\n"
-                        result = f"Error: La herramienta '{action.tool}' no existe."
-                    
-                    yield json.dumps({"event": "tool_result", "tool": action.tool, "result": str(result)[:200] + "..."}) + "\n"
-                    current_prompt += f"{clean_resp}\nTOOL_RESULT: {result}\nTRUTHGPT: "
-                    
-                elif action.final_answer:
-                    if self.use_reflexion:
-                        yield json.dumps({"event": "reflexion", "status": "evaluating"}) + "\n"
-                        approved, critique = await self._run_reflexion(user_id, current_prompt, clean_resp, trace_id)
-                        
-                        if approved:
-                            yield json.dumps({"event": "reflexion_approved"}) + "\n"
-                            await self._finalize_completion(user_id, message, action.final_answer, "streaming_task", trace_id)
-                            yield json.dumps({"event": "final_answer", "content": action.final_answer}) + "\n"
-                            return
-                        else:
-                            yield json.dumps({"event": "reflexion_rejected", "critique": critique}) + "\n"
-                            current_prompt += f"\n{clean_resp}\n[CRÍTICA]: {critique}\nTRUTHGPT: "
-                    else:
-                        await self._finalize_completion(user_id, message, action.final_answer, "streaming_task", trace_id)
-                        yield json.dumps({"event": "final_answer", "content": action.final_answer}) + "\n"
-                        return
-                elif action.handoff:
-                    logger.info(f"STREAMING: Iniciando Swarm Handoff hacia: {action.handoff}")
-                    yield json.dumps({"event": "handoff", "target": action.handoff}) + "\n"
-                    handoff_msg = f"<HANDOFF target='{action.handoff}'/>"
-                    await self.memory.add_message(user_id, "assistant", f"Transferring control to {action.handoff}...")
-                    yield json.dumps({"event": "final_answer", "content": handoff_msg}) + "\n"
-                    return
-                else:
-                    raise ValueError("Debes proveer 'tool', 'final_answer' o 'handoff' en tu JSON.")
-                    
-            except Exception as e:
-                logger.warning(f"Error parseando Pydantic JSON: {e}")
-                yield json.dumps({"event": "error", "message": f"Syntax error recovering: {str(e)}"}) + "\n"
-                current_prompt += f"\n[ERROR DE SISTEMA]: Tu respuesta violó el esquema JSON obligatorio. Detalle: {str(e)}\nCorrige y responde solo en JSON.\nTRUTHGPT: "
-        
-        fallback = "Límite de razonamiento alcanzado. Por favor, simplifica tu petición."
-        await self.memory.add_message(user_id, "assistant", fallback)
-        yield json.dumps({"event": "error", "message": fallback}) + "\n"
-        global_tracer.finish_trace(trace_id)
 
     async def _execute_tool_action(self, trace_id: str, action: AgentAction, user_id: str) -> str:
         """Helper para ejecutar una herramienta y manejar señales internas (Core Memory)."""
@@ -376,10 +212,207 @@ class MultiUserReActAgent:
             tool_span.finish(output=str(e), status="error")
             raise ToolExecutionError(f"Tool {action.tool} failed: {str(e)}", metadata={"tool": action.tool})
 
+    async def _run_react_loop(self, user_id: str, message: str, task_id: str) -> 'AsyncIterator[Dict[str, Any]]':
+        """Unifies the core ReAct execution loop, yielding events as dictionaries."""
+        logger.info(f"Iniciando bucle ReAct unificado para {user_id}")
+        await self.memory.add_message(user_id, "user", message)
+
+        current_prompt = await self._build_initial_prompt(user_id, message)
+
+        model_name = getattr(self.llm, "model_name", None) or getattr(self.llm, "model", None) or ""
+        trace_id = global_tracer.start_trace(
+            name="react_loop",
+            agent_name=self.name,
+            input_data=message,
+            metadata={"user_id": user_id, "model": model_name},
+        )
+
+        MAX_JSON_RETRIES = 3
+        json_retry_count = 0
+        tool_count = 0
+        error_count = 0
+        iters_used = 0
+        trace_status = "ok"
+        trace_output = ""
+        trace_extra_meta: Dict[str, Any] = {}
+
+        try:
+            for i in range(settings.MAX_ITERATIONS):
+                iters_used = i + 1
+                await self._checkpoint(task_id, user_id, message, current_prompt, i)
+                yield {"event": "thinking", "iteration": i + 1}
+
+                from agents.engines import safe_llm_call
+                response = await safe_llm_call(self.llm, current_prompt, trace_id)
+
+                try:
+                    action = self._parse_action(response)
+                    clean_resp = response.strip()
+                    json_retry_count = 0
+
+                    if action.tool:
+                        tool_count += 1
+                        if action.tool in self.tools:
+                            tool_instance = self.tools[action.tool]
+                            if tool_instance.requires_approval:
+                                logger.info(f"HITL PAUSE: Require aprobación para {action.tool}")
+                                yield {"event": "requires_approval", "tool": action.tool, "cmd": action.tool_input, "clean_resp": clean_resp}
+                                approval_msg = f"<WAITING_FOR_APPROVAL tool='{action.tool}' cmd='{action.tool_input}'/>"
+                                await self.memory.add_message(user_id, "assistant", clean_resp)
+                                await self.memory.add_message(user_id, "assistant", f"⏳ Esperando aprobación manual para ejecutar: {action.tool}")
+                                yield {"event": "final_answer", "content": approval_msg, "action_type": "approval_required", "metadata": {"tool": action.tool, "cmd": action.tool_input}}
+                                trace_output = approval_msg
+                                trace_extra_meta["action_type"] = "approval_required"
+                                return
+
+                            yield {"event": "tool_call", "tool": action.tool, "cmd": action.tool_input}
+                            if CC_AVAILABLE:
+                                cc_tool_call(f"Executing {action.tool}...")
+                            result = await self._execute_tool_action(trace_id, action, user_id)
+                            if CC_AVAILABLE:
+                                cc_result(action.tool, note="Success")
+                                cc_tool_output(action.tool, str(result))
+                        else:
+                            yield {"event": "tool_call", "tool": action.tool, "cmd": action.tool_input}
+                            result = f"Error: La herramienta '{action.tool}' no existe."
+
+                        yield {"event": "tool_result", "tool": action.tool, "result": str(result)[:200] + "..."}
+                        current_prompt += f"{clean_resp}\nTOOL_RESULT: {result}\nTRUTHGPT: "
+
+                    elif action.final_answer:
+                        if self.use_reflexion:
+                            yield {"event": "reflexion", "status": "evaluating"}
+                            approved, critique = await self._run_reflexion(user_id, current_prompt, clean_resp, trace_id)
+
+                            if approved:
+                                yield {"event": "reflexion_approved"}
+                                await self._finalize_completion(user_id, message, action.final_answer, task_id, trace_id)
+                                yield {"event": "final_answer", "content": action.final_answer, "action_type": "final_answer"}
+                                trace_output = action.final_answer
+                                trace_extra_meta["action_type"] = "final_answer"
+                                return
+                            
+                            yield {"event": "reflexion_rejected", "critique": critique}
+                            current_prompt += f"\n{clean_resp}\n[CRÍTICA]: {critique}\nTRUTHGPT: "
+                        else:
+                            await self._finalize_completion(user_id, message, action.final_answer, task_id, trace_id)
+                            yield {"event": "final_answer", "content": action.final_answer, "action_type": "final_answer"}
+                            trace_output = action.final_answer
+                            trace_extra_meta["action_type"] = "final_answer"
+                            return
+
+                    elif action.handoff:
+                        logger.info(f"Iniciando Swarm Handoff hacia: {action.handoff}")
+                        yield {"event": "handoff", "target": action.handoff}
+                        handoff_msg = f"<HANDOFF target='{action.handoff}'/>"
+                        await self.memory.add_message(user_id, "assistant", f"Transferring control to {action.handoff}...")
+                        yield {"event": "final_answer", "content": handoff_msg, "action_type": "handoff", "handoff_target": action.handoff}
+                        trace_output = handoff_msg
+                        trace_extra_meta["action_type"] = "handoff"
+                        trace_extra_meta["handoff"] = action.handoff
+                        return
+                    else:
+                        raise ValueError("Debes proveer 'tool', 'final_answer' o 'handoff' en tu JSON.")
+
+                except Exception as e:
+                    error_count += 1
+                    json_retry_count += 1
+                    logger.warning(f"Error parseando Pydantic JSON ({json_retry_count}/{MAX_JSON_RETRIES}): {e}")
+                    yield {"event": "error", "message": f"Syntax error recovering ({json_retry_count}/{MAX_JSON_RETRIES})", "is_fatal": False}
+                    
+                    if json_retry_count >= MAX_JSON_RETRIES:
+                        fallback = (
+                            "El motor LLM no produjo JSON válido tras varios intentos. "
+                            "Por favor reformula tu petición o cambia de motor."
+                        )
+                        await self.memory.add_message(user_id, "assistant", fallback)
+                        yield {"event": "final_answer", "content": fallback, "action_type": "error", "metadata": {"error": "json_retry_exhausted"}}
+                        trace_status = "error"
+                        trace_output = fallback
+                        trace_extra_meta["action_type"] = "json_retry_exhausted"
+                        return
+                        
+                    current_prompt += (
+                        "\n[ERROR DE SISTEMA]: Tu última respuesta no fue JSON válido "
+                        "que cumpla el esquema AgentAction. Responde EXACTAMENTE con un objeto JSON "
+                        "con los campos 'thought', 'tool', 'tool_input', 'final_answer', sin texto extra.\nTRUTHGPT: "
+                    )
+
+            fallback = "Límite de razonamiento alcanzado. Por favor, simplifica tu petición."
+            await self.memory.add_message(user_id, "assistant", fallback)
+            yield {"event": "final_answer", "content": fallback, "action_type": "error", "metadata": {"error": "iteration_limit"}}
+            trace_status = "error"
+            trace_output = fallback
+            trace_extra_meta["action_type"] = "iteration_limit"
+
+        except Exception as outer:
+            logger.exception(f"react_loop crashed for user {user_id}")
+            trace_status = "error"
+            trace_output = f"{type(outer).__name__}: {str(outer)[:200]}"
+            trace_extra_meta["action_type"] = "unhandled_exception"
+            yield {"event": "error", "message": trace_output, "is_fatal": True}
+            raise
+
+        finally:
+            global_tracer.finish_trace(
+                trace_id,
+                output=trace_output,
+                status=trace_status,
+                metadata={
+                    "iterations": iters_used,
+                    "tool_calls": tool_count,
+                    "errors": error_count,
+                    **trace_extra_meta,
+                },
+            )
+
+    async def process_message(self, user_id: str, message: str) -> AgentResponse:
+        """
+        Procesa un mensaje consumiendo el bucle unificado y retornando la respuesta final.
+        """
+        task_id = str(uuid.uuid4())
+        final_resp = None
+        
+        async for event in self._run_react_loop(user_id, message, task_id):
+            if event["event"] == "final_answer":
+                final_resp = AgentResponse(
+                    content=event["content"],
+                    action_type=event.get("action_type", "final_answer"),
+                    metadata=event.get("metadata", {}),
+                    handoff_target=event.get("handoff_target")
+                )
+                break
+                
+        if not final_resp:
+            final_resp = AgentResponse(content="Error: loop terminated without final answer.", action_type="error")
+            
+        return final_resp
+
+    async def astream_process_message(self, user_id: str, message: str) -> 'AsyncIterator[str]':
+        """
+        Procesa un mensaje emitiendo eventos de Server-Sent Events (SSE) desde el bucle unificado.
+        """
+        task_id = "streaming_task_" + str(uuid.uuid4())
+        
+        async for event in self._run_react_loop(user_id, message, task_id):
+            if event["event"] == "requires_approval":
+                yield json.dumps({"event": "requires_approval", "tool": event["tool"], "cmd": event["cmd"]}) + "\n"
+            elif event["event"] == "final_answer":
+                yield json.dumps({"event": "final_answer", "content": event["content"]}) + "\n"
+                break
+            elif event["event"] == "error":
+                yield json.dumps({"event": "error", "message": event["message"]}) + "\n"
+                if event.get("is_fatal"):
+                    break
+            elif event["event"] == "handoff":
+                yield json.dumps({"event": "handoff", "target": event["target"]}) + "\n"
+            else:
+                # Eventos intermedios directos (thinking, tool_call, tool_result, reflexion...)
+                yield json.dumps(event) + "\n"
+
     async def resume_task(self, task_id: str) -> AgentResponse:
         """
         Resumes a task from a saved snapshot.
-        This is the core of 'running even with the computer off'.
         """
         from modules.persistence.task_manager import get_persistence_manager
         
@@ -389,7 +422,6 @@ class MultiUserReActAgent:
         
         logger.info(f"Resuming task {task_id} for user {snapshot.user_id} at iteration {snapshot.iteration}")
         
-        # Platinum Upgrade: State Reconstruction
         if snapshot.history:
             logger.info(f"Reconstructing chat history ({len(snapshot.history)} messages)...")
             await self.memory.clear_memory(snapshot.user_id)
@@ -400,7 +432,6 @@ class MultiUserReActAgent:
             for block, content in snapshot.core_memory.items():
                 await self.core_memory.update_block(snapshot.user_id, block, content)
         
-        # Continue processing from where it left off
         return await self.process_message(snapshot.user_id, snapshot.metadata.get("original_message", "Resuming task..."))
 
     async def _checkpoint(self, task_id: str, user_id: str, original_msg: str, prompt: str, iteration: int):
@@ -410,7 +441,6 @@ class MultiUserReActAgent:
             
         from modules.persistence.task_manager import get_persistence_manager, TaskSnapshot
             
-        # Platinum Upgrade: Full state capture
         history = await self.memory.get_history(user_id, limit=50)
         core_mem = await self.core_memory.get_core(user_id)
 
@@ -425,6 +455,4 @@ class MultiUserReActAgent:
             status="running",
             metadata={"original_message": original_msg}
         )
-        # Non-blocking async save
         asyncio.create_task(get_persistence_manager().save_snapshot(snapshot))
-

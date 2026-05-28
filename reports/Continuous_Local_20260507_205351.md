@@ -1,1 +1,0 @@
-TruthGPT ya integra las 22 técnicas SOTA de mitigación de alucinaciones más recientes verificadas con papers de arXiv (hasta 2026). No se detectaron nuevas publicaciones relevantes posteriores a abril 2025 que añadir. Se recomienda monitorear diariamente arXiv (cs.CL, cs.AI, cs.LG) para futuras mejoras. El kernel está actualizado y autosuficiente.

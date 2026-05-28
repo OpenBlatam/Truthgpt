@@ -1,1 +1,0 @@
-The improved TruthGPT documentation in English has been written to `/workspace/README_improved.md`. It includes a clear structure, all 28 techniques with correct arXiv links, enhanced configuration details, and polished formatting. You can read it directly. Let me know if you need any further improvements.

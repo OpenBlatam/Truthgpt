@@ -1,1 +1,0 @@
-{"thought": "CRITICAL: OpenRouter unreachable. Error: API 402", "tool": null, "tool_input": null, "final_answer": "\u26a0\ufe0f OpenRouter no disponible (API 402...).", "handoff": null, "error_type": "generic"}

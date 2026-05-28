@@ -148,12 +148,44 @@ def load_user_prefs() -> Dict[str, Any]:
                 if "api_credits" in loaded and isinstance(loaded["api_credits"], dict):
                     defaults["api_credits"].update(loaded["api_credits"])
                 defaults.update(loaded)
-        except:
-            pass
+        except Exception:
+            # Corruption detected - rename file to heal system state and boot defaults
+            try:
+                corrupt_backup = CONFIG_PATH.with_suffix(".corrupt")
+                if CONFIG_PATH.exists():
+                    if corrupt_backup.exists():
+                        corrupt_backup.unlink()
+                    CONFIG_PATH.rename(corrupt_backup)
+            except Exception:
+                pass
     return defaults
 
 def save_user_prefs(prefs: Dict[str, Any]):
-    CONFIG_PATH.write_text(json.dumps(prefs, indent=4))
+    try:
+        # Atomic write: write to temp file first, then rename/replace
+        temp_path = CONFIG_PATH.with_suffix(".tmp")
+        temp_path.write_text(json.dumps(prefs, indent=4))
+        if temp_path.exists():
+            if CONFIG_PATH.exists():
+                CONFIG_PATH.unlink()
+            temp_path.rename(CONFIG_PATH)
+    except Exception:
+        # Fallback to direct write if rename/replace fails (e.g. windows locking)
+        try:
+            CONFIG_PATH.write_text(json.dumps(prefs, indent=4))
+        except Exception as e:
+            import logging
+            logging.getLogger().error(f"Failed to write user preferences: {e}")
+    _invalidate_llm_client_cache()
+
+
+def _invalidate_llm_client_cache() -> None:
+    """Force swarm/client to rebuild LLM engine after prefs change (ensemble, engines)."""
+    try:
+        import interface.swarm_menu as swarm_menu
+        swarm_menu._client_cache = None
+    except Exception:
+        pass
 
 USER_PREFS = load_user_prefs()
 
@@ -405,6 +437,10 @@ async def handle_personalize():
             
             USER_PREFS["preferred_engine"] = ",".join(clean_resolved)
         elif choice == "3":
+            console.print(
+                "[dim]consensus = cluster vote · parallel = all answers · race = fastest engine · "
+                "majority = similarity vote · debate = transcript + verdict · bayesian = confidence weights[/dim]"
+            )
             USER_PREFS["ensemble_mode"] = get_input(
                 "Ensemble Mode", 
                 choices=["consensus", "parallel", "race", "majority", "debate", "bayesian"], 
@@ -1093,8 +1129,37 @@ def get_theme_panel(content: Any, title: Optional[str] = None, border_style: Opt
     else:
         return Panel(content, title=title, border_style=border_style)
 
+def _build_ctrl_o_keybindings():
+    """Build a prompt_toolkit KeyBindings object with ctrl+o => expand pending blocks.
+
+    The handler prints expanded content above the input line (does not exit the prompt).
+    """
+    try:
+        from prompt_toolkit.key_binding import KeyBindings
+    except Exception:
+        return None
+    kb = KeyBindings()
+
+    @kb.add('c-o')
+    def _expand(event):
+        try:
+            from interface.cc_style import expand_pending
+        except Exception:
+            return
+        # run_in_terminal yields control so prints don't corrupt the prompt buffer
+        try:
+            event.app.run_in_terminal(lambda: expand_pending())
+        except Exception:
+            pass
+    return kb
+
+
 def get_input(message: str, choices: Optional[List[str]] = None, default: str = "", password: bool = False) -> str:
-    """Gets user input with mouse support if available, otherwise fallbacks to Rich."""
+    """Gets user input with mouse support if available, otherwise fallbacks to Rich.
+
+    Binds ctrl+o to expand the most recent truncated tool output, matching
+    Claude Code's ``(ctrl+o to expand)`` UX.
+    """
     if _check_prompt_toolkit():
         # Check if an event loop is already running to avoid prompt_toolkit crash/warning
         try:
@@ -1112,8 +1177,15 @@ def get_input(message: str, choices: Optional[List[str]] = None, default: str = 
                 style = PTStyle.from_dict({
                     'prompt': 'bold cyan',
                 })
-                # Enable mouse support
-                result = pt_prompt(f"{message}: ", mouse_support=True, style=style, is_password=password).strip()
+                kb = _build_ctrl_o_keybindings()
+                # Enable mouse support + ctrl+o expand
+                result = pt_prompt(
+                    f"{message}: ",
+                    mouse_support=True,
+                    style=style,
+                    is_password=password,
+                    key_bindings=kb,
+                ).strip()
                 if not result and default:
                     return default
                 return result
@@ -1122,7 +1194,7 @@ def get_input(message: str, choices: Optional[List[str]] = None, default: str = 
             except Exception:
                 # Fallback to standard Rich prompt if something goes wrong
                 pass
-            
+
     from rich.prompt import Prompt
     return Prompt.ask(message, choices=choices, default=default, password=password)
 

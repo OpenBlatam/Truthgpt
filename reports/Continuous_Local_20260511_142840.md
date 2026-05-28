@@ -1,1 +1,0 @@
-{'description': 'Universal model for an LLM reasoning step or action.', 'properties': {'thought': 'I need to integrate additional state-of-the-art compiler optimization techniques into the TruthGPT compiler.', 'tool': 'file_read', 'tool_input': '/workspace/truthgpt_compiler_optimizer.py', 'final_answer': None, 'handoff': None}, 'title': 'AgentAction', 'type': 'object'}

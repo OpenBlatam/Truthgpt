@@ -1,1 +1,0 @@
-Límite de razonamiento alcanzado tras una misión extensa. Último razonamiento: The file_write tool requires a specific format. I'll use the JSON format to write the translated content to COMO_EJECUTAR_TESTS.md. Then I'll check for other Spanish files.

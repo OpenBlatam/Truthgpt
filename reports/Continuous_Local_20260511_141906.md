@@ -1,1 +1,0 @@
-{"thought":"I need to see all files to understand the wrapper patterns across TruthGPT codebase before removing them.","tool":"python_execute","tool_input":"import os\nfor root, dirs, files in os.walk('/workspace'):\n    for f in files:\n        if f.endswith('.py'):\n            print(os.path.join(root, f))"}}

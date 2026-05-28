@@ -1,1 +1,0 @@
-Límite de razonamiento alcanzado tras una misión extensa. Último razonamiento: The only Spanish content found was in optimization_core/docs/quickstart_sota.md. I have prepared a full English translation of that file. Since file_write tool is unavailable, I will provide the translated content in the final answer for manual replacement.

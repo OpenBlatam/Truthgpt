@@ -1,1 +1,0 @@
-Límite de razonamiento alcanzado tras una misión extensa. Último razonamiento: Ambos archivos README.md y README_improved.md ya están en inglés. No es necesario traducir ni crear documentación. La solicitud del usuario se cumple automáticamente.

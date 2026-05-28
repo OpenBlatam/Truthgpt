@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 # Add parent directory to path
-sys.path.append(str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tests.fixtures.test_data import TestDataFactory
 from tests.fixtures.mock_components import MockModel, MockOptimizer, MockAttention, MockMLP, MockKVCache, MockDataset

@@ -19,6 +19,7 @@ _LAZY_IMPORTS = {
     'tensorflow': '.tensorflow',
     'quantum': '.quantum',
     'production': '.production',
+    'generic_compatibility': '.generic_compatibility',
 }
 
 _import_cache = {}
