@@ -1,8 +1,8 @@
 """
-Compatibility shim for hybrid_optimization_core.
+Compatibility shim for supreme_optimization_core.
 
 DEPRECATED: use ``UnifiedTruthGPTOptimizer`` with
-``OptimizationLevel.EXPERT`` directly.
+``OptimizationLevel.SUPREME`` directly.
 """
 import warnings
 from dataclasses import dataclass, field
@@ -16,22 +16,22 @@ from ...core.base_truthgpt_optimizer import (
     UnifiedTruthGPTOptimizer,
 )
 
-_LEVEL = OptimizationLevel.EXPERT
+_LEVEL = OptimizationLevel.SUPREME
 
 
 @dataclass
-class HybridOptimizationConfig:
+class SupremeOptimizationConfig:
     """Legacy config — accepted for backward compatibility."""
     extra: Dict[str, Any] = field(default_factory=dict)
 
 
-class HybridOptimizationCore:
-    """Backward-compatible facade around UnifiedTruthGPTOptimizer(EXPERT)."""
+class SupremeOptimizationCore:
+    """Backward-compatible facade around UnifiedTruthGPTOptimizer(SUPREME)."""
 
     def __init__(self, config: Dict[str, Any] = None):
         warnings.warn(
-            "HybridOptimizationCore is deprecated; "
-            "use UnifiedTruthGPTOptimizer(level=OptimizationLevel.EXPERT).",
+            "SupremeOptimizationCore is deprecated; "
+            "use UnifiedTruthGPTOptimizer(level=OptimizationLevel.SUPREME).",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -45,12 +45,12 @@ class HybridOptimizationCore:
         return getattr(self._optimizer, name)
 
 
-def create_hybrid_optimization_core(config: Dict[str, Any] = None) -> HybridOptimizationCore:
-    return HybridOptimizationCore(config)
+def create_supreme_optimization_core(config: Dict[str, Any] = None) -> SupremeOptimizationCore:
+    return SupremeOptimizationCore(config)
 
 
 __all__ = [
-    "HybridOptimizationCore",
-    "HybridOptimizationConfig",
-    "create_hybrid_optimization_core",
+    "SupremeOptimizationCore",
+    "SupremeOptimizationConfig",
+    "create_supreme_optimization_core",
 ]

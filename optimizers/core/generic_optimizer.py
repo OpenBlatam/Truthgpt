@@ -76,7 +76,7 @@ class BaseGenericOptimizer(ABC):
     
     def _calculate_metrics(self, original_model: nn.Module, optimized_model: nn.Module) -> Dict[str, float]:
         """Calculate performance metrics."""
-        from optimizers.metrics import calculate_optimization_metrics
+        from optimizers.core.metrics import calculate_optimization_metrics
         
         techniques = getattr(self, '_last_applied_techniques', [])
         opt_time = getattr(self, '_last_optimization_time', 0.0)
@@ -93,7 +93,7 @@ class UnifiedGenericOptimizer(BaseGenericOptimizer):
         super().__init__(config, level)
         self.optimizer_type = optimizer_type
         
-        from optimizers.optimization_pipeline import build_optimization_pipeline
+        from optimizers.core.optimization_pipeline import build_optimization_pipeline
         self.pipeline = build_optimization_pipeline(self.level.value, config=self.config)
     
     def optimize(self, model: nn.Module, **kwargs) -> GenericOptimizationResult:

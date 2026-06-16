@@ -1,85 +1,59 @@
 """
-Compatibility Shim for EnhancedOptimizationCore
-================================================
-DEPRECATED: Use UnifiedOptimizer with OptimizationLevel.ADVANCED instead.
+Compatibility shim for enhanced_optimization_core.
 
-This shim provides backward compatibility for code using EnhancedOptimizationCore.
-It redirects to UnifiedOptimizer with EnhancedStrategy.
+DEPRECATED: use ``UnifiedTruthGPTOptimizer`` with
+``OptimizationLevel.ADVANCED`` directly.
 """
 import warnings
-from typing import Dict, Any
+from dataclasses import dataclass, field
+from typing import Any, Dict
+
 import torch.nn as nn
 
-# Import the new unified optimizer
-from ...core.unified_optimizer import UnifiedOptimizer
-from ...core.base_truthgpt_optimizer import OptimizationLevel, OptimizationResult
+from ...core.base_truthgpt_optimizer import (
+    OptimizationLevel,
+    OptimizationResult,
+    UnifiedTruthGPTOptimizer,
+)
+
+_LEVEL = OptimizationLevel.ADVANCED
+
+
+@dataclass
+class EnhancedOptimizationConfig:
+    """Legacy config — accepted for backward compatibility."""
+    optimization_aggressiveness: float = 0.8
+    memory_efficiency_threshold: float = 0.9
+    computational_efficiency_threshold: float = 0.85
+    extra: Dict[str, Any] = field(default_factory=dict)
 
 
 class EnhancedOptimizationCore:
-    """
-    Compatibility shim for enhanced_optimization_core.
-    
-    DEPRECATED: Use UnifiedOptimizer with OptimizationLevel.ADVANCED instead.
-    
-    This class will be removed in a future version.
-    
-    Migration:
-        # Old code
-        from optimizers.enhanced_optimization_core import EnhancedOptimizationCore
-        optimizer = EnhancedOptimizationCore(config)
-        
-        # New code
-        from optimizers.core.unified_optimizer import UnifiedOptimizer
-        from optimizers.core.base_truthgpt_optimizer import OptimizationLevel
-        optimizer = UnifiedOptimizer(level=OptimizationLevel.ADVANCED, config=config)
-    """
-    
+    """Backward-compatible facade around UnifiedTruthGPTOptimizer(ADVANCED)."""
+
     def __init__(self, config: Dict[str, Any] = None):
-        """
-        Initialize compatibility shim.
-        
-        Args:
-            config: Configuration dictionary
-        """
         warnings.warn(
-            "EnhancedOptimizationCore is deprecated. "
-            "Use UnifiedOptimizer(level=OptimizationLevel.ADVANCED) instead. "
-            "See migration guide for details.",
+            "EnhancedOptimizationCore is deprecated; "
+            "use UnifiedTruthGPTOptimizer(level=OptimizationLevel.ADVANCED).",
             DeprecationWarning,
-            stacklevel=2
-        )
-        self._optimizer = UnifiedOptimizer(
-            level=OptimizationLevel.ADVANCED,
-            config=config
+            stacklevel=2,
         )
         self.config = config or {}
-    
+        self._optimizer = UnifiedTruthGPTOptimizer(config=self.config, level=_LEVEL)
+
     def optimize(self, model: nn.Module, **kwargs) -> OptimizationResult:
-        """
-        Optimize model using enhanced strategy.
-        
-        Args:
-            model: Model to optimize
-            **kwargs: Additional parameters
-            
-        Returns:
-            OptimizationResult
-        """
         return self._optimizer.optimize(model, **kwargs)
-    
+
     def __getattr__(self, name):
-        """
-        Delegate attribute access to underlying optimizer.
-        
-        This allows access to methods and properties of the underlying
-        UnifiedOptimizer for backward compatibility.
-        """
         return getattr(self._optimizer, name)
 
 
-# Export for backward compatibility
-__all__ = ['EnhancedOptimizationCore']
+def create_enhanced_optimization_core(config: Dict[str, Any] = None) -> EnhancedOptimizationCore:
+    return EnhancedOptimizationCore(config)
 
 
-
-
+__all__ = [
+    "EnhancedOptimizationCore",
+    "EnhancedOptimizationConfig",
+    "create_enhanced_optimization_core",
+]

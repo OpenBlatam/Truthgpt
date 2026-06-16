@@ -76,7 +76,7 @@ class BaseTruthGPTOptimizer(ABC):
     
     def _calculate_metrics(self, original_model: nn.Module, optimized_model: nn.Module) -> Dict[str, float]:
         """Calculate performance metrics."""
-        from optimizers.metrics import calculate_optimization_metrics
+        from optimizers.core.metrics import calculate_optimization_metrics
         
         techniques = getattr(self, '_last_applied_techniques', [])
         opt_time = getattr(self, '_last_optimization_time', 0.0)
@@ -89,7 +89,7 @@ class BaseTruthGPTOptimizer(ABC):
         """Get or create a sub-optimizer (lazy loading)."""
         if name not in self._sub_optimizers:
             # Lazy import to avoid circular dependencies
-            from optimizers.component_optimizers import get_component_optimizer
+            from optimizers.core.component_optimizers import get_component_optimizer
             self._sub_optimizers[name] = get_component_optimizer(name, self.config.get(name, {}))
         return self._sub_optimizers[name]
 
@@ -100,7 +100,7 @@ class UnifiedTruthGPTOptimizer(BaseTruthGPTOptimizer):
     def __init__(self, config: Dict[str, Any] = None, level: OptimizationLevel = None):
         super().__init__(config, level)
         
-        from optimizers.optimization_pipeline import build_optimization_pipeline
+        from optimizers.core.optimization_pipeline import build_optimization_pipeline
         self.pipeline = build_optimization_pipeline(self.level.value, config=self.config)
     
     def optimize(self, model: nn.Module, **kwargs) -> OptimizationResult:
