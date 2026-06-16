@@ -38,6 +38,8 @@ root_logger.addHandler(file_handler)
 # Configure loguru to write to its OWN per-process file. Sharing "truthgpt.log"
 # with the stdlib FileHandler above (or with a second running instance) made
 # loguru's rotation rename fail on Windows with WinError 32 ("file in use").
+# A per-PID filename + enqueue (non-blocking, process-safe) + catch (never let a
+# logging failure crash the TUI) removes that whole class of errors.
 loguru_logger.add(
     log_dir / f"truthgpt_loguru_{os.getpid()}.log",
     level="WARNING",
@@ -137,27 +139,6 @@ async def main_loop():
 
     extended_mode = True
     
-    # --- Command Routing Configuration ---
-    # Map dashboard choices to their respective menu handlers
-    COMMAND_MAP = {
-        "0":  ("interface.system_menu", "kernel_menu"),
-        "1":  ("interface.swarm_menu", "swarm_menu"),
-        "2":  ("interface.model_menu", "models_menu"),
-        "3":  ("interface.research_menu", "research_menu"),
-        "4":  ("interface.system_menu", "opts_menu"),
-        "5":  ("interface.research_menu", "intelligence_labs_menu"),
-        "6":  ("interface.comm_menu", "handle_messaging_apps"),
-        "7":  ("interface.system_menu", "system_menu"),
-        "9":  ("interface.blockchain_menu", "blockchain_menu"),
-        "10": ("interface.infra_menu", "infrastructure_menu"),
-        "11": ("interface.infra_menu", "task_registry_menu"),
-        "13": ("interface.comm_menu", "marketing_intelligence_menu"),
-        "15": ("interface.comm_menu", "embodied_rl_menu"),
-        "16": ("interface.overdrive_menu", "handle_overdrive_menu"),
-        "h":  ("interface.history_menu", "history_menu"),
-        "p":  ("interface.core", "handle_personalize"),
-    }
-    
     # Pre-import dashboard to avoid latency in the loop
     from interface.interactive_dashboard import get_dashboard_choice
     
@@ -179,7 +160,7 @@ async def main_loop():
             clear_screen()
             cc_action("REBOOTING TRUTHGPT KERNEL...", status="WARN")
             time.sleep(1)
-            script_path = os.path.abspath(__file__)
+            script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "main.py")
             os.execl(sys.executable, sys.executable, script_path, *sys.argv[1:])
             
         if choice == "exit" or choice == "x":
@@ -191,45 +172,18 @@ async def main_loop():
                 pass
             break
             
-        # Route to the appropriate menu handler
-        if choice in COMMAND_MAP:
-            module_path, function_name = COMMAND_MAP[choice]
-            try:
-                from interface.cc_style import cc_action
-                console.print(f"[bold cyan]●[/bold cyan] [white]Routing to {function_name}...[/white]")
-                
-                # Record navigation to persistent history
-                try:
-                    from interface.history_menu import record_action
-                    record_action("ROUTER", f"Opened {function_name}", "RUN")
-                except Exception:
-                    pass
-                
-                import importlib
-                # Import module
-                module = importlib.import_module(module_path)
-                handler = getattr(module, function_name)
-                
-                if asyncio.iscoroutinefunction(handler):
-                    console.print(f"[dim]Executing async handler: {function_name}[/dim]")
-                    await handler()
-                else:
-                    console.print(f"[dim]Executing sync handler: {function_name}[/dim]")
-                    handler()
-            except Exception as e:
+        # Route via the kernel's InterfaceService
+        from main import kernel
+        if hasattr(kernel.service_manager, 'get_service'):
+            interface_service = kernel.service_manager.get_service("InterfaceService")
+            if interface_service:
+                await interface_service.execute_command(choice, user_input)
+            else:
                 from rich.console import Console
-                import traceback
-                Console().print(f"[bold red]Routing Error:[/bold red] Failed to execute {module_path}.{function_name} -> {e}")
-                logger.error(f"Handler {function_name} failed: {traceback.format_exc()}")
+                Console().print("[bold red]Kernel InterfaceService not available![/bold red]")
         else:
-            # Handle executive reasoning or other generic inputs
-            if choice and not choice.isspace():
-                from interface.comm_menu import handle_executive_prompt
-                try:
-                    await handle_executive_prompt(user_input)
-                except Exception as e:
-                    from rich.console import Console
-                    Console().print(f"[yellow]Command '{user_input}' not recognized or failed: {e}[/yellow]")
+            from rich.console import Console
+            Console().print("[bold red]Kernel Service Manager is missing get_service![/bold red]")
 
 if __name__ == "__main__":
     try:

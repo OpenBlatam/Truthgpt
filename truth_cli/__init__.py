@@ -61,9 +61,30 @@ if len(sys.argv) > 1 and sys.argv[1] not in ["--help", "-h"]:
 def main_callback(ctx: typer.Context):
     """Default callback that launches the dashboard if no command is provided."""
     if ctx.invoked_subcommand is None:
-        from main import main_loop
+        # Load the main.py that sits next to this package by explicit path, so we
+        # can never accidentally import a stray "main" module from another clone
+        # on sys.path (the cause of "cannot import name 'main_loop' from 'main'").
+        import importlib.util
+        from pathlib import Path
+
+        main_path = Path(__file__).resolve().parent.parent / "main.py"
+        if not main_path.exists():
+            raise SystemExit(f"Entry point not found: {main_path}")
+
+        spec = importlib.util.spec_from_file_location("main", main_path)
+        main_mod = importlib.util.module_from_spec(spec)
+        # Register before exec so intra-repo `from main import kernel` resolves here.
+        sys.modules["main"] = main_mod
+        spec.loader.exec_module(main_mod)
+
+        if not hasattr(main_mod, "main_loop"):
+            raise SystemExit(
+                f"'main_loop' is missing from {main_path}. The loaded file may be "
+                "from a different/older TruthGPT version."
+            )
+
         try:
-            asyncio.run(main_loop())
+            asyncio.run(main_mod.main_loop())
         except KeyboardInterrupt:
             pass
 
