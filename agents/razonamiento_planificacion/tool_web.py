@@ -2,6 +2,7 @@ import asyncio
 import logging
 import re
 from datetime import datetime
+from urllib.parse import urlparse, parse_qs, unquote
 import httpx
 from typing import Optional, List, Dict, Any
 from .tool_base import BaseTool
@@ -102,17 +103,96 @@ class WebSearchTool(BaseTool):
             logger.warning("search_internet falló: %s", exc)
         return None
 
+    # User-Agent de navegador: DuckDuckGo devuelve páginas vacías a UAs no realistas.
+    _HTTP_HEADERS = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "es,en;q=0.9",
+    }
+
+    @staticmethod
+    def _decode_ddg_url(href: str) -> str:
+        """Resuelve los links de redirección de DuckDuckGo (//duckduckgo.com/l/?uddg=...)."""
+        if href.startswith("//"):
+            href = "https:" + href
+        parsed = urlparse(href)
+        if "duckduckgo.com" in parsed.netloc and parsed.path.startswith("/l/"):
+            uddg = parse_qs(parsed.query).get("uddg")
+            if uddg:
+                return unquote(uddg[0])
+        return href
+
+    def _parse_ddg_lite(self, html: str, max_results: int = 5) -> List[Dict[str, str]]:
+        """Extrae (title, link, snippet) del HTML de DuckDuckGo Lite.
+
+        Empareja título y snippet por orden en el documento (más robusto que por
+        índice) y descarta anuncios / enlaces internos de DuckDuckGo.
+        """
+        import bs4
+        soup = bs4.BeautifulSoup(html, "html.parser")
+        results: List[Dict[str, str]] = []
+        pending: Optional[Dict[str, str]] = None
+
+        def _flush() -> None:
+            nonlocal pending
+            if pending is None:
+                return
+            host = urlparse(pending["link"]).netloc.lower()
+            # Las URLs que siguen en duckduckgo.com son ads (y.js) o links de ayuda.
+            if pending["title"] and pending["link"] and not host.endswith("duckduckgo.com"):
+                results.append(pending)
+            pending = None
+
+        # Recorre links y snippets en orden de aparición.
+        for el in soup.select("a.result-link, td.result-snippet"):
+            classes = el.get("class") or []
+            if el.name == "a":          # nuevo resultado: cierra el anterior
+                _flush()
+                pending = {
+                    "title": el.get_text(strip=True),
+                    "link": self._decode_ddg_url(el.get("href", "")),
+                    "snippet": "",
+                }
+            elif "result-snippet" in classes and pending is not None:
+                pending["snippet"] = el.get_text(" ", strip=True)
+                _flush()
+            if len(results) >= max_results:
+                return results
+        _flush()
+        return results[:max_results]
+
     async def _try_http(self, query: str) -> Optional[str]:
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.get(
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True,
+                                         headers=self._HTTP_HEADERS) as client:
+                # DuckDuckGo Lite sirve los resultados vía POST del formulario.
+                resp = await client.post(
                     "https://lite.duckduckgo.com/lite/",
-                    params={"q": query},
-                    headers={"User-Agent": "TruthGPT/5.9"},
+                    data={"q": query},
                 )
-                if resp.status_code == 200 and len(resp.text) > 500:
-                    self._failures = 0
-                    return f"Resultados (raw) para '{query}':\n{resp.text[:2000]}"
+            if resp.status_code != 200:
+                logger.warning("HTTP fallback: status %s", resp.status_code)
+                return None
+
+            try:
+                hits = self._parse_ddg_lite(resp.text)
+            except ImportError:
+                logger.info("bs4 no instalado; no se puede parsear el HTML de DuckDuckGo.")
+                return None
+
+            if hits:
+                self._failures = 0
+                lines = [
+                    f"{i}. **{h['title']}**\n"
+                    f"   {h['snippet']}\n"
+                    f"   Link: {h['link']}"
+                    for i, h in enumerate(hits, 1)
+                ]
+                return f"Resultados para '{query}':\n\n" + "\n\n".join(lines)
+            logger.info("HTTP fallback: sin resultados parseables para '%s'.", query)
         except Exception as exc:
             logger.warning("HTTP fallback failed: %s", exc)
         return None
