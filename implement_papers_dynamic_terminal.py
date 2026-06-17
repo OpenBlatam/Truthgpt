@@ -16,6 +16,7 @@ Features:
 Usage: python implement_papers_dynamic_terminal.py [--config CONFIG_PATH]
 """
 
+import argparse
 import asyncio
 import json
 import logging
@@ -470,7 +471,29 @@ class DynamicPaperTerminal:
             paper_names.append("SnapKV:ON")
         if self.paper_engine.speculative_active:
             paper_names.append("SpecDec:ON")
-        
+        if self.paper_engine.entropy_active:
+            paper_names.append("Entropy:ON")
+        if self.paper_engine.distinct_leaf_active:
+            paper_names.append("DLeaf:ON")
+        if self.paper_engine.disc_verify_active:
+            paper_names.append("DiscVer:ON")
+        if self.paper_engine.adaptive_kv_active:
+            paper_names.append("AdaKV:ON")
+        if self.paper_engine.moqae_active:
+            paper_names.append("MoQAE:ON")
+        if self.paper_engine.confspec_active:
+            paper_names.append("ConfSpec:ON")
+        if self.paper_engine.spec_prefill_active:
+            paper_names.append("SpecPre:ON")
+        if self.paper_engine.intuitor_active:
+            paper_names.append("INTUITOR:ON")
+        if self.paper_engine.echo_active:
+            paper_names.append("ECHO:ON")
+        if self.paper_engine.reinforced_attn_active:
+            paper_names.append("RAL:ON")
+        if self.paper_engine.progressive_thought_active:
+            paper_names.append("PTE:ON")
+
         header_text = Text(
             f"TruthGPT Dynamic Terminal | Papers: {', '.join(paper_names) if paper_names else 'none active'} | User: {self.user_prefs.get('user_name', 'default')}",
             style="bold white on dark_blue"
@@ -500,7 +523,15 @@ class DynamicPaperTerminal:
             f"[bold]Iter:[/bold] {self.iteration} | [bold]Elapsed:[/bold] {elapsed:.1f}s | [bold]CoD applied:[/bold] {m['chain_draft_applied']} | [bold]SnapKV runs:[/bold] {m['snapkv_compression_runs']}",
             f"[bold]Elastic:[/bold] {m['elastic_budgets_enforced']} | [bold]FP16 checks:[/bold] {m['fp16_stable_tensors']} | [bold]Tokens saved:[/bold] {m['total_tokens_saved']} | [bold]SpecDec tokens:[/bold] {m['speculative_tokens_accepted']}"
         )
-        
+        metrics_table.add_row(
+            f"[bold]Entropy seg:[/bold] {m['entropy_sparse_segments']} ({m['entropy_speedup']:.2f}x) | [bold]DLeaf saved:[/bold] {m['distinct_leaf_samples_saved']} | [bold]DiscVer overrides:[/bold] {m['verifier_majority_overrides']} | [bold]KV mem saved:[/bold] {m['kv_memory_saved_pct']:.1f}%",
+            f"[bold]MoQAE bits:[/bold] {m['moqae_avg_bits']:.2f} | [bold]ConfSpec saved:[/bold] {m['confspec_verify_saved']} | [bold]Prefill dropped:[/bold] {m['prefill_tokens_dropped']}"
+        )
+        metrics_table.add_row(
+            f"[bold]INTUITOR scored:[/bold] {m['intuitor_rollouts_scored']} | [bold]ECHO updates:[/bold] {m['echo_updates']}",
+            f"[bold]RAL heads:[/bold] {m['reinforced_attn_heads']} | [bold]PTE savings:[/bold] {m['progressive_thought_savings_pct']:.1f}%"
+        )
+
         footer_panel = Panel(
             metrics_table,
             border_style="bright_black",
@@ -628,7 +659,71 @@ class DynamicPaperTerminal:
                     accepted = spec_result.get("accepted_tokens", 0)
                     self.paper_engine.metrics["speculative_tokens_accepted"] += accepted
                     self.add_workflow_log(f"   ⚡ SpecDec: {accepted} tokens accepted (Speedup: {spec_result.get('speedup_multiplier', 1.0):.1f}x)")
-                
+
+                # Shared simulated context for inference-time papers
+                context_len = 1000 + (self.iteration * 150)
+
+                # Entropy-Guided Inference (arXiv:2606.09508)
+                if self.paper_engine.entropy_active:
+                    eg = self.paper_engine.apply_entropy_guided(context_len)
+                    self.add_workflow_log(f"   🌀 Entropy-Guided: {eg.get('sparse_attention_segments', 0)} sparse segments (Speedup: {eg.get('speedup_multiplier', 1.0):.2f}x)")
+
+                # Distinct-Leaf Self-Consistency (arXiv:2604.20500)
+                if self.paper_engine.distinct_leaf_active:
+                    dl = self.paper_engine.apply_distinct_leaf()
+                    self.add_workflow_log(f"   🍃 Distinct-Leaf: {dl.get('distinct_traces', 0)} distinct traces, {dl.get('samples_saved', 0)} samples saved")
+
+                # Discriminative Verification (arXiv:2510.14913)
+                if self.paper_engine.disc_verify_active:
+                    candidates = [("answer-A", 0.55), ("answer-B", 0.30), ("answer-C", 0.15)]
+                    dv = self.paper_engine.select_answer(candidates)
+                    self.add_reasoning(f"   🧪 DiscVer selected '{dv.get('selected')}'{' (overrode majority)' if dv.get('overrode_majority') else ''}")
+
+                # Adaptive KV-Cache Quantization (arXiv:2604.04722)
+                if self.paper_engine.adaptive_kv_active:
+                    akv = self.paper_engine.apply_adaptive_kv(context_len)
+                    self.add_workflow_log(f"   🗜️ Adaptive-KV: {akv.get('memory_savings_pct', 0.0):.1f}% KV memory saved")
+
+                # MoQAE Mixture-of-Quant-Experts (arXiv:2506.07533)
+                if self.paper_engine.moqae_active:
+                    mq = self.paper_engine.apply_moqae(context_len)
+                    self.add_workflow_log(f"   🎛️ MoQAE: {mq.get('avg_bits', 16.0):.2f} avg bits/token")
+
+                # ConfSpec Step-Level Speculative Reasoning (arXiv:2602.18447)
+                if self.paper_engine.confspec_active:
+                    cs = self.paper_engine.apply_confspec(num_steps=12)
+                    self.add_workflow_log(f"   ⏭️ ConfSpec: {cs.get('verify_passes_saved', 0)} verify passes saved (Speedup: {cs.get('speedup_multiplier', 1.0):.2f}x)")
+
+                # Speculative Prefill (arXiv:2603.02631)
+                if self.paper_engine.spec_prefill_active:
+                    sp = self.paper_engine.apply_spec_prefill(context_len)
+                    self.add_workflow_log(f"   ✂️ SpecPrefill: {sp.get('dropped_tokens', 0)} prefill tokens dropped")
+
+                # INTUITOR label-free self-certainty reward (arXiv:2505.19590)
+                if self.paper_engine.intuitor_active:
+                    group_token_probs = [[0.9, 0.1], [0.7, 0.3], [0.6, 0.4]]
+                    it = self.paper_engine.score_intuitor(group_token_probs)
+                    self.add_reasoning(f"   🎯 INTUITOR scored {len(it.get('rewards', []))} rollouts, best={it.get('best_rollout', -1)}")
+
+                # ECHO entropy-confidence hybrid test-time RL (arXiv:2602.02150)
+                if self.paper_engine.echo_active:
+                    rollouts = [
+                        {"confidence": 0.8, "dist": [0.7, 0.3]},
+                        {"confidence": 0.5, "dist": [0.5, 0.5]},
+                    ]
+                    ec = self.paper_engine.optimize_echo(rollouts)
+                    self.add_reasoning(f"   🔁 ECHO selected rollout {ec.get('selected', -1)}")
+
+                # RAL reinforced attention learning (arXiv:2602.04884)
+                if self.paper_engine.reinforced_attn_active:
+                    ra = self.paper_engine.reinforce_attention([0.4, 0.1, 0.3, 0.2], reward=1.0)
+                    self.add_workflow_log(f"   🧠 RAL: reinforced {ra.get('reinforced_heads', 0)} attention heads")
+
+                # PTE progressive thought encoding (arXiv:2602.16839)
+                if self.paper_engine.progressive_thought_active:
+                    pt = self.paper_engine.encode_thoughts(base_thought_tokens=512)
+                    self.add_workflow_log(f"   📚 PTE: {pt.get('training_token_savings_pct', 0.0):.1f}% thought tokens saved")
+
                 # Update terminal output
                 self.add_terminal_output(f"$ Iteration {self.iteration}: {generated[:80]}...")
                 
@@ -658,7 +753,18 @@ async def main():
     parser.add_argument("--no-elastic", action="store_true", help="Disable Elastic Reasoning")
     parser.add_argument("--no-snapkv", action="store_true", help="Disable SnapKV Compression")
     parser.add_argument("--no-speculative", action="store_true", help="Disable Speculative Decoding")
-    
+    parser.add_argument("--no-entropy", action="store_true", help="Disable Entropy-Guided Inference")
+    parser.add_argument("--no-distinct-leaf", action="store_true", help="Disable Distinct-Leaf Self-Consistency")
+    parser.add_argument("--no-disc-verify", action="store_true", help="Disable Discriminative Verification")
+    parser.add_argument("--no-adaptive-kv", action="store_true", help="Disable Adaptive KV-Cache Quantization")
+    parser.add_argument("--no-moqae", action="store_true", help="Disable MoQAE Quantization")
+    parser.add_argument("--no-confspec", action="store_true", help="Disable ConfSpec Speculative Reasoning")
+    parser.add_argument("--no-spec-prefill", action="store_true", help="Disable Speculative Prefill")
+    parser.add_argument("--no-intuitor", action="store_true", help="Disable INTUITOR self-certainty reward")
+    parser.add_argument("--no-echo", action="store_true", help="Disable ECHO test-time RL")
+    parser.add_argument("--no-reinforced-attn", action="store_true", help="Disable Reinforced Attention Learning")
+    parser.add_argument("--no-progressive-thought", action="store_true", help="Disable Progressive Thought Encoding")
+
     args = parser.parse_args()
     
     # Load config
@@ -685,6 +791,23 @@ async def main():
         active_papers.remove("snap_kv")
     if getattr(args, 'no_speculative', False) and "speculative_decoding" in active_papers:
         active_papers.remove("speculative_decoding")
+    # SOTA / RL papers: map each --no-* flag to its active_papers key
+    extra_disable = {
+        "no_entropy": "entropy_guided",
+        "no_distinct_leaf": "distinct_leaf",
+        "no_disc_verify": "discriminative_verification",
+        "no_adaptive_kv": "adaptive_kv_quant",
+        "no_moqae": "moqae",
+        "no_confspec": "confspec",
+        "no_spec_prefill": "speculative_prefill",
+        "no_intuitor": "intuitor",
+        "no_echo": "echo",
+        "no_reinforced_attn": "reinforced_attention",
+        "no_progressive_thought": "progressive_thought",
+    }
+    for flag, key in extra_disable.items():
+        if getattr(args, flag, False) and key in active_papers:
+            active_papers.remove(key)
     if args.no_fp16:
         config["fp16_enabled"] = False
         if "fp16_stability" in active_papers:
