@@ -37,6 +37,13 @@ commit_tracker/
 # Local secrets / preferences (use user_preferences.example.json)
 user_preferences.json
 
+# Generated trace history (large, regenerated at runtime)
+traces_history.json
+
+# Windows crash dumps / scratch files
+*.stackdump
+scratch_*.py
+
 # Test / verify outputs
 test_out.txt
 test_output.txt
