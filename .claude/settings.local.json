@@ -21,7 +21,12 @@
       "Bash(OPENROUTER_API_KEY=x python -c ' *)",
       "WebSearch",
       "Bash(echo \"exit:$?\")",
-      "Bash(git reset *)"
+      "Bash(git reset *)",
+      "Bash(git commit -q -m ' *)",
+      "Bash(git push *)",
+      "Bash(grep -oiE \"^[A-Z_]+_API_KEY|^TAVILY[A-Z_]*\" .env)",
+      "Bash(grep -iE \"tavily|search|serp\" optimization_core/.env.example)",
+      "Bash(git commit -q .claude/settings.local.json -m ' *)"
     ]
   }
 }
