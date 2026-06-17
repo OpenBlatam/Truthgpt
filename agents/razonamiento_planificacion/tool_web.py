@@ -1,6 +1,7 @@
+import asyncio
 import logging
 import httpx
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from .tool_base import BaseTool
 
 logger = logging.getLogger(__name__)
@@ -178,3 +179,92 @@ class WebReaderTool(BaseTool):
             return f"Error HTTP {e.response.status_code} al leer {url}."
         except Exception as e:
             return f"Error al leer {url}: {str(e)}"
+
+
+class DeepResearchTool(BaseTool):
+    """
+    Investigación profunda en internet en una sola llamada: busca el tema,
+    abre en paralelo las páginas de los mejores resultados, extrae su contenido
+    y devuelve un dossier consolidado con fuentes citadas (título, URL y extracto).
+    Úsala cuando necesites información detallada y verificada, no solo titulares.
+    Entrada: el tema a investigar (opcionalmente 'tema:::N' para fijar N fuentes a leer, máx 5).
+    """
+    name = "deep_research"
+
+    _DEFAULT_PAGES = 3
+    _MAX_PAGES = 5
+    _PER_PAGE_CHARS = 1800
+
+    def _parse_input(self, tool_input: str) -> tuple[str, int]:
+        """Acepta 'tema' o 'tema:::N' para controlar cuántas fuentes leer."""
+        raw = (tool_input or "").strip()
+        n = self._DEFAULT_PAGES
+        if ":::" in raw:
+            query, _, n_str = raw.rpartition(":::")
+            query = query.strip() or raw
+            try:
+                n = max(1, min(self._MAX_PAGES, int(n_str.strip())))
+            except ValueError:
+                query = raw
+        else:
+            query = raw
+        return query, n
+
+    async def run(self, tool_input: str) -> str:
+        query, num_pages = self._parse_input(tool_input)
+        if not query:
+            return "Error: indica un tema a investigar."
+
+        logger.info("deep_research: %r (leyendo %d fuentes)", query, num_pages)
+
+        # 1) Buscar (multi-fuente, con caché/dedup/recencia heredados)
+        try:
+            try:
+                from utils.internet_search import search_internet
+            except ImportError:
+                from optimization_core.utils.internet_search import search_internet
+            hits: List[Dict[str, Any]] = await search_internet(query, max_results=max(num_pages + 2, 5))
+        except Exception as e:
+            return f"Error en la fase de búsqueda para '{query}': {e}"
+
+        if not hits:
+            return f"No se encontraron fuentes en internet para: '{query}'."
+
+        # 2) Seleccionar las primeras URLs http(s) válidas y leerlas en paralelo
+        readable = [h for h in hits if str(h.get("link", "")).startswith("http")][:num_pages]
+        reader = WebReaderTool()
+
+        async def _read(hit: Dict[str, Any]) -> Dict[str, Any]:
+            content = await reader.run(hit["link"])
+            return {**hit, "content": content[:self._PER_PAGE_CHARS]}
+
+        read_results = await asyncio.gather(
+            *(_read(h) for h in readable), return_exceptions=True
+        )
+
+        # 3) Construir el dossier consolidado
+        lines = [f"# Investigación profunda: {query}\n",
+                 f"Fuentes consultadas: {len(readable)} (de {len(hits)} encontradas)\n"]
+        for i, res in enumerate(read_results, 1):
+            if isinstance(res, Exception):
+                lines.append(f"## {i}. [Error leyendo fuente]: {res}\n")
+                continue
+            title = res.get("title", "—") or "—"
+            link = res.get("link", "N/A")
+            snippet = (res.get("snippet", "") or "").strip()
+            content = (res.get("content", "") or "").strip()
+            body = content if len(content) > len(snippet) else snippet
+            lines.append(
+                f"## {i}. {title}\n"
+                f"Fuente: {link}\n\n"
+                f"{body or '[Sin contenido extraíble]'}\n"
+            )
+
+        # Adjuntar resultados extra solo-snippet (no leídos) como referencias rápidas
+        extra = [h for h in hits if h not in readable and str(h.get('title', '')).strip()]
+        if extra:
+            lines.append("## Referencias adicionales (no leídas en detalle)")
+            for h in extra[:5]:
+                lines.append(f"- {h.get('title', '—')} — {h.get('link', 'N/A')}")
+
+        return "\n".join(lines)

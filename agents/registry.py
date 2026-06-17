@@ -71,6 +71,7 @@ class ComponentRegistry:
             "system_bash": (core_tools_mod, "SystemBashTool"),
             "web_search": (core_tools_mod, "WebSearchTool"),
             "web_reader": (core_tools_mod, "WebReaderTool"),
+            "deep_research": (core_tools_mod, "DeepResearchTool"),
             "file_read": (core_tools_mod, "FileReadTool"),
             "file_write": (core_tools_mod, "FileWriteTool"),
             "python_execute": (core_tools_mod, "PythonExecutionTool"),

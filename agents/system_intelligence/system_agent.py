@@ -21,7 +21,8 @@ from ..razonamiento_planificacion.tools import (
     DirectoryListTool,
     GlobTool,
     WebSearchTool,
-    WebReaderTool
+    WebReaderTool,
+    DeepResearchTool
 )
 
 logger = logging.getLogger(__name__)
@@ -66,9 +67,10 @@ class SystemAgent(BaseAgent):
         self._react.register_tool(FileWriteTool())
         self._react.register_tool(DirectoryListTool())
         self._react.register_tool(GlobTool())
-        # Acceso a internet (web general + lectura de URLs)
+        # Acceso a internet (web general + lectura de URLs + investigación profunda)
         self._react.register_tool(WebSearchTool())
         self._react.register_tool(WebReaderTool())
+        self._react.register_tool(DeepResearchTool())
 
     async def process(
         self, query: str, context: Optional[Dict[str, Any]] = None
