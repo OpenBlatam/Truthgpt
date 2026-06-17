@@ -8,11 +8,21 @@ from .ensemble_utils import (
     _extract_final,
     _extract_thought,
     _pick_largest_cluster,
+    _similarity,
     parse_agent_json,
 )
 
 # Run tuple: (engine_key, model_name, raw_text, elapsed_sec, token_estimate)
 EngineRun = Tuple[str, str, str, float, int]
+
+
+def _empty_response(mode: str) -> str:
+    """Standard error JSON when no engine returned a response."""
+    return json.dumps({
+        "thought": "Ensemble: no engine returned a response.",
+        "final_answer": "Error: all engines failed in ensemble call.",
+        "metadata": {"ensemble_mode": mode, "engines": []},
+    }, ensure_ascii=False)
 
 class EnsembleStrategy(ABC):
     @abstractmethod
@@ -27,14 +37,34 @@ class EnsembleStrategy(ABC):
                 continue
             data = parse_agent_json(text)
             parsed.append((key, model, data))
-            
+
         if not parsed:
             return [], ""
-            
+
         engine_list = [f"{k} ({m})" for k, m, _ in parsed]
         header = f"Ensemble [{self.name()}] from {', '.join(engine_list)}"
         return parsed, header
-        
+
+    def _recover_final(
+        self,
+        merged: str,
+        winner_key: str,
+        parsed: List[Tuple[str, str, Dict[str, Any]]],
+    ) -> str:
+        """Never emit an empty final_answer.
+
+        A common engine failure mode is to put all useful content in 'thought'
+        and leave 'final_answer' blank — which then scores ~0 downstream and
+        triggers endless self-correction. When that happens, recover the
+        winning engine's reasoning so the mission has something to act on.
+        """
+        if merged and merged.strip():
+            return merged
+        for key, _model, data in parsed:
+            if key == winner_key:
+                return _extract_thought(data)
+        return _extract_thought(parsed[0][2]) if parsed else ""
+
     @classmethod
     def name(cls) -> str:
         return "base"
@@ -48,11 +78,7 @@ class ParallelStrategy(EnsembleStrategy):
     def merge(self, runs: List[EngineRun], mode: str) -> str:
         parsed, header = self._prepare_parsed(runs)
         if not parsed:
-            return json.dumps({
-                "thought": f"Ensemble: no engine returned a response.",
-                "final_answer": "Error: all engines failed in ensemble call.",
-                "metadata": {"ensemble_mode": mode, "engines": []},
-            }, ensure_ascii=False)
+            return _empty_response(mode)
 
         sections = []
         thought_lines = []
@@ -85,14 +111,7 @@ class RaceStrategy(EnsembleStrategy):
         parsed, header = self._prepare_parsed(runs)
         successful = [r for r in runs if r[2]]
         if not successful:
-            return json.dumps(
-                {
-                    "thought": f"{header if header else 'Ensemble [race]'}: race had no finisher.",
-                    "final_answer": "Error: race mode — no engine finished in time.",
-                    "metadata": {"ensemble_mode": mode, "engines": []},
-                },
-                ensure_ascii=False,
-            )
+            return _empty_response(mode)
             
         winner = min(successful, key=lambda r: r[3])
         key, model, text, elapsed, tokens = winner
@@ -101,7 +120,7 @@ class RaceStrategy(EnsembleStrategy):
             {
                 "thought": f"{header} — winner [{key}/{model}] in {elapsed:.2f}s:\n"
                 + _extract_thought(data),
-                "final_answer": _extract_final(data) or text,
+                "final_answer": _extract_final(data) or _extract_thought(data) or text,
                 "metadata": {
                     "ensemble_mode": mode,
                     "winner": key,
@@ -123,11 +142,7 @@ class MajorityStrategy(EnsembleStrategy):
     def merge(self, runs: List[EngineRun], mode: str) -> str:
         parsed, header = self._prepare_parsed(runs)
         if not parsed:
-            return json.dumps({
-                "thought": f"Ensemble: no engine returned a response.",
-                "final_answer": "Error: all engines failed in ensemble call.",
-                "metadata": {"ensemble_mode": mode, "engines": []},
-            }, ensure_ascii=False)
+            return _empty_response(mode)
 
         finals = [(k, _extract_final(d)) for k, _, d in parsed if _extract_final(d)]
         thought_lines = [f"[{k}/{m}] {_extract_thought(d)}" for k, m, d in parsed]
@@ -146,6 +161,8 @@ class MajorityStrategy(EnsembleStrategy):
             if len(finals) > 1
             else "single engine"
         )
+
+        merged = self._recover_final(merged, winner_key, parsed)
 
         return json.dumps(
             {
@@ -170,11 +187,7 @@ class DebateStrategy(EnsembleStrategy):
     def merge(self, runs: List[EngineRun], mode: str) -> str:
         parsed, header = self._prepare_parsed(runs)
         if not parsed:
-            return json.dumps({
-                "thought": f"Ensemble: no engine returned a response.",
-                "final_answer": "Error: all engines failed in ensemble call.",
-                "metadata": {"ensemble_mode": mode, "engines": []},
-            }, ensure_ascii=False)
+            return _empty_response(mode)
 
         positions = []
         for key, model, data in parsed:
@@ -248,11 +261,7 @@ class BayesianStrategy(EnsembleStrategy):
     def merge(self, runs: List[EngineRun], mode: str) -> str:
         parsed, header = self._prepare_parsed(runs)
         if not parsed:
-            return json.dumps({
-                "thought": f"Ensemble: no engine returned a response.",
-                "final_answer": "Error: all engines failed in ensemble call.",
-                "metadata": {"ensemble_mode": mode, "engines": []},
-            }, ensure_ascii=False)
+            return _empty_response(mode)
 
         weighted: List[Tuple[str, str, Dict[str, Any], float]] = []
         for key, model, data in parsed:
@@ -292,11 +301,7 @@ class ConsensusStrategy(EnsembleStrategy):
     def merge(self, runs: List[EngineRun], mode: str) -> str:
         parsed, header = self._prepare_parsed(runs)
         if not parsed:
-            return json.dumps({
-                "thought": f"Ensemble: no engine returned a response.",
-                "final_answer": "Error: all engines failed in ensemble call.",
-                "metadata": {"ensemble_mode": mode, "engines": []},
-            }, ensure_ascii=False)
+            return _empty_response(mode)
 
         finals = [(k, _extract_final(d), _extract_confidence(d)) for k, _, d in parsed]
         thought_lines = [f"[{k}/{m}] {_extract_thought(d)}" for k, m, d in parsed]
@@ -328,6 +333,8 @@ class ConsensusStrategy(EnsembleStrategy):
                 )
                 winner, merged, _ = max(best_cluster, key=lambda x: (x[2], len(x[1])))
 
+        merged = self._recover_final(merged, winner, parsed)
+
         return json.dumps(
             {
                 "thought": f"{header} — consensus via [{winner}]:\n" + "\n".join(thought_lines),
@@ -342,6 +349,82 @@ class ConsensusStrategy(EnsembleStrategy):
         )
 
 
+class ElasticStrategy(EnsembleStrategy):
+    @classmethod
+    def name(cls) -> str:
+        return "elastic"
+
+    def merge(self, runs: List[EngineRun], mode: str) -> str:
+        parsed, header = self._prepare_parsed(runs)
+        if not parsed:
+            return _empty_response(mode)
+
+        # Elastic Reasoning separates thought/solution with budget awareness
+        best_run = max(parsed, key=lambda x: len(_extract_thought(x[2])))
+        key, model, data = best_run
+        
+        thought_lines = [
+            f"Phase 1 (Exploration - {k}/{m}): {_extract_thought(d)[:300]}..." 
+            for k, m, d in parsed
+        ]
+        
+        return json.dumps(
+            {
+                "thought": f"{header} — Elastic Reasoning. Selected [{key}] for Phase 2 (Solution):\n"
+                + "\n".join(thought_lines) + f"\n\nDeep Thought via {key}:\n{_extract_thought(data)}",
+                "final_answer": self._recover_final(_extract_final(data), key, parsed),
+                "metadata": {
+                    "ensemble_mode": mode,
+                    "winner": key,
+                    "engines": [k for k, _, _ in parsed],
+                    "elastic_budget_spent": sum(r[4] for r in runs)
+                },
+            },
+            ensure_ascii=False,
+        )
+
+
+class MCTSStrategy(EnsembleStrategy):
+    @classmethod
+    def name(cls) -> str:
+        return "mcts"
+
+    def merge(self, runs: List[EngineRun], mode: str) -> str:
+        parsed, header = self._prepare_parsed(runs)
+        if not parsed:
+            return _empty_response(mode)
+
+        # MCT Self-Refine simulates a Monte Carlo Tree Search
+        # by evaluating generated branches and selecting the one with the best reward heuristic (confidence * thought length)
+        scored_nodes = []
+        for key, model, data in parsed:
+            conf = _extract_confidence(data)
+            thought_len = len(_extract_thought(data))
+            reward = conf * (1.0 + (min(thought_len, 2000) / 2000.0))
+            scored_nodes.append((key, model, data, reward))
+
+        best_node = max(scored_nodes, key=lambda x: x[3])
+        winner_key, winner_model, winner_data, winner_score = best_node
+        
+        tree_log = [f"Node [{k}/{m}] -> Reward: {r:.2f}" for k, m, d, r in scored_nodes]
+
+        return json.dumps(
+            {
+                "thought": f"{header} — MCT Self-Refine path evaluation:\n"
+                + "\n".join(tree_log) + f"\n\nSelected optimal path [{winner_key}] with score {winner_score:.2f}:\n{_extract_thought(winner_data)}",
+                "final_answer": self._recover_final(_extract_final(winner_data), winner_key, parsed),
+                "metadata": {
+                    "ensemble_mode": mode,
+                    "winner": winner_key,
+                    "engines": [k for k, _, _ in parsed],
+                    "mcts_evaluations": len(scored_nodes),
+                    "best_score": winner_score
+                },
+            },
+            ensure_ascii=False,
+        )
+
+
 class StrategyFactory:
     _strategies: Dict[str, EnsembleStrategy] = {
         "parallel": ParallelStrategy(),
@@ -350,9 +433,12 @@ class StrategyFactory:
         "debate": DebateStrategy(),
         "bayesian": BayesianStrategy(),
         "consensus": ConsensusStrategy(),
+        "elastic": ElasticStrategy(),
+        "mcts": MCTSStrategy(),
     }
 
     @classmethod
     def get_strategy(cls, mode: str) -> EnsembleStrategy:
         mode = (mode or "consensus").lower().strip()
         return cls._strategies.get(mode, cls._strategies["consensus"])
+

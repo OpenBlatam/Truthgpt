@@ -35,13 +35,25 @@ class PromptManager:
         
         self._templates["react_core"] = (
             "You operate using a ReAct (Reasoning and Action) loop.\n"
-            "Analyse the user request and decide if you need tools.\n"
-            "Always maintain a high standard of reasoning."
+            "On EVERY turn you emit exactly ONE JSON action, choosing exactly one of:\n"
+            "  • 'tool'        — call a tool (set 'tool' and 'tool_input') when you need more information or to act.\n"
+            "  • 'handoff'     — transfer to another agent (set 'handoff') when it is better suited.\n"
+            "  • 'final_answer'— deliver the complete result to the user when the task is done.\n"
+            "'thought' is your PRIVATE reasoning; the user never sees it, so it must NEVER be the deliverable.\n"
+            "When you are done, the full, self-contained answer goes in 'final_answer' — do NOT leave it empty\n"
+            "and do NOT put the answer only in 'thought'. If you have enough to respond, answer NOW rather than\n"
+            "looping. Always maintain a high standard of reasoning."
         )
 
         self._templates["json_output"] = (
             "IMPORTANTE: Debes responder ÚNICA y EXCLUSIVAMENTE con un JSON puro que cumpla estrictamente este esquema:\n"
             "{schema}\n"
+            "REGLAS OBLIGATORIAS:\n"
+            "1. Incluye EXACTAMENTE uno de estos campos con contenido: 'tool', 'handoff' o 'final_answer'.\n"
+            "2. Si NO vas a llamar a una herramienta ni delegar, 'final_answer' DEBE contener la respuesta\n"
+            "   completa y NO puede estar vacío ni ser un placeholder.\n"
+            "3. NUNCA dejes 'final_answer' vacío poniendo el contenido solo en 'thought'.\n"
+            "4. 'thought' es razonamiento interno breve; el entregable real va en 'final_answer'.\n"
             "No incluyas NADA de texto fuera del JSON."
         )
 

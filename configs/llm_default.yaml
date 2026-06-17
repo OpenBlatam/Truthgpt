@@ -3,6 +3,7 @@ run_name: llm_baseline
 output_dir: runs/llm_baseline
 
 model:
+  family: gpt2
   name_or_path: gpt2
   gradient_checkpointing: true
   lora:

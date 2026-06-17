@@ -1,0 +1,26 @@
+# configs/agent_framework.yaml
+agent_framework:
+  coordination:
+    type: temporal
+    max_parallel_agents: 4
+    timeout_seconds: 30
+  
+  resilience:
+    circuit_breaker:
+      failure_threshold: 3
+      timeout: 30
+    fallback_strategy: local_model
+  
+  memory:
+    type: hybrid
+    vector_store: chroma
+    graph_db: neo4j
+    cache: redis
+  
+  agents:
+    research_agent:
+      primary: openai_api
+      fallback: local_llama
+    code_architect:
+      primary: claude_api
+      fallback: local_codegen

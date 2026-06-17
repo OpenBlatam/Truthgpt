@@ -125,7 +125,7 @@ class ModelMenuApp:
         ]
 
         return Layout(HSplit([
-            Window(content=static_content, wrap_lines=True),
+            Window(content=static_content, wrap_lines=True, ignore_content_height=True),
             main_content,
             Window(height=1, char=" "),
             Window(content=FormattedTextControl(footer_segments), height=1, align=WindowAlign.LEFT),

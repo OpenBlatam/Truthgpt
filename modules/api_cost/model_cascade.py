@@ -6,6 +6,7 @@ Based on:
 - AutoMix (Chatterjee et al., 2024): https://arxiv.org/abs/2310.12963
 """
 
+import json
 import logging
 import re
 from typing import List, Dict, Any, Optional, Tuple
@@ -17,15 +18,53 @@ class ConfidenceScorer:
     AutoMix-inspired Self-Verification (arXiv:2310.12963).
     Evaluates response quality and confidence using multiple heuristics.
     """
-    
+
     def __init__(self, threshold: float = 0.65):
         self.threshold = threshold
 
+    @staticmethod
+    def _extract_payload(response: str) -> Optional[Dict[str, Any]]:
+        """Detect a structured agent envelope (``{... "final_answer" ...}``).
+
+        Returns the parsed dict, or ``None`` for plain-text responses. Tolerates
+        a ```json fence wrapper. Kept dependency-free so the scorer stays generic.
+        """
+        text = response.strip()
+        if not (text.startswith("{") and '"' in text):
+            m = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, re.DOTALL)
+            if not m:
+                return None
+            text = m.group(1)
+        try:
+            data = json.loads(text)
+        except Exception:
+            return None
+        if not isinstance(data, dict):
+            return None
+        if not any(k in data for k in ("thought", "final_answer", "answer", "metadata")):
+            return None
+        return data
+
     def score(self, response: str, prompt: str) -> float:
         """Score response from 0.0 to 1.0."""
-        if not response or len(response.strip()) < 10: 
+        if not response or len(response.strip()) < 10:
             return 0.0
-            
+
+        # Agent-payload awareness: a structured envelope is the strongest signal.
+        # An explicit error envelope must escalate; a missing final_answer is weak;
+        # otherwise score the *answer* text rather than the raw JSON wrapper.
+        payload = self._extract_payload(response)
+        if payload is not None:
+            meta = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+            if meta.get("error") or payload.get("action_type") == "error":
+                logger.debug("Cascade: error envelope detected -> forcing escalation")
+                return 0.15
+            answer = (payload.get("final_answer") or payload.get("answer") or "").strip()
+            if not answer:
+                # Agent is still planning / issuing tool calls — not a final answer.
+                return 0.35
+            response = answer
+
         score = 0.4 # Lower baseline to be more critical
         
         # 1. Structural signals (up to 0.2)

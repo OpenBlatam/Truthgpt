@@ -91,6 +91,7 @@ class ComponentRegistry:
             "system_model_train": (sys_tools_mod, "ModelTrainTool"),
             "arxiv_search": (sys_tools_mod, "ArXivSearchTool"),
             "google_scholar_search": (sys_tools_mod, "GoogleScholarSearchTool"),
+            "semantic_scholar_search": (sys_tools_mod, "SemanticScholarSearchTool"),
             "github_search": (sys_tools_mod, "GitHubSearchTool"),
             "paper_synthesis": (sys_tools_mod, "PaperSynthesisTool"),
             "sota_scraper": (sys_tools_mod, "SOTAPaperScraperTool"),

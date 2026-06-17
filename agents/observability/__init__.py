@@ -266,6 +266,206 @@ class Tracer:
         except Exception as e:
             logger.error("Failed to load trace history: %s", e)
 
+    # ------------------------------------------------------------------
+    # Intelligent Health Analysis
+    # ------------------------------------------------------------------
+
+    def analyze_health(self, last_n: int = 50) -> dict:
+        """Compute a health score and detailed metrics from recent traces.
+
+        Returns a dict with:
+        - health_score (0-100): overall system health
+        - latency_avg_ms, latency_p95_ms, latency_p99_ms
+        - error_rate, dummy_rate, json_retry_rate
+        - total_traces_analyzed
+        - top_errors: list of (error_type, count)
+        """
+        self._ensure_loaded()
+        recent_ids = self._trace_order[-last_n:]
+        if not recent_ids:
+            return {"health_score": 0, "total_traces_analyzed": 0, "message": "No traces available"}
+
+        durations = []
+        error_count = 0
+        dummy_count = 0
+        no_engine_count = 0
+        json_retry_count = 0
+        tool_call_total = 0
+        error_types: Dict[str, int] = {}
+
+        for tid in recent_ids:
+            spans = self._traces.get(tid, [])
+            if not spans:
+                continue
+            root = spans[0]
+            if root.duration_ms > 0:
+                durations.append(root.duration_ms)
+
+            # Check root metadata for action_type errors
+            action_type = root.metadata.get("action_type", "")
+            if action_type in ("json_retry_exhausted", "mock_echo_detected", "mock_in_json_retry", "no_engine_configured", "iteration_limit", "unhandled_exception"):
+                error_count += 1
+                error_types[action_type] = error_types.get(action_type, 0) + 1
+
+            if root.status in ("error", "no_engine"):
+                if root.status not in error_types:
+                    error_types[root.status] = error_types.get(root.status, 0) + 1
+
+            tool_call_total += root.metadata.get("tool_calls", 0)
+            json_retry_count += root.metadata.get("json_retries", 0)
+
+            # Check child spans for dummy/no_engine
+            for span in spans:
+                if span.status in ("dummy_fallback", "no_engine"):
+                    dummy_count += 1
+                    break
+
+        n = len(recent_ids)
+        sorted_durations = sorted(durations) if durations else [0]
+
+        def _percentile(data: list, pct: float) -> float:
+            if not data:
+                return 0.0
+            idx = int(len(data) * pct / 100)
+            return data[min(idx, len(data) - 1)]
+
+        error_rate = error_count / max(n, 1)
+        dummy_rate = dummy_count / max(n, 1)
+
+        # Health score: start at 100, deduct for issues
+        score = 100
+        score -= min(50, int(error_rate * 100))  # Up to -50 for errors
+        score -= min(30, int(dummy_rate * 60))    # Up to -30 for dummy fallbacks
+        score -= min(10, json_retry_count // max(n, 1) * 5)  # Up to -10 for retries
+        if tool_call_total == 0 and n > 5:
+            score -= 10  # No tools used at all
+        score = max(0, min(100, score))
+
+        top_errors = sorted(error_types.items(), key=lambda x: -x[1])[:5]
+
+        return {
+            "health_score": score,
+            "total_traces_analyzed": n,
+            "latency_avg_ms": round(sum(durations) / max(len(durations), 1), 1),
+            "latency_p95_ms": round(_percentile(sorted_durations, 95), 1),
+            "latency_p99_ms": round(_percentile(sorted_durations, 99), 1),
+            "error_rate": round(error_rate, 4),
+            "dummy_rate": round(dummy_rate, 4),
+            "json_retry_total": json_retry_count,
+            "tool_calls_total": tool_call_total,
+            "top_errors": top_errors,
+        }
+
+    def detect_anomalies(self, last_n: int = 20) -> List[dict]:
+        """Detect anomalies in recent traces and return actionable alerts.
+
+        Each alert has: severity (critical/warning/info), type, message, suggestion.
+        """
+        health = self.analyze_health(last_n)
+        alerts: List[dict] = []
+
+        if health.get("total_traces_analyzed", 0) == 0:
+            return [{"severity": "info", "type": "no_data", "message": "No traces to analyze.", "suggestion": "Run the agent to generate traces."}]
+
+        # CRITICAL: All traces use dummy engine
+        if health.get("dummy_rate", 0) > 0.5:
+            alerts.append({
+                "severity": "critical",
+                "type": "no_real_engine",
+                "message": f"{health['dummy_rate']*100:.0f}% of traces used DummyAsyncLLM (no real engine).",
+                "suggestion": "Configure at least one API key: DEEPSEEK_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY, or OPENROUTER_API_KEY in Settings > Engines.",
+            })
+
+        # CRITICAL: High error rate
+        if health.get("error_rate", 0) > 0.3:
+            alerts.append({
+                "severity": "critical",
+                "type": "high_error_rate",
+                "message": f"Error rate is {health['error_rate']*100:.0f}% across last {last_n} traces.",
+                "suggestion": "Check API keys, network connectivity, and model availability.",
+            })
+
+        # WARNING: JSON retry storms
+        avg_retries = health.get("json_retry_total", 0) / max(health.get("total_traces_analyzed", 1), 1)
+        if avg_retries > 1.0:
+            alerts.append({
+                "severity": "warning",
+                "type": "json_retry_storm",
+                "message": f"Average {avg_retries:.1f} JSON retries per trace. LLM is not producing valid JSON.",
+                "suggestion": "Check if the LLM engine supports structured output. Consider switching to a more capable model.",
+            })
+
+        # WARNING: High latency
+        if health.get("latency_p95_ms", 0) > 30000:
+            alerts.append({
+                "severity": "warning",
+                "type": "high_latency",
+                "message": f"P95 latency is {health['latency_p95_ms']/1000:.1f}s (threshold: 30s).",
+                "suggestion": "Check if the LLM is timing out. Consider using a faster model or increasing timeout.",
+            })
+
+        # INFO: Zero tool calls
+        if health.get("tool_calls_total", 0) == 0 and health.get("total_traces_analyzed", 0) > 5:
+            alerts.append({
+                "severity": "info",
+                "type": "no_tools_used",
+                "message": "No tool calls were made in any recent trace.",
+                "suggestion": "The agent may not be using its tools effectively, or all queries are simple Q&A.",
+            })
+
+        # Top errors breakdown
+        for err_type, count in health.get("top_errors", []):
+            if count >= 3:
+                alerts.append({
+                    "severity": "warning",
+                    "type": f"recurring_error:{err_type}",
+                    "message": f"Error '{err_type}' occurred {count} times in last {last_n} traces.",
+                    "suggestion": f"Investigate root cause of '{err_type}' errors.",
+                })
+
+        return alerts or [{"severity": "info", "type": "healthy", "message": "System appears healthy.", "suggestion": "No action needed."}]
+
+    def get_trace_summary_for_improvement(self) -> str:
+        """Generate a human-readable summary of trace health for system improvement."""
+        health = self.analyze_health(last_n=100)
+        anomalies = self.detect_anomalies(last_n=50)
+
+        lines = ["═══ TruthGPT Trace Health Report ═══", ""]
+
+        score = health.get("health_score", 0)
+        if score >= 80:
+            grade = "🟢 HEALTHY"
+        elif score >= 50:
+            grade = "🟡 DEGRADED"
+        else:
+            grade = "🔴 CRITICAL"
+
+        lines.append(f"Health Score: {score}/100 ({grade})")
+        lines.append(f"Traces Analyzed: {health.get('total_traces_analyzed', 0)}")
+        lines.append(f"Error Rate: {health.get('error_rate', 0)*100:.1f}%")
+        lines.append(f"Dummy Fallback Rate: {health.get('dummy_rate', 0)*100:.1f}%")
+        lines.append(f"Avg Latency: {health.get('latency_avg_ms', 0):.0f}ms")
+        lines.append(f"P95 Latency: {health.get('latency_p95_ms', 0):.0f}ms")
+        lines.append(f"JSON Retries: {health.get('json_retry_total', 0)}")
+        lines.append(f"Tool Calls: {health.get('tool_calls_total', 0)}")
+        lines.append("")
+
+        if anomalies:
+            lines.append("── Alerts ──")
+            for alert in anomalies:
+                icon = {"critical": "🔴", "warning": "🟡", "info": "ℹ️"}.get(alert["severity"], "•")
+                lines.append(f"  {icon} [{alert['type']}] {alert['message']}")
+                lines.append(f"    → {alert['suggestion']}")
+            lines.append("")
+
+        if health.get("top_errors"):
+            lines.append("── Top Errors ──")
+            for err_type, count in health["top_errors"]:
+                lines.append(f"  • {err_type}: {count}x")
+
+        lines.append("═" * 38)
+        return "\n".join(lines)
+
 
 # Singleton tracer instance for the entire application
 global_tracer = Tracer()

@@ -1,6 +1,7 @@
 
 import os
 import sys
+import asyncio
 import logging
 from typing import Any, Dict, Optional
 from ..razonamiento_planificacion.tools import BaseTool, ToolResult
@@ -22,7 +23,7 @@ class ListPapersTool(BaseTool):
             papers = [p for p in papers if p.category.lower() == category.lower()]
         
         if not papers:
-            return "No se encontraron papers."
+            return "No se encontraron papers en la biblioteca local. Utilice la herramienta 'arxiv_search' o 'google_scholar_search' para buscar nuevos papers en internet."
         
         res = "Papers encontrados:\n"
         for p in papers[:10]: # Limit to 10
@@ -208,6 +209,93 @@ class GoogleScholarSearchTool(BaseTool):
                 return "\n\n".join(results)
         except Exception as e:
             return f"Error en Google Scholar Search: {e}"
+
+class SemanticScholarSearchTool(BaseTool):
+    """
+    Busca artículos académicos en Semantic Scholar (API oficial, gratuita, sin API key).
+    Fuente robusta de respaldo para Google Scholar: devuelve metadatos estructurados
+    (año, venue, citaciones, abstract) sin riesgo de CAPTCHA/rate-limit por scraping.
+    """
+    name = "semantic_scholar_search"
+
+    async def run(self, query: str) -> str:
+        import re
+        import httpx
+
+        # Detect a year filter embedded in the query (e.g. "MoE 2025..2026" or "MoE 2025-").
+        year_param = None
+        m = re.search(r"\b(\d{4})\s*\.\.\s*(\d{4})\b", query)
+        if m:
+            year_param = f"{m.group(1)}-{m.group(2)}"
+            query = query[:m.start()].strip() + query[m.end():].strip()
+        else:
+            m = re.search(r"\b(\d{4})-\b", query)
+            if m:
+                year_param = f"{m.group(1)}-"
+                query = (query[:m.start()] + query[m.end():]).strip()
+
+        query = query.strip()
+        logger.info(f"Searching Semantic Scholar for: {query} (Year: {year_param})")
+
+        url = "https://api.semanticscholar.org/graph/v1/paper/search"
+        params = {
+            "query": query,
+            "limit": "15",
+            "fields": "title,abstract,year,venue,citationCount,url,externalIds",
+        }
+        if year_param:
+            params["year"] = year_param
+
+        # Semantic Scholar throttles anonymous traffic (HTTP 429); an API key removes
+        # the limit. Reuse the project's .env loader so a key in .env is picked up.
+        try:
+            from utils.internet_search import load_env_manually
+            load_env_manually()
+        except Exception:
+            pass
+        headers = {"User-Agent": "TruthGPT-Research/1.0"}
+        api_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
+        if api_key:
+            headers["x-api-key"] = api_key
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = None
+                for attempt in range(3):
+                    response = await client.get(url, params=params, headers=headers, timeout=20)
+                    if response.status_code != 429:
+                        break
+                    await asyncio.sleep(1.5 * (attempt + 1))
+
+                if response.status_code != 200:
+                    return f"Error: Semantic Scholar API returned status {response.status_code}."
+
+                data = response.json()
+                papers = data.get("data", []) or []
+                results = []
+                for p in papers:
+                    title = (p.get("title") or "Untitled").replace("\n", " ").strip()
+                    venue = (p.get("venue") or "").strip() or "Semantic Scholar"
+                    year = p.get("year") or "N/A"
+                    citations = p.get("citationCount", 0)
+                    abstract = (p.get("abstract") or "No abstract available.").replace("\n", " ").strip()
+                    link = p.get("url") or ""
+                    # Prefer an ArXiv ID when present so downstream synthesis can fetch the PDF.
+                    ext = p.get("externalIds") or {}
+                    doc_id = ext.get("ArXiv") or p.get("paperId", "")
+                    results.append(
+                        f"ID: {doc_id} | Title: {title} | Category: {venue}\n"
+                        f"Published: {year}\n"
+                        f"Link: {link}\n"
+                        f"Summary: {abstract[:200]}... [Citations: {citations}]"
+                    )
+
+                if not results:
+                    return "No se encontraron resultados en Semantic Scholar."
+
+                return "\n\n".join(results)
+        except Exception as e:
+            return f"Error en Semantic Scholar Search: {e}"
 
 class GitHubSearchTool(BaseTool):
     """

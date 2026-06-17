@@ -137,13 +137,19 @@ async def safe_llm_call(engine: AsyncLLMEngine, prompt: str, trace_id: Optional[
                     logger.warning(f"Fallback engine '{fb_key}' failed: {fb_error}")
             
             # If all fallbacks fail, try DummyAsyncLLM
-            logger.error("All fallback engines failed. Executing DummyAsyncLLM fallback.")
+            failed_providers = [fb_key for fb_key, _, _ in fallback_engines] if fallback_engines else []
+            logger.error(
+                f"ALL ENGINE FALLBACKS FAILED. Tried: {failed_providers or ['none available']}. "
+                f"No provider has a valid API key. Executing DummyAsyncLLM fallback. "
+                f"Configure at least one of: DEEPSEEK_API_KEY, ANTHROPIC_API_KEY, "
+                f"OPENAI_API_KEY, GOOGLE_API_KEY, OPENROUTER_API_KEY."
+            )
             dummy = DummyAsyncLLM()
             result = await dummy(prompt, **kwargs)
             elapsed = time.time() - t0
             model_name = dummy.model_name
             engine_key = dummy.provider_name
-            _finish_span(str(result), "dummy_fallback", elapsed, len(str(result)) // 4)
+            _finish_span(str(result), "no_engine", elapsed, len(str(result)) // 4)
             return result
 
     if CC_AVAILABLE:

@@ -18,14 +18,33 @@ async def research_menu():
     while True:
         clear_screen()
         console.print(get_header())
+        
+        main_panel = Table.grid(padding=1)
+        main_panel.add_column(style="bold cyan", justify="right")
+        main_panel.add_column()
+        
         papers = registry.list_papers()[:10]
-        console.print(f" [bold magenta]SOTA Trend Radar:[/bold magenta] [dim]{len(papers)} papers indexed[/dim]")
+        console.print(Panel(f"📊 [bold magenta]SOTA Trend Radar:[/bold magenta] [dim]{len(papers)} papers indexed[/dim]", border_style="magenta"))
+        
+        paper_table = Table(box=None, show_header=True, header_style="bold yellow")
+        paper_table.add_column("Idx", style="dim", width=3)
+        paper_table.add_column("Paper ID", style="magenta")
+        paper_table.add_column("Category", style="green")
+        
         for i, p in enumerate(papers, 1):
-            console.print(f" {i:2} | [magenta]{p.paper_id:25}[/magenta] | [green]{p.category}[/green]")
-        console.print(" [bold white]D[/bold white] | Autonomous Discovery (ArXiv)")
-        console.print(" [bold white]T[/bold white] | Tavily Neural Search (SOTA)")
-        console.print(" [bold white]M[/bold white] | Mathematical Discovery (Erdos Solver)")
-        console.print(" [bold white]0[/bold white] | Return")
+            paper_table.add_row(str(i), p.paper_id, p.category)
+        console.print(paper_table)
+        
+        console.print("\n[bold cyan]Global Research Actions:[/bold cyan]")
+        action_table = Table(box=None, show_header=False)
+        action_table.add_column("Key", style="bold white")
+        action_table.add_column("Desc", style="white")
+        action_table.add_row("D", "🚀 Autonomous Discovery (ArXiv Search)")
+        action_table.add_row("S", "🎓 Semantic Scholar Search (Academic Graph)")
+        action_table.add_row("T", "🔍 Tavily Neural Search (SOTA Internet)")
+        action_table.add_row("M", "🧮 Mathematical Discovery (Erdos Solver)")
+        action_table.add_row("0", "⬅️  Return")
+        console.print(action_table)
         choice = Prompt.ask("Selection").upper()
         if choice == "0": break
         elif choice.isdigit() and 1 <= int(choice) <= len(papers):
@@ -53,7 +72,7 @@ async def research_menu():
                     p_id_clean = selected.paper_id.replace(".", "_").replace("-", "_")
                     script_path = Path(f"optimization_core/truthgpt_collected/integration_code/papers/research/paper_{p_id_clean}.py")
                     if not script_path.exists():
-                        from agents.system_intelligence.system_tools import PaperSynthesisTool
+                        from optimization_core.agents.system_intelligence.system_tools import PaperSynthesisTool
                         synthesis = PaperSynthesisTool()
                         await synthesis.run(f"{selected.paper_id}:::{selected.title}:::{selected.category}:::N/A")
                     
@@ -128,7 +147,7 @@ async def research_menu():
                 paper_title = f"Manual Discovery: {paper_id}"
 
             if paper_id:
-                from agents.system_intelligence.system_tools import PaperSynthesisTool, SOTAPaperScraperTool
+                from optimization_core.agents.system_intelligence.system_tools import PaperSynthesisTool, SOTAPaperScraperTool
                 with console.status(f"[bold cyan]Scraping Paper {paper_id}...[/bold cyan]"):
                     scraper = SOTAPaperScraperTool()
                     scrape_res = await scraper.run(paper_id)
@@ -139,6 +158,70 @@ async def research_menu():
                     synth_res = await synthesis.run(f"{paper_id}:::{paper_title}:::Deep Learning:::Synthesized from ArXiv Discovery")
                     console.print(Panel(synth_res, title="Integration Result", border_style="green"))
                 wait_for_user(force=True)
+
+        elif choice == "S":
+            query = Prompt.ask("Search Semantic Scholar (e.g., 'Mixture of Experts 2025..2026')")
+            if not query:
+                continue
+
+            from optimization_core.agents.system_intelligence.system_tools import SemanticScholarSearchTool
+
+            with console.status(f"[bold magenta]Querying Semantic Scholar for '{query}'...[/bold magenta]"):
+                try:
+                    results_text = await SemanticScholarSearchTool().run(query)
+                except Exception as e:
+                    results_text = f"Error: {e}"
+
+            if "ID:" not in results_text:
+                console.print(Panel(results_text, title="🎓 Semantic Scholar", border_style="yellow"))
+                if "429" in results_text:
+                    console.print("[dim]Sugerencia: configura SEMANTIC_SCHOLAR_API_KEY en tu .env para evitar el rate-limit anónimo.[/dim]")
+                wait_for_user(force=True)
+                continue
+
+            # Parse the structured tool output into candidate records.
+            found_papers = []
+            for block in results_text.split("\n\n"):
+                if "ID:" not in block:
+                    continue
+                try:
+                    p_id = block.split("ID: ")[1].split(" |")[0].strip()
+                    title = block.split("Title: ")[1].split("\n")[0].split(" | ")[0].strip()
+                    link = block.split("Link: ")[1].split("\n")[0].strip() if "Link: " in block else ""
+                    found_papers.append({"id": p_id, "title": title, "link": link})
+                except Exception:
+                    continue
+
+            clear_screen()
+            console.print(Panel(f"[bold magenta]Semantic Scholar Results for:[/bold magenta] {query}", border_style="magenta"))
+            results_table = Table(box=None)
+            results_table.add_column("Idx", style="dim", width=4)
+            results_table.add_column("ID", style="cyan", width=18)
+            results_table.add_column("Title", style="white")
+            for i, p in enumerate(found_papers, 1):
+                results_table.add_row(str(i), p["id"], p["title"])
+            console.print(results_table)
+
+            sub_choice = Prompt.ask("\nEnter # to adopt/synthesize, or '0' to return")
+            if sub_choice == "0" or not sub_choice.isdigit():
+                continue
+            if not (1 <= int(sub_choice) <= len(found_papers)):
+                continue
+
+            target = found_papers[int(sub_choice) - 1]
+            paper_id, paper_title = target["id"], target["title"]
+            from optimization_core.agents.system_intelligence.system_tools import PaperSynthesisTool, SOTAPaperScraperTool
+            # ArXiv-style IDs can be scraped directly; otherwise jump straight to synthesis.
+            if paper_id and paper_id[0].isdigit():
+                with console.status(f"[bold cyan]Scraping Paper {paper_id}...[/bold cyan]"):
+                    scrape_res = await SOTAPaperScraperTool().run(paper_id)
+                    console.print(f"[dim]{scrape_res}[/dim]")
+            with console.status(f"[bold green]Synthesizing Implementation for {paper_id}...[/bold green]"):
+                synth_res = await PaperSynthesisTool().run(
+                    f"{paper_id}:::{paper_title}:::Deep Learning:::Synthesized from Semantic Scholar Discovery"
+                )
+                console.print(Panel(synth_res, title="Integration Result", border_style="green"))
+            wait_for_user(force=True)
 
         elif choice == "M":
             from modules.math.erdos_solver import ErdosSolver

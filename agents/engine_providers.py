@@ -34,11 +34,14 @@ class DummyAsyncLLM:
 class BaseProvider(ABC):
     """Base class for all LLM providers."""
     
-    def __init__(self, model: str, api_key: Optional[str] = None, env_var: str = ""):
+    def __init__(self, model: str, api_key: Optional[str] = None, env_var: str = "",
+                 force_model: bool = False):
         custom_model = model
+        # When force_model is set, the caller's model wins over the stored
+        # engine_models preference (used by tier selection / explicit overrides).
         try:
             prefs_path = Path(__file__).resolve().parent.parent / "user_preferences.json"
-            if prefs_path.exists():
+            if not force_model and prefs_path.exists():
                 import json
                 data = json.loads(prefs_path.read_text())
                 engine_models = data.get("engine_models", {})
@@ -59,7 +62,9 @@ class BaseProvider(ABC):
             
         self.model = custom_model
         self.api_key = _resolve_api_key(env_var, api_key) if env_var else api_key
-        self.timeout = 120.0
+        if isinstance(self.api_key, str):
+            self.api_key = self.api_key.strip()
+        self.timeout = 300.0
 
     @abstractmethod
     async def generate(self, prompt: str, **kwargs) -> str:
@@ -75,8 +80,9 @@ class BaseProvider(ABC):
         })
 
 class DeepSeekProvider(BaseProvider):
-    def __init__(self, model: str = "deepseek-reasoner", api_key: Optional[str] = None):
-        super().__init__(model, api_key, env_var="DEEPSEEK_API_KEY")
+    def __init__(self, model: str = "deepseek-reasoner", api_key: Optional[str] = None,
+                 force_model: bool = False):
+        super().__init__(model, api_key, env_var="DEEPSEEK_API_KEY", force_model=force_model)
         self.url = "https://api.deepseek.com/chat/completions"
         model_lower = str(self.model).lower().strip()
         if model_lower in ("v4-flash", "flash", "chat", "v3", "v4", "deepseek-chat", "deepseek-v4-flash"):
@@ -109,14 +115,23 @@ class DeepSeekProvider(BaseProvider):
             if resp.status_code == 200:
                 return resp.json()["choices"][0]["message"]["content"]
             
-            logger.warning(f"DeepSeek API Error {resp.status_code}: {resp.text}")
-            raise InferenceError(f"DeepSeek API Error {resp.status_code}")
+            err_msg = resp.text
+            try:
+                err_msg = resp.json().get("error", {}).get("message", resp.text)
+            except Exception:
+                pass
+            logger.warning(f"DeepSeek API Error {resp.status_code}: {err_msg}")
+            raise InferenceError(f"DeepSeek API Error {resp.status_code}: {err_msg}")
 
 class GoogleGeminiProvider(BaseProvider):
-    def __init__(self, model: str = "gemini-2.0-flash-exp", api_key: Optional[str] = None):
-        super().__init__(model, api_key, env_var="GOOGLE_API_KEY")
+    def __init__(self, model: str = "gemini-2.0-flash-exp", api_key: Optional[str] = None,
+                 force_model: bool = False):
+        super().__init__(model, api_key, env_var="GOOGLE_API_KEY", force_model=force_model)
         model_lower = str(self.model).lower().strip()
-        if model_lower in ("1", "", "flash", "gemini-2.0-flash-exp"):
+        if "pro" in model_lower:
+            # Detecta cualquier variante que indique "Pro" (ej. "Gemini 3.1 Pro (High)")
+            self.model = "gemini-2.0-pro-exp-02-05"
+        elif "flash" in model_lower or model_lower in ("1", ""):
             self.model = "gemini-2.0-flash-exp"
         else:
             if not model_lower.startswith("gemini-"):
@@ -144,12 +159,18 @@ class GoogleGeminiProvider(BaseProvider):
             if resp.status_code == 200:
                 return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
             
-            logger.warning(f"Google API Error {resp.status_code}: {resp.text}")
-            raise InferenceError(f"Google API Error {resp.status_code}")
+            err_msg = resp.text
+            try:
+                err_msg = resp.json().get("error", {}).get("message", resp.text)
+            except Exception:
+                pass
+            logger.warning(f"Google API Error {resp.status_code}: {err_msg}")
+            raise InferenceError(f"Google API Error {resp.status_code}: {err_msg}")
 
 class OpenAIProvider(BaseProvider):
-    def __init__(self, model: str = "gpt-4o", api_key: Optional[str] = None):
-        super().__init__(model, api_key, env_var="OPENAI_API_KEY")
+    def __init__(self, model: str = "gpt-4o", api_key: Optional[str] = None,
+                 force_model: bool = False):
+        super().__init__(model, api_key, env_var="OPENAI_API_KEY", force_model=force_model)
         self.url = "https://api.openai.com/v1/chat/completions"
         model_lower = str(self.model).lower().strip()
         if model_lower in ("si", "gpt4", "gpt-4", "gpt-4o", "1", ""):
@@ -182,12 +203,18 @@ class OpenAIProvider(BaseProvider):
             if resp.status_code == 200:
                 return resp.json()["choices"][0]["message"]["content"]
             
-            logger.warning(f"OpenAI API Error {resp.status_code}: {resp.text}")
-            raise InferenceError(f"OpenAI API Error {resp.status_code}")
+            err_msg = resp.text
+            try:
+                err_msg = resp.json().get("error", {}).get("message", resp.text)
+            except Exception:
+                pass
+            logger.warning(f"OpenAI API Error {resp.status_code}: {err_msg}")
+            raise InferenceError(f"OpenAI API Error {resp.status_code}: {err_msg}")
 
 class OpenRouterProvider(BaseProvider):
-    def __init__(self, model: str = "~anthropic/claude-sonnet-latest", api_key: Optional[str] = None):
-        super().__init__(model, api_key, env_var="OPENROUTER_API_KEY")
+    def __init__(self, model: str = "~anthropic/claude-sonnet-latest", api_key: Optional[str] = None,
+                 force_model: bool = False):
+        super().__init__(model, api_key, env_var="OPENROUTER_API_KEY", force_model=force_model)
         model_lower = str(self.model).lower().strip()
         # Map retired model IDs to current ones
         _retired_models = {
@@ -224,7 +251,8 @@ class OpenRouterProvider(BaseProvider):
         data = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.1
+            "temperature": 0.1,
+            "max_tokens": 4096
         }
         
         async with httpx.AsyncClient(timeout=self.timeout, verify=httpx_verify_setting()) as client:
@@ -232,22 +260,30 @@ class OpenRouterProvider(BaseProvider):
             if resp.status_code == 200:
                 return resp.json()["choices"][0]["message"]["content"]
             
-            logger.warning(f"OpenRouter API Error {resp.status_code}: {resp.text}")
-            raise InferenceError(f"OpenRouter API Error {resp.status_code}")
+            err_msg = resp.text
+            try:
+                err_msg = resp.json().get("error", {}).get("message", resp.text)
+            except Exception:
+                pass
+            logger.warning(f"OpenRouter API Error {resp.status_code}: {err_msg}")
+            raise InferenceError(f"OpenRouter API Error {resp.status_code}: {err_msg}")
 
 class AnthropicProvider(BaseProvider):
-    def __init__(self, model: str = "claude-sonnet-4-20250514", api_key: Optional[str] = None):
-        super().__init__(model, api_key, env_var="ANTHROPIC_API_KEY")
+    def __init__(self, model: str = "claude-sonnet-4-6", api_key: Optional[str] = None,
+                 force_model: bool = False):
+        super().__init__(model, api_key, env_var="ANTHROPIC_API_KEY", force_model=force_model)
         self.url = "https://api.anthropic.com/v1/messages"
         model_lower = str(self.model).lower().strip()
-        if model_lower in ("opus", "claude-3-opus", "claude-3-opus-20240229"):
-            self.model = "claude-3-opus-20240229"
-        elif model_lower in ("sonnet", "claude-3-5-sonnet", "claude-3.5-sonnet", "claude-3-5-sonnet-latest"):
-            self.model = "claude-3-5-sonnet-20241022"
-        elif model_lower in ("claude-3-7-sonnet", "claude-3.7-sonnet", "claude-3-7-sonnet-latest", "1", ""):
-            self.model = "claude-sonnet-4-20250514"
+        if model_lower in ("opus", "claude-3-opus", "claude-3-opus-20240229", "claude-opus-4-8"):
+            self.model = "claude-opus-4-8"
+        elif "haiku" in model_lower or model_lower in ("claude-haiku-4-5-20251001",):
+            self.model = "claude-haiku-4-5-20251001"
+        elif model_lower in ("sonnet", "claude-3-5-sonnet", "claude-3.5-sonnet", "claude-3-5-sonnet-latest", "claude-sonnet-4-6"):
+            self.model = "claude-sonnet-4-6"
+        elif model_lower in ("claude-3-7-sonnet", "claude-3.7-sonnet", "claude-3-7-sonnet-latest", "claude-sonnet-4-20250514", "claude-sonnet-4-0", "1", ""):
+            self.model = "claude-sonnet-4-6"
         else:
-            self.model = "claude-sonnet-4-20250514"
+            self.model = "claude-sonnet-4-6"
 
     @retry(
         stop=stop_after_attempt(3),
@@ -283,8 +319,13 @@ class AnthropicProvider(BaseProvider):
                 if resp.status_code == 200:
                     return resp.json()["content"][0]["text"]
                 
-                logger.warning(f"Anthropic API Error {resp.status_code}: {resp.text}")
-                raise InferenceError(f"Anthropic API Error {resp.status_code}")
+                err_msg = resp.text
+                try:
+                    err_msg = resp.json().get("error", {}).get("message", resp.text)
+                except Exception:
+                    pass
+                logger.warning(f"Anthropic API Error {resp.status_code}: {err_msg}")
+                raise InferenceError(f"Anthropic API Error {resp.status_code}: {err_msg}")
         except Exception as e:
             or_key = _resolve_api_key("OPENROUTER_API_KEY")
             if or_key:

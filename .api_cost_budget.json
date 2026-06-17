@@ -1,10 +1,10 @@
 {
-  "date": "2026-05-25",
+  "date": "2026-06-16",
   "metrics": {
-    "total_usd": 0.003845,
-    "input_tokens": 230,
-    "output_tokens": 327,
-    "request_count": 1
+    "total_usd": 0.09188383750000001,
+    "input_tokens": 7715,
+    "output_tokens": 14468,
+    "request_count": 38
   },
-  "savings_usd": 0.0005924999999999997
+  "savings_usd": 0.0978631625
 }

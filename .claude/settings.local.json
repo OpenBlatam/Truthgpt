@@ -1,7 +1,27 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(echo \"---EXIT:$?---\")",
+      "Read(//c/Users/blatam/AppData/Local/Python/pythoncore-3.14-64/Scripts/**)",
+      "Read(//c/Users/blatam/AppData/Local/Python/pythoncore-3.14-64/Lib/site-packages/**)",
+      "Bash(pip show *)",
+      "Bash(pip install *)",
+      "Skill(claude-api)",
+      "PowerShell(python -W ignore -c \"import torch.nn as nn; from optimizers.optimization_cores import create_optimization_core; m = nn.Linear\\(8, 8\\); core = create_optimization_core\\('enhanced', {}\\); print\\('instantiated:', type\\(core\\).__name__\\); r = core.optimize\\(m\\); print\\('optimize ran, level=', r.level.value, 'techniques=', r.techniques_applied\\)\")",
+      "PowerShell(python -W ignore -c \"import ast; tree = ast.parse\\(open\\('main.py', encoding='utf-8'\\).read\\(\\)\\); print\\('main.py parses OK,', len\\([n for n in ast.walk\\(tree\\) if isinstance\\(n, \\(ast.Import, ast.ImportFrom\\)\\)]\\), 'import statements'\\)\")",
+      "PowerShell(python -W ignore -c \"import importlib; mods = ['optimizers', 'optimizers.compatibility.shims', 'optimizers.optimization_cores', 'optimizers.core', 'optimizers.core.base_truthgpt_optimizer', 'optimizers.core.generic_optimizer', 'optimizers.core.optimization_pipeline']; [print\\(m, '->', 'OK' if importlib.import_module\\(m\\) else 'FAIL'\\) for m in mods]\")",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "PowerShell(python -W ignore -c \"import importlib.util, sys, types; spec = importlib.util.spec_from_file_location\\('truthgpt_main', 'main.py'\\); mod = importlib.util.module_from_spec\\(spec\\); sys.modules['truthgpt_main'] = mod; spec.loader.exec_module\\(mod\\); print\\('main.py module loaded OK; top-level names:', [n for n in dir\\(mod\\) if not n.startswith\\('_'\\)][:15]\\)\")",
+      "Bash(git commit -m ' *)",
+      "PowerShell(python -W ignore -m pytest tests/unit/test_optimizer_core.py -x --tb=short 2>&1 | Select-Object -First 80)",
+      "PowerShell(python -W ignore -m pytest tests/unit/test_optimizer_core.py --tb=no -q --no-header 2>&1 | Select-Object -Last 25)",
+      "Bash([ -s \"$f\" ])",
+      "Bash(OPENROUTER_API_KEY=x python -c ' *)",
+      "WebSearch",
+      "Bash(echo \"exit:$?\")",
+      "Bash(git reset *)"
     ]
   }
 }

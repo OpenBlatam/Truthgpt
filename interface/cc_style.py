@@ -163,7 +163,7 @@ def expand_pending(max_blocks: int = 4) -> int:
     return count
 
 
-def cc_tool_output(tool_name: str, output: str, max_lines: int = 8, max_chars: int = 600) -> None:
+def cc_tool_output(tool_name: str, output: str, max_lines: int = 1000, max_chars: int = 100000) -> None:
     """Render a truncated tool output inline below the tool result line.
 
     Shows the first ``max_lines`` of output (up to ``max_chars`` total).
@@ -400,7 +400,8 @@ def cc_code_change(
     if removed:
         bits.append(f"[red]Removed {removed} line{'s' if removed != 1 else ''}[/red]")
     if note:
-        bits.append(f"[dim]{note}[/dim]")
+        from rich.markup import escape
+        bits.append(f"[dim]{escape(note)}[/dim]")
     
     if bits:
         _console.print(f"  [dim]{CONT}[/dim]  " + "  ".join(bits))
@@ -408,33 +409,44 @@ def cc_code_change(
     if diff_text:
         import re
         lines = diff_text.strip("\n").split("\n")
-        
+
         old_ln = 0
         new_ln = 0
-        
+
+        # Build each row as a Text object with explicit styles so code that
+        # contains square brackets (Dict[str, Any], xs[0], …) is NOT parsed
+        # as Rich markup — that was mangling and concatenating diff lines.
         for line in lines:
             if line.startswith("---") or line.startswith("+++"):
                 continue
-                
+
             if line.startswith("@@"):
                 match = re.search(r"@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@", line)
                 if match:
                     old_ln = int(match.group(1))
                     new_ln = int(match.group(2))
                 continue
-                
+
+            row = Text()
             if line.startswith("+"):
-                _console.print(f"[green]{new_ln:>8} +{line[1:]}[/green]")
+                row.append(f"{new_ln:>6} ", style="dim green")
+                row.append("+ ", style="green")
+                row.append(line[1:], style="green")
                 new_ln += 1
             elif line.startswith("-"):
-                _console.print(f"[red]{old_ln:>8} -{line[1:]}[/red]")
+                row.append(f"{old_ln:>6} ", style="dim red")
+                row.append("- ", style="red")
+                row.append(line[1:], style="red")
                 old_ln += 1
             else:
-                # line starts with space for unchanged lines in unified diff
+                # Unchanged context line (may start with a leading space).
                 text = line[1:] if line.startswith(" ") else line
-                _console.print(f"      {new_ln:>2}  {text}")
+                row.append(f"{new_ln:>6} ", style="dim")
+                row.append("  ")
+                row.append(text, style="dim")
                 old_ln += 1
                 new_ln += 1
+            _console.print(row)
         _console.print()
 
 

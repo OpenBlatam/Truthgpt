@@ -15,7 +15,10 @@ from .multi_agentes.swarm_orchestrator import SwarmOrchestrator
 from .razonamiento_planificacion.orchestrator import MultiUserReActAgent
 from .models import AgentResponse, AgentConfig
 from .registry import registry
-from .engines import DummyAsyncLLM
+# Import DummyAsyncLLM from where it is defined (engine_providers), not from the
+# heavy `engines` facade. Going through `engines` creates a latent import cycle:
+# agents/__init__ -> client -> engines -> (engines mid-import) -> client.
+from .engine_providers import DummyAsyncLLM
 from .exceptions import HandoffError
 
 logger = logging.getLogger(__name__)

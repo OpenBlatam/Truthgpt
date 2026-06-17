@@ -40,6 +40,10 @@ class PaperMetadata:
     load_count: int = 0
     error_count: int = 0
     
+    @property
+    def title(self) -> str:
+        return self.paper_name
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert metadata to dictionary."""
         return {

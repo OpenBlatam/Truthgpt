@@ -10,7 +10,7 @@ class AgentSettings(BaseSettings):
     )
     
     # Inferencia
-    MAX_ITERATIONS: int = Field(default=30, description="Máximo de bucles ReAct por mensaje")
+    MAX_ITERATIONS: int = Field(default=60, description="Máximo de bucles ReAct por mensaje")
     MODEL_TEMPERATURE: float = 0.7
     
     # Persistencia

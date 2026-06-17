@@ -52,10 +52,12 @@ class ResearchAgent(BaseAgent):
         """
         logger.info(f"ResearchAgent processing: {prompt}")
         
-        # Pipeline interactivo para descubrimiento múltiple
-        if "descubrir" in prompt.lower() or "search" in prompt.lower():
+        # Pipeline interactivo para descubrimiento múltiple o Auto-Integración
+        if "descubrir" in prompt.lower() or "search" in prompt.lower() or "auto-integrate" in prompt.lower() or "auto integrate" in prompt.lower():
             from .system_tools import ArXivSearchTool
             search = ArXivSearchTool()
+            auto_integrate = "auto-integrate" in prompt.lower() or "auto integrate" in prompt.lower()
+
             
             # Step 1: Translate and Refine Query via LLM (Industrial SOTA Bridge)
             from agents.engines import engine_registry
@@ -82,20 +84,31 @@ class ResearchAgent(BaseAgent):
             
             # Step 2: Determine Search Source & Temporal Filters
             use_scholar = "scholar" in prompt.lower()
+            use_semantic = "semantic" in prompt.lower()
             sort_by = "relevance"
-            
+
             is_recent = any(word in prompt.lower() for word in ["hoy", "este dia", "esta semana", "reciente", "nuevo", "today", "recent"])
             if is_recent:
                 sort_by = "submittedDate"
-            
-            if use_scholar:
-                from .system_tools import GoogleScholarSearchTool
-                scholar_tool = GoogleScholarSearchTool()
-                # For Scholar, append year if recent
+
+            if use_scholar or use_semantic:
+                from .system_tools import GoogleScholarSearchTool, SemanticScholarSearchTool
+                semantic_tool = SemanticScholarSearchTool()
+                # For Scholar-style queries, append year range if recent
                 if is_recent:
                     refined_query += " 2025..2026"
-                console.print(f"[bold yellow]Searching Google Scholar for '{refined_query}'...[/bold yellow]")
-                results_text = await scholar_tool.run(refined_query)
+
+                if use_semantic:
+                    # Explicit Semantic Scholar request
+                    console.print(f"[bold yellow]Searching Semantic Scholar for '{refined_query}'...[/bold yellow]")
+                    results_text = await semantic_tool.run(refined_query)
+                else:
+                    # Google Scholar with robust Semantic Scholar fallback (CAPTCHA/rate-limit safe)
+                    console.print(f"[bold yellow]Searching Google Scholar for '{refined_query}'...[/bold yellow]")
+                    results_text = await GoogleScholarSearchTool().run(refined_query)
+                    if "ID:" not in results_text:
+                        console.print("[yellow]Google Scholar no disponible (rate-limit/CAPTCHA). Fallback a Semantic Scholar...[/yellow]")
+                        results_text = await semantic_tool.run(refined_query)
             else:
                 # Use specific categories and temporal awareness for ArXiv
                 final_query = f"(abs:{refined_query} OR ti:{refined_query}) AND (cat:cs.AI OR cat:cs.LG OR cat:cs.CL)"
@@ -112,7 +125,8 @@ class ResearchAgent(BaseAgent):
                     if "ID:" in block:
                         try:
                             p_id = block.split("ID: ")[1].split(" |")[0]
-                            title = block.split("Title: ")[1].split("\n")[0]
+                            # Title shares its line with " | Category:" / " | Source:" suffixes; keep only the title.
+                            title = block.split("Title: ")[1].split("\n")[0].split(" | ")[0].strip()
                             category = block.split("Category: ")[1].split("\n")[0] if "Category: " in block else "cs.AI"
                             summary = block.split("Summary: ")[1] if "Summary: " in block else ""
                             published = block.split("Published: ")[1].split("\n")[0] if "Published: " in block else "N/A"
@@ -156,19 +170,39 @@ class ResearchAgent(BaseAgent):
                 
                 # Construir respuesta con tabla de candidatos
                 if candidates:
-                    res_msg = f"🔍 **SOTA Trend Radar** | Mostrando los {len(candidates)} resultados más relevantes en ArXiv:\n\n"
-                    for i, c in enumerate(candidates, 1):
-                        res_msg += f"{i}. **{c['title']}**\n"
-                        res_msg += f"   📅 Fecha: {c['date']} | 🔗 Link: {c['link']}\n"
-                        res_msg += f"   🚀 Mejora Estimada: **{c['speedup']} Speedup** | **{c['accuracy']} Accuracy**\n\n"
-                    
-                    res_msg += "¿Cuál de estos deseas integrar en TruthGPT? (Usa el número)"
-                    
-                    return AgentResponse(
-                        content=res_msg,
-                        action_type="final_answer",
-                        metadata={"agent": self.name, "candidates": candidates}
-                    )
+                    if auto_integrate:
+                        console.print(f"[bold cyan]AUTO-INTEGRATE MODE ACTIVE: Automatically processing top 3 candidates...[/bold cyan]")
+                        top_3 = candidates[:3]
+                        # Disparamos la síntesis automática (Integración LexChronos)
+                        from .system_tools import PaperSynthesisTool
+                        synth_tool = PaperSynthesisTool()
+                        res_msg = f"🔍 **Auto-Integración SOTA** | LexChronos ha iniciado la síntesis paralela de los top papers:\n\n"
+                        for i, c in enumerate(top_3, 1):
+                            res_msg += f"{i}. **{c['title']}** ({c['speedup']} | {c['accuracy']})\n"
+                            
+                        # El Orchestrator recibirá la acción de ejecutar synthesis en el próximo loop.
+                        # Aquí delegamos a la herramienta forzando la acción.
+                        synthesis_query = f"Extrae los claims e integra el código para los IDs: {', '.join([c['id'] for c in top_3])}"
+                        
+                        return AgentResponse(
+                            content=res_msg + "\nIntegrando...",
+                            action_type="tool_call",
+                            metadata={"agent": self.name, "tool": "paper_synthesis", "tool_input": synthesis_query}
+                        )
+                    else:
+                        res_msg = f"🔍 **SOTA Trend Radar** | Mostrando los {len(candidates)} resultados más relevantes en ArXiv:\n\n"
+                        for i, c in enumerate(candidates, 1):
+                            res_msg += f"{i}. **{c['title']}**\n"
+                            res_msg += f"   📅 Fecha: {c['date']} | 🔗 Link: {c['link']}\n"
+                            res_msg += f"   🚀 Mejora Estimada: **{c['speedup']} Speedup** | **{c['accuracy']} Accuracy**\n\n"
+                        
+                        res_msg += "¿Cuál de estos deseas integrar en TruthGPT? (Usa el número)"
+                        
+                        return AgentResponse(
+                            content=res_msg,
+                            action_type="final_answer",
+                            metadata={"agent": self.name, "candidates": candidates}
+                        )
             
             return AgentResponse(content=f"No encontré papers relevantes para '{prompt}'.", action_type="final_answer")
             

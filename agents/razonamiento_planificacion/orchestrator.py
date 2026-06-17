@@ -129,14 +129,36 @@ class MultiUserReActAgent:
         return f"{instructions}\n\n{core_str}\n{context}\nTRUTHGPT: "
 
     def _parse_action(self, response: str) -> AgentAction:
-        """Parsea la respuesta en formato JSON de la IA a un objeto AgentAction."""
+        """Parsea la respuesta en formato JSON de la IA a un objeto AgentAction. Si falla, asume que es texto plano y lo devuelve como final_answer."""
+        import re
+        import json
+        from pydantic import ValidationError
+        
         clean_resp = response.strip()
-        if clean_resp.startswith("```json"):
-            clean_resp = clean_resp[7:-3].strip()
-        elif clean_resp.startswith("```"):
-            clean_resp = clean_resp[3:-3].strip()
-            
-        return AgentAction.model_validate_json(clean_resp)
+        
+        # Intentar extraer el bloque JSON usando regex
+        json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', clean_resp, re.DOTALL)
+        if json_match:
+            candidate = json_match.group(1).strip()
+        else:
+            json_match = re.search(r'(\{.*\})', clean_resp, re.DOTALL)
+            candidate = json_match.group(1).strip() if json_match else clean_resp
+                
+        try:
+            action = AgentAction.model_validate_json(candidate)
+            # If the LLM returned a valid JSON but forgot all expected keys, treat it as plain text final answer
+            if not action.tool and not action.final_answer and not action.handoff:
+                # Try to see if it used a wrong key like "response" or "action"
+                raw_dict = json.loads(candidate)
+                possible_text = raw_dict.get("response") or raw_dict.get("answer") or raw_dict.get("text") or raw_dict.get("message")
+                if possible_text:
+                    return AgentAction(final_answer=str(possible_text))
+                return AgentAction(final_answer=clean_resp)
+            return action
+        except (ValidationError, json.JSONDecodeError, ValueError):
+            # Si no es un JSON válido o falta esquema, el LLM probablemente dio una respuesta en texto plano.
+            # Convertimos esa respuesta en final_answer para que no entre en un bucle infinito de errores.
+            return AgentAction(final_answer=clean_resp)
 
     async def _run_reflexion(self, user_id: str, current_prompt: str, clean_resp: str, trace_id: str) -> tuple[bool, str]:
         """Evalúa críticamente la respuesta anterior y decide si necesita mejoras."""
@@ -217,6 +239,40 @@ class MultiUserReActAgent:
         logger.info(f"Iniciando bucle ReAct unificado para {user_id}")
         await self.memory.add_message(user_id, "user", message)
 
+        # ── GUARD: Detect DummyAsyncLLM before entering the loop ──
+        from agents.engine_providers import DummyAsyncLLM
+        _engine_obj = self.llm
+        # Unwrap closures: safe_llm_call wraps providers in lambdas
+        _inner = getattr(_engine_obj, "__self__", None)
+        _is_dummy = isinstance(_engine_obj, DummyAsyncLLM) or isinstance(_inner, DummyAsyncLLM)
+        if not _is_dummy:
+            # Check if the engine_registry resolved to Dummy
+            _provider_name = getattr(_engine_obj, "provider_name", "") or ""
+            _model_name_check = getattr(_engine_obj, "model_name", "") or ""
+            if _provider_name == "dummy" or _model_name_check == "dummy-fallback":
+                _is_dummy = True
+
+        if _is_dummy:
+            logger.warning("⚠️ DummyAsyncLLM detected — no real LLM engine configured. Aborting ReAct loop.")
+            no_engine_msg = (
+                "⚠️ Motor de inferencia no configurado. "
+                "Configura al menos una API key (DEEPSEEK_API_KEY, ANTHROPIC_API_KEY, "
+                "OPENAI_API_KEY, GOOGLE_API_KEY, OPENROUTER_API_KEY) en Settings > Engines."
+            )
+            await self.memory.add_message(user_id, "assistant", no_engine_msg)
+            yield {"event": "final_answer", "content": no_engine_msg, "action_type": "error", "metadata": {"error": "no_engine_configured"}}
+            # Record a minimal trace so the issue is visible in traces_history
+            _dummy_trace_id = global_tracer.start_trace(
+                name="react_loop", agent_name=self.name, input_data=message,
+                metadata={"user_id": user_id, "model": "dummy-fallback"},
+            )
+            global_tracer.finish_trace(
+                _dummy_trace_id, output=no_engine_msg, status="no_engine",
+                metadata={"iterations": 0, "tool_calls": 0, "errors": 0, "action_type": "no_engine_configured"},
+            )
+            return
+        # ── END GUARD ──
+
         current_prompt = await self._build_initial_prompt(user_id, message)
 
         model_name = getattr(self.llm, "model_name", None) or getattr(self.llm, "model", None) or ""
@@ -227,8 +283,9 @@ class MultiUserReActAgent:
             metadata={"user_id": user_id, "model": model_name},
         )
 
-        MAX_JSON_RETRIES = 3
+        MAX_JSON_RETRIES = 2  # Reduced from 3: faster failure when LLM is broken
         json_retry_count = 0
+        total_json_retries = 0  # Track across entire loop for trace metadata
         tool_count = 0
         error_count = 0
         iters_used = 0
@@ -237,41 +294,122 @@ class MultiUserReActAgent:
         trace_extra_meta: Dict[str, Any] = {}
 
         try:
-            for i in range(settings.MAX_ITERATIONS):
+            actual_iterations = max(60, getattr(settings, "MAX_ITERATIONS", 60))
+            for i in range(actual_iterations):
                 iters_used = i + 1
                 await self._checkpoint(task_id, user_id, message, current_prompt, i)
                 yield {"event": "thinking", "iteration": i + 1}
 
                 from agents.engines import safe_llm_call
-                response = await safe_llm_call(self.llm, current_prompt, trace_id)
+
+                if getattr(self, "_scheduler", None) is None:
+                    from agents.scheduler.smart_scheduler import SmartAgentScheduler
+                    self._scheduler = SmartAgentScheduler()
+
+                async def llm_coro():
+                    return await safe_llm_call(self.llm, current_prompt, trace_id)
+
+                try:
+                    response = await self._scheduler.execute_with_timeout('planning_agent', llm_coro())
+                except Exception as e:
+                    logger.error(f"Execution failed or timed out: {e}")
+                    error_msg = f"Error de conexión: El motor de inferencia falló o agotó el tiempo (timeout). Detalle: {e}"
+                    yield {"event": "final_answer", "content": error_msg, "action_type": "error", "metadata": {"error": "inference_timeout"}}
+                    trace_status = "error"
+                    trace_output = error_msg
+                    trace_extra_meta["action_type"] = "inference_timeout"
+                    return
+
+                # ── GUARD: Detect mock echo responses from DummyAsyncLLM or errors ──
+                _resp_stripped = response.strip() if response else ""
+                if (
+                    "Echo from OpenClaw" in _resp_stripped or 
+                    '"dummy-fallback"' in _resp_stripped or 
+                    "Motor de inferencia no configurado" in _resp_stripped or 
+                    "Inference error:" in _resp_stripped
+                ):
+                    logger.warning("Mock echo response or inference error detected mid-loop — aborting cascade.")
+                    mock_abort_msg = (
+                        "⚠️ El motor de inferencia reportó un error o no está configurado. "
+                        "Verifica tus API keys en Settings > Engines."
+                    )
+                    await self.memory.add_message(user_id, "assistant", mock_abort_msg)
+                    yield {"event": "final_answer", "content": mock_abort_msg, "action_type": "error", "metadata": {"error": "inference_failure"}}
+                    trace_status = "error"
+                    trace_output = mock_abort_msg
+                    trace_extra_meta["action_type"] = "inference_failure"
+                    return
+                # ── END GUARD ──
 
                 try:
                     action = self._parse_action(response)
                     clean_resp = response.strip()
                     json_retry_count = 0
 
+                    if action.thought and action.tool and getattr(self, "thought_verification_enabled", True):
+                        verification_prompt = (
+                            f"Evalúa la lógica de este pensamiento:\n"
+                            f"Pensamiento: {action.thought}\n"
+                            f"Acción propuesta: {action.tool} -> {action.tool_input}\n"
+                            f"Responde estrictamente con un puntaje de confianza de 0.0 a 1.0 (Ej: 0.9). Nada más."
+                        )
+                        try:
+                            verif_res = await safe_llm_call(self.llm, verification_prompt, trace_id)
+                            try:
+                                verif_score = float(verif_res.strip())
+                            except ValueError:
+                                verif_score = 1.0
+                            if verif_score < 0.7:
+                                logger.warning(f"THOUGHT VERIFICATION FAILED: Score {verif_score} for {action.tool}")
+                                yield {"event": "thought_verification", "status": "failed", "score": verif_score}
+                                result = f"Error interno de razonamiento: Mi propio sistema de verificación calificó este paso con {verif_score}/1.0. Debo repensar la estrategia y probar otra aproximación."
+                                yield {"event": "tool_result", "tool": action.tool, "result": result}
+                                current_prompt += f"{clean_resp}\nTOOL_RESULT: {result}\nTRUTHGPT: "
+                                continue
+                        except Exception as e:
+                            logger.debug(f"Thought verification skipped: {e}")
+
                     if action.tool:
                         tool_count += 1
                         if action.tool in self.tools:
                             tool_instance = self.tools[action.tool]
                             if tool_instance.requires_approval:
-                                logger.info(f"HITL PAUSE: Require aprobación para {action.tool}")
-                                yield {"event": "requires_approval", "tool": action.tool, "cmd": action.tool_input, "clean_resp": clean_resp}
-                                approval_msg = f"<WAITING_FOR_APPROVAL tool='{action.tool}' cmd='{action.tool_input}'/>"
-                                await self.memory.add_message(user_id, "assistant", clean_resp)
-                                await self.memory.add_message(user_id, "assistant", f"⏳ Esperando aprobación manual para ejecutar: {action.tool}")
-                                yield {"event": "final_answer", "content": approval_msg, "action_type": "approval_required", "metadata": {"tool": action.tool, "cmd": action.tool_input}}
-                                trace_output = approval_msg
-                                trace_extra_meta["action_type"] = "approval_required"
-                                return
+                                if getattr(self, "_circuit_breaker", None) is None:
+                                    from agents.scheduler.smart_scheduler import CircuitBreaker
+                                    self._circuit_breaker = CircuitBreaker(failure_threshold=3)
 
-                            yield {"event": "tool_call", "tool": action.tool, "cmd": action.tool_input}
-                            if CC_AVAILABLE:
-                                cc_tool_call(f"Executing {action.tool}...")
-                            result = await self._execute_tool_action(trace_id, action, user_id)
-                            if CC_AVAILABLE:
-                                cc_result(action.tool, note="Success")
-                                cc_tool_output(action.tool, str(result))
+                                if self._circuit_breaker.can_auto_approve():
+                                    logger.warning(f"CIRCUIT BREAKER AUTO-APPROVAL for {action.tool}")
+                                    yield {"event": "auto_approval", "tool": action.tool, "cmd": action.tool_input}
+                                else:
+                                    logger.info(f"HITL PAUSE: Require aprobación para {action.tool}")
+                                    yield {"event": "requires_approval", "tool": action.tool, "cmd": action.tool_input, "clean_resp": clean_resp}
+                                    approval_msg = f"<WAITING_FOR_APPROVAL tool='{action.tool}' cmd='{action.tool_input}'/>"
+                                    await self.memory.add_message(user_id, "assistant", clean_resp)
+                                    await self.memory.add_message(user_id, "assistant", f"⏳ Esperando aprobación manual para ejecutar: {action.tool}")
+                                    yield {"event": "final_answer", "content": approval_msg, "action_type": "approval_required", "metadata": {"tool": action.tool, "cmd": action.tool_input}}
+                                    trace_output = approval_msg
+                                    trace_extra_meta["action_type"] = "approval_required"
+                                    return
+
+                            if getattr(self, "_memory_optimizer", None) is None:
+                                from agents.memoria_aprendizaje.memory_optimizer import optimizer_instance
+                                self._memory_optimizer = optimizer_instance
+                                
+                            skip, cached_res = self._memory_optimizer.should_skip_redundant_action(action.tool, action.tool_input, user_id)
+                            
+                            if skip:
+                                result = cached_res
+                                yield {"event": "tool_call", "tool": action.tool, "cmd": f"(CACHED) {action.tool_input}"}
+                            else:
+                                yield {"event": "tool_call", "tool": action.tool, "cmd": action.tool_input}
+                                if CC_AVAILABLE:
+                                    cc_tool_call(f"Executing {action.tool}...")
+                                result = await self._execute_tool_action(trace_id, action, user_id)
+                                self._memory_optimizer.cache_result(action.tool, action.tool_input, user_id, result)
+                                if CC_AVAILABLE:
+                                    cc_result(action.tool, note="Success")
+                                    cc_tool_output(action.tool, str(result))
                         else:
                             yield {"event": "tool_call", "tool": action.tool, "cmd": action.tool_input}
                             result = f"Error: La herramienta '{action.tool}' no existe."
@@ -317,6 +455,7 @@ class MultiUserReActAgent:
                 except Exception as e:
                     error_count += 1
                     json_retry_count += 1
+                    total_json_retries += 1
                     logger.warning(f"Error parseando Pydantic JSON ({json_retry_count}/{MAX_JSON_RETRIES}): {e}")
                     yield {"event": "error", "message": f"Syntax error recovering ({json_retry_count}/{MAX_JSON_RETRIES})", "is_fatal": False}
                     
@@ -326,19 +465,32 @@ class MultiUserReActAgent:
                             "Por favor reformula tu petición o cambia de motor."
                         )
                         await self.memory.add_message(user_id, "assistant", fallback)
-                        yield {"event": "final_answer", "content": fallback, "action_type": "error", "metadata": {"error": "json_retry_exhausted"}}
+                        yield {"event": "final_answer", "content": fallback, "action_type": "error", "metadata": {"error": "json_retry_exhausted", "total_json_retries": total_json_retries}}
                         trace_status = "error"
                         trace_output = fallback
                         trace_extra_meta["action_type"] = "json_retry_exhausted"
+                        trace_extra_meta["total_json_retries"] = total_json_retries
                         return
-                        
-                    current_prompt += (
-                        "\n[ERROR DE SISTEMA]: Tu última respuesta no fue JSON válido "
-                        "que cumpla el esquema AgentAction. Responde EXACTAMENTE con un objeto JSON "
-                        "con los campos 'thought', 'tool', 'tool_input', 'final_answer', sin texto extra.\nTRUTHGPT: "
-                    )
 
-            fallback = "Límite de razonamiento alcanzado. Por favor, simplifica tu petición."
+                    # Only append error correction to prompt if NOT a mock response
+                    # (mock engines ignore prompts, so appending is useless pollution)
+                    if "Echo from OpenClaw" not in response and "Mock" not in response:
+                        current_prompt += (
+                            "\n[ERROR DE SISTEMA]: Tu última respuesta no fue JSON válido "
+                            "que cumpla el esquema AgentAction. Responde EXACTAMENTE con un objeto JSON "
+                            "con los campos 'thought', 'tool', 'tool_input', 'final_answer', sin texto extra.\nTRUTHGPT: "
+                        )
+                    else:
+                        # Mock detected in JSON retry — abort immediately
+                        mock_msg = "⚠️ Motor mock detectado durante reintento JSON. Configura un motor real."
+                        await self.memory.add_message(user_id, "assistant", mock_msg)
+                        yield {"event": "final_answer", "content": mock_msg, "action_type": "error", "metadata": {"error": "mock_in_json_retry"}}
+                        trace_status = "error"
+                        trace_output = mock_msg
+                        trace_extra_meta["action_type"] = "mock_in_json_retry"
+                        return
+
+            fallback = "El agente ha procesado extensamente la información pero requiere más detalles para finalizar. ¿Podrías ser más específico con tu petición?"
             await self.memory.add_message(user_id, "assistant", fallback)
             yield {"event": "final_answer", "content": fallback, "action_type": "error", "metadata": {"error": "iteration_limit"}}
             trace_status = "error"
@@ -362,6 +514,7 @@ class MultiUserReActAgent:
                     "iterations": iters_used,
                     "tool_calls": tool_count,
                     "errors": error_count,
+                    "json_retries": total_json_retries,
                     **trace_extra_meta,
                 },
             )

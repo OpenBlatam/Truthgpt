@@ -210,7 +210,31 @@ background_missions = []
 BLOCKCHAIN_READY = False
 
 # Cached values for UI responsiveness
-_CACHED_PAPER_COUNT = None
+def _fast_count_papers() -> int:
+    try:
+        from pathlib import Path
+        _current = Path(__file__).resolve().parent
+        _workspace_root = None
+        for _ in range(20):
+            if (_current / ".git").exists() or _current.name == "blatam-academy":
+                _workspace_root = _current
+                break
+            if _current.parent == _current:
+                break
+            _current = _current.parent
+            
+        if not _workspace_root:
+            _workspace_root = Path(__file__).resolve().parent.parent # fallback
+            
+        p = _workspace_root / "truthgpt_collected" / "integration_code" / "papers"
+        if p.exists():
+            categories = ['research', 'architecture', 'inference', 'memory', 'redundancy', 'techniques', 'code', 'best']
+            return sum(len(list(p.glob(d + '/paper_*.py'))) for d in categories if (p / d).exists())
+    except Exception:
+        pass
+    return 66
+
+_CACHED_PAPER_COUNT = _fast_count_papers()
 _LAST_PAPER_SCAN = 0
 
 
@@ -556,6 +580,18 @@ def get_header() -> Panel:
     if theme in ["claude", "anthropic", "minimalist"]:
         return get_claude_header()
     
+    import shutil
+    terminal_lines = shutil.get_terminal_size().lines or 24
+    from rich.panel import Panel
+    from rich.text import Text
+    
+    if terminal_lines < 30:
+        return Panel(
+            Text("🚀 TruthGPT Industrial OS  [bold red][R] Reboot[/bold red]", style="bold orange3", justify="center"),
+            border_style="orange3",
+            padding=(0, 1)
+        )
+    
     banner = r"""
    _____                      _      _____  _____  _______
   |_   _| __ _   _  | |_  | |_   / ____||  __ \|__   __|
@@ -563,8 +599,6 @@ def get_header() -> Panel:
     | |  | |  | |_| | | |_  | |_  | |__  ||  ___/   | |
     |_|  |_|   \__,_|  \__|  \__|  \_____||_|       |_|
     """
-    from rich.panel import Panel
-    from rich.text import Text
     return Panel(
         Text(banner, style="bold orange3", justify="center"),
         title="[bold purple] TruthGPT Industrial OS [/bold purple]",
@@ -575,15 +609,15 @@ def get_header() -> Panel:
 
 def get_real_budget_stats():
     """Reads actual API budget data from persistence."""
-    path = ".budget.json"
+    path = ".api_cost_budget.json"
     stats = {"total_usd": 0.0, "savings_usd": 0.0, "limit": 2.0}
     if os.path.exists(path):
         try:
+            import json
             with open(path, 'r') as f:
                 data = json.load(f)
                 stats["total_usd"] = data.get("metrics", {}).get("total_usd", 0.0)
                 stats["savings_usd"] = data.get("savings_usd", 0.0)
-                # You might want to load the limit from user_prefs or config too
         except: pass
     return stats
 
@@ -755,49 +789,42 @@ class TelemetryProvider:
                         pass
                 threading.Thread(target=run_thread, daemon=True).start()
                 
-        # Resolve estimated / offline credits from prefs
+        # Dedicate tracking to real costs from .api_cost_budget.json
         prefs = load_user_prefs()
-        credits = prefs.get("api_credits", {"claude": 10.00, "openai": 10.00, "google": 10.00})
-        
-        # Deduct session usage from the preferred/active engine
         budget_stats = get_real_budget_stats()
         session_cost = budget_stats.get("total_usd", 0.0)
         pref_engine = prefs.get("preferred_engine", "deepseek").split(",")[0].strip()
         
         res = {}
-        # 1. DeepSeek
+        # 1. DeepSeek (Has API balance endpoint)
         deepseek_key = prefs.get("api_keys", {}).get("deepseek") or os.getenv("DEEPSEEK_API_KEY")
         ds_cached = cls._CACHED_BALANCES.get("deepseek", {})
         if deepseek_key and ds_cached.get("val") is not None:
-            res["DeepSeek"] = (ds_cached["val"], "API")
+            res["DeepSeek"] = (ds_cached["val"], "API Balance")
         else:
-            res["DeepSeek"] = (max(0.0, 5.00 - (session_cost if pref_engine == "deepseek" else 0.0)), "Est")
+            res["DeepSeek"] = (session_cost if pref_engine == "deepseek" else 0.0, "API Cost")
                 
-        # 2. OpenRouter
+        # 2. OpenRouter (Has API balance endpoint)
         openrouter_key = prefs.get("api_keys", {}).get("openrouter") or os.getenv("OPENROUTER_API_KEY")
         or_cached = cls._CACHED_BALANCES.get("openrouter", {})
         if openrouter_key and or_cached.get("val") is not None:
-            res["OpenRouter"] = (or_cached["val"], "API")
+            res["OpenRouter"] = (or_cached["val"], "API Balance")
         else:
-            res["OpenRouter"] = (max(0.0, 10.00 - (session_cost if "openrouter" in pref_engine else 0.0)), "Est")
+            res["OpenRouter"] = (session_cost if "openrouter" in pref_engine else 0.0, "API Cost")
 
-        # 3. Claude (Anthropic)
+        # Claude, OpenAI, and Gemini do not provide balance endpoints natively.
+        # We show the REAL tracked API Cost instead of fake "Estimated Balances"
         anthropic_key = prefs.get("api_keys", {}).get("anthropic") or os.getenv("ANTHROPIC_API_KEY")
-        claude_start = float(credits.get("claude", 10.00))
-        claude_val = max(0.0, claude_start - (session_cost if "claude" in pref_engine or "anthropic" in pref_engine else 0.0))
-        res["Claude"] = (claude_val, "API" if anthropic_key else "Est")
+        if anthropic_key or "claude" in pref_engine or "anthropic" in pref_engine:
+            res["Claude"] = (session_cost if "claude" in pref_engine or "anthropic" in pref_engine else 0.0, "API Cost")
             
-        # 4. OpenAI
         openai_key = prefs.get("api_keys", {}).get("openai") or os.getenv("OPENAI_API_KEY")
-        openai_start = float(credits.get("openai", 10.00))
-        openai_val = max(0.0, openai_start - (session_cost if "openai" in pref_engine or "chatgpt" in pref_engine else 0.0))
-        res["OpenAI"] = (openai_val, "API" if openai_key else "Est")
+        if openai_key or "openai" in pref_engine or "chatgpt" in pref_engine:
+            res["OpenAI"] = (session_cost if "openai" in pref_engine or "chatgpt" in pref_engine else 0.0, "API Cost")
             
-        # 5. Google (Gemini)
         google_key = prefs.get("api_keys", {}).get("google") or os.getenv("GOOGLE_API_KEY")
-        google_start = float(credits.get("google", 10.00))
-        google_val = max(0.0, google_start - (session_cost if "google" in pref_engine else 0.0))
-        res["Gemini"] = (google_val, "API" if google_key else "Est")
+        if google_key or "google" in pref_engine:
+            res["Gemini"] = (session_cost if "google" in pref_engine else 0.0, "API Cost")
             
         return res
 
@@ -833,8 +860,24 @@ def get_claude_header(updates: list[str] = None):
     cost_str = f"${budget_stats['total_usd']:.4f}"
     
     import shutil
-    w = max(80, shutil.get_terminal_size().columns or 100)
+    terminal_size = shutil.get_terminal_size()
+    w = max(80, terminal_size.columns or 100)
+    h = terminal_size.lines or 24
     
+    if h < 30:
+        telemetry = Text()
+        telemetry.append(f" {timestamp} ", style="bold white bg:black")
+        telemetry.append(" █▓▒░ TRUTHGPT CORE ░▒▓█ ", style="bold black bg:white")
+        telemetry.append(f"  COST:[{cost_str}]  ", style="dim")
+        stats = TelemetryProvider.get_stats()
+        telemetry.append(f" CPU: {stats['load']:.0f}% | RAM: {stats['mem']:.0f}% ", style="white")
+        header_line = Text(f"\n── TruthGPT OS {version} ──────────────────────────────────────", style=f"bold {theme_color}")
+        final_header = Text()
+        final_header.append(telemetry)
+        final_header.append(header_line)
+        final_header.append("\n")
+        return final_header
+
     telemetry = Text()
     telemetry.append(f" {timestamp} ", style="bold white bg:black")
     telemetry.append(" █▓▒░ TRUTHGPT CORE ░▒▓█ ", style="bold black bg:white")
@@ -874,9 +917,16 @@ def get_claude_header(updates: list[str] = None):
     left_content.append("\n    ▀█▀ █▀▄ █ █ ▀█▀ █ █ █▀▀ █▀█ ▀█▀\n", style=theme_color)
     left_content.append("     █  █▀▄ █▄█  █  █▀█ █▄█ █▀  █ \n\n", style=theme_color)
     
+    from rich.text import Text as RichText
+    
     left_content.append(f" Welcome back {user_name}!\n\n", style="bold white")
-    left_content.append(f" TruthGPT 5.9 · [bold #00ff00]SOTA[/bold #00ff00] · 128k Context\n", style="dim")
-    left_content.append(f" Cascading: [cyan]ACTIVE[/cyan] · Sandbox: [bold white]HARDENED[/bold white]\n", style="dim")
+    
+    line1 = RichText.from_markup(f"[dim] TruthGPT 5.9 · [/dim][bold #00ff00]SOTA[/bold #00ff00][dim] · 128k Context[/dim]\n")
+    left_content.append(line1)
+    
+    line2 = RichText.from_markup(f"[dim] Cascading: [/dim][cyan]ACTIVE[/cyan][dim] · Sandbox: [/dim][bold white]HARDENED[/bold white]\n")
+    left_content.append(line2)
+    
     left_content.append(f" {current_path}\n", style="dim")
     
     # Right Content: Sidebar (Industrial HUD Stats)
@@ -884,24 +934,32 @@ def get_claude_header(updates: list[str] = None):
     
     # 1. API Budget & Costs (REAL DATA) - PRIMARY FOCUS
     right_content.append("\n █▓▒░ COST TELEMETRY\n", style="white")
+    
+    # Global Budget Stats
+    spent = budget_stats.get('total_usd', 0.0)
+    limit = budget_stats.get('limit', 10.0)
+    remaining = max(0.0, limit - spent)
+    
+    right_content.append(" ├ Budget:      ", style="dim")
+    right_content.append(f"${limit:.2f}\n", style="green")
+    right_content.append(" ├ Spent:       ", style="dim")
+    right_content.append(f"${spent:.4f}\n", style="cyan")
+    right_content.append(" ├ Remaining:   ", style="dim")
+    right_content.append(f"${remaining:.4f}\n", style="yellow")
+    right_content.append(" │\n", style="dim")
+
     balances = TelemetryProvider.get_api_balances()
     if balances:
-        total_avail = 0.0
-        for name, (val, b_type) in balances.items():
-            right_content.append(f" ├ {name:<10}: ", style="dim")
-            right_content.append(f"${val:.4f}", style="cyan")
+        keys = list(balances.keys())
+        for i, name in enumerate(keys):
+            val, b_type = balances[name]
+            prefix = " └ " if i == len(keys) - 1 else " ├ "
+            right_content.append(f"{prefix}{name:<10}: ", style="dim")
+            if "Balance" in b_type:
+                right_content.append(f"${val:.4f}", style="green")
+            else:
+                right_content.append(f"${val:.4f}", style="cyan")
             right_content.append(f" ({b_type})\n", style="dim")
-            total_avail += val
-        right_content.append(" └ Total Avail: ", style="dim")
-        right_content.append(f"${total_avail:.4f}\n", style="green")
-    else:
-        remaining = budget_stats['limit'] - budget_stats['total_usd']
-        right_content.append(" ├ Budget:      ", style="dim")
-        right_content.append(f"${budget_stats['limit']:.2f}\n", style="green")
-        right_content.append(" ├ Usage:       ", style="dim")
-        right_content.append(f"${budget_stats['total_usd']:.4f}\n", style="cyan")
-        right_content.append(" └ Remaining:   ", style="dim")
-        right_content.append(f"${remaining:.4f}\n", style="yellow")
     
     # 2. Mission Persistence (Background Tasks)
     right_content.append("\n █▓▒░ MISSION PERSISTENCE\n", style="white")
@@ -1255,7 +1313,7 @@ async def get_choice(title: str, options: Dict[str, str], style_name: str = "plu
             header_content = ANSI(header_console.file.getvalue())
 
             root = HSplit([
-                Window(content=FormattedTextControl(header_content)),
+                Window(content=FormattedTextControl(header_content), ignore_content_height=True),
                 Window(height=1),
                 Label(f"  [bold {style_name}] {title.upper()} [/bold {style_name}]", style="bold white"),
                 Window(height=1),

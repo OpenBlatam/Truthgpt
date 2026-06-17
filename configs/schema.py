@@ -14,15 +14,15 @@ class TrainingCfg(BaseModel):
 
 
 class ModelCfg(BaseModel):
-    family: str = Field(...)
-    name_or_path: str = Field(...)
+    family: str = Field(default="unknown")
+    name_or_path: str = Field(default="gpt2")
 
 
 class AppCfg(BaseModel):
     run_name: str = Field("run")
     seed: int = Field(42)
-    model: ModelCfg
-    training: TrainingCfg
+    model: ModelCfg = Field(default_factory=ModelCfg)
+    training: TrainingCfg = Field(default_factory=TrainingCfg)
     data: Optional[dict] = None
 
 

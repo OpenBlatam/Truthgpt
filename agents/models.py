@@ -9,10 +9,10 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 class AgentAction(BaseModel):
     """Universal model for an LLM reasoning step or action."""
-    thought: Optional[str] = Field(None, description="Internal reasoning or thought process.")
+    thought: Optional[str] = Field(None, description="Brief PRIVATE reasoning (not shown to the user). Never put the deliverable here.")
     tool: Optional[str] = Field(None, description="Name of the tool to call. Null if providing a final answer.")
     tool_input: Optional[Any] = Field(None, description="Arguments for the tool call (usually a string or JSON).")
-    final_answer: Optional[str] = Field(None, description="Final message to the user.")
+    final_answer: Optional[str] = Field(None, description="The complete, self-contained answer for the user. Required and non-empty whenever no tool/handoff is used.")
     handoff: Optional[str] = Field(None, description="Target agent name for a handoff transfer.")
 
     @field_validator("tool_input", mode="before")

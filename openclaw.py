@@ -28,8 +28,10 @@ OPENCLAW_GATEWAY_URL = "http://127.0.0.1:18789"
 async def deep_refine(prompt: str, hours: float = 0.016, criteria: str = "Clarity, impact, and fidelity to the prompt", provider: str = "deepseek") -> Optional[str]:
     """
     Sends a refinement task to the local OpenClaw Deep Refiner Gateway (System 5.9).
-    This function acts as an asynchronous client that polls for the result.
+    This function acts as an asynchronous client that polls for the result,
+    and then displays TruthGPT's engine benchmarks.
     """
+    start_time = time.time()
     async with aiohttp.ClientSession() as session:
         # 1. Submit the job
         payload = {
@@ -61,8 +63,21 @@ async def deep_refine(prompt: str, hours: float = 0.016, criteria: str = "Clarit
                     if poll_res.status == 200:
                         status_data = await poll_res.json()
                         if status_data["status"] == "completed":
-                            print(f"[OpenClaw] Refinement complete! Score: {status_data.get('score')}")
-                            return status_data.get("output")
+                            elapsed = time.time() - start_time
+                            output_text = status_data.get("output", "")
+                            score = status_data.get("score", "N/A")
+                            print(f"[OpenClaw] Refinement complete! Score: {score}")
+                            
+                            # Integrar Benchmark de TruthGPT
+                            try:
+                                from agents.engine_benchmark import _display_truthgpt_benchmark, _record_benchmark_run
+                                tokens = len(output_text) // 4
+                                _record_benchmark_run("openclaw", f"OpenClaw ({provider})", elapsed, tokens)
+                                await _display_truthgpt_benchmark(elapsed, model_name=f"OpenClaw ({provider})", tokens=tokens, engine_key="openclaw")
+                            except Exception as bench_err:
+                                print(f"[OpenClaw] Could not render benchmark: {bench_err}")
+                            
+                            return output_text
                         elif status_data["status"] == "failed":
                             print("[OpenClaw] Refinement failed.")
                             return None

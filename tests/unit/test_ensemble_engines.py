@@ -38,6 +38,13 @@ for mod_name in ["agents.ssl_context", "agents.engines", "agents.ensemble"]:
         mod = importlib.util.module_from_spec(spec)
         sys.modules[mod_name] = mod
         spec.loader.exec_module(mod)
+        # Attach to the parent package so dotted-path resolution (e.g. pytest's
+        # monkeypatch.setattr("agents.engines....")) can find it via getattr.
+        # Manual exec_module, unlike normal import, does not do this for us.
+        parent_name, _, child = mod_name.rpartition(".")
+        parent = sys.modules.get(parent_name)
+        if parent is not None:
+            setattr(parent, child, mod)
 
 from agents.ensemble import (  # noqa: E402
     ALL_ENSEMBLE_MODES,
@@ -237,7 +244,7 @@ async def test_registry_builds_ensemble_for_multi_engine(monkeypatch):
     registry.register("claude", MockProvider("claude", "cl-v1", 0.02))
 
     monkeypatch.setattr(
-        "agents.engines._get_user_prefs",
+        "agents.engine_registry._get_user_prefs",
         lambda: {
             "preferred_engine": "deepseek,claude",
             "ensemble_mode": "parallel",
@@ -245,7 +252,7 @@ async def test_registry_builds_ensemble_for_multi_engine(monkeypatch):
         },
     )
     monkeypatch.setattr(
-        "agents.engines._load_api_keys_from_prefs",
+        "agents.engine_registry._load_api_keys_from_prefs",
         lambda: {"DEEPSEEK_API_KEY": "k1", "ANTHROPIC_API_KEY": "k2"},
     )
 
@@ -284,7 +291,7 @@ async def test_registry_race_mode(monkeypatch):
     registry._providers["claude"] = MockProvider("claude", 0.5)
 
     monkeypatch.setattr(
-        "agents.engines._get_user_prefs",
+        "agents.engine_registry._get_user_prefs",
         lambda: {
             "preferred_engine": "deepseek,claude",
             "ensemble_mode": "race",
@@ -292,7 +299,7 @@ async def test_registry_race_mode(monkeypatch):
         },
     )
     monkeypatch.setattr(
-        "agents.engines._load_api_keys_from_prefs",
+        "agents.engine_registry._load_api_keys_from_prefs",
         lambda: {"DEEPSEEK_API_KEY": "k1", "ANTHROPIC_API_KEY": "k2"},
     )
 
@@ -329,7 +336,7 @@ async def test_registry_all_merge_modes(monkeypatch, mode: str):
     )
 
     monkeypatch.setattr(
-        "agents.engines._get_user_prefs",
+        "agents.engine_registry._get_user_prefs",
         lambda: {
             "preferred_engine": "deepseek,claude",
             "ensemble_mode": mode,
@@ -337,7 +344,7 @@ async def test_registry_all_merge_modes(monkeypatch, mode: str):
         },
     )
     monkeypatch.setattr(
-        "agents.engines._load_api_keys_from_prefs",
+        "agents.engine_registry._load_api_keys_from_prefs",
         lambda: {"DEEPSEEK_API_KEY": "k1", "ANTHROPIC_API_KEY": "k2"},
     )
 

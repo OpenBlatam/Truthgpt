@@ -48,7 +48,16 @@ try:
     from papers.chain_of_draft import ChainOfDraft
     from papers.elastic_reasoning import ElasticReasoning
     from papers.fp16_stability import FP16Stability
-    from latency_optimizations import apply_chain_of_draft, apply_elastic_reasoning, apply_fp16_stability
+    from latency_optimizations import (
+        apply_chain_of_draft, apply_elastic_reasoning, apply_fp16_stability,
+        apply_snap_kv_compression, apply_speculative_decoding,
+        apply_entropy_guided_inference, apply_distinct_leaf_decoding,
+        apply_discriminative_verification,
+        apply_adaptive_kv_quant, apply_moqae_quant,
+        apply_confspec_reasoning, apply_speculative_prefill,
+        apply_intuitor_reward, apply_echo_ttrl,
+        apply_reinforced_attention, apply_progressive_thought_encoding,
+    )
     PAPERS_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: Could not import paper modules: {e}")
@@ -92,6 +101,19 @@ Solution:
             return f"Please think within {t_budget} tokens using <think></think> tags, then answer within {s_budget} tokens:\n\n{prompt}"
         return prompt
     def apply_fp16_stability(model): return model
+    def apply_snap_kv_compression(current_tokens, **kwargs): return {"compressed": False, "compression_ratio": 1.0, "tokens_saved": 0}
+    def apply_speculative_decoding(**kwargs): return {"accepted_tokens": 0, "speedup_multiplier": 1.0}
+    def apply_entropy_guided_inference(context_length, **kwargs): return {"speedup_multiplier": 1.0, "compute_fraction": 1.0, "sparse_attention_segments": 0}
+    def apply_distinct_leaf_decoding(sample_budget=8, **kwargs): return {"distinct_traces": sample_budget, "samples_saved": 0, "speedup_multiplier": 1.0}
+    def apply_discriminative_verification(candidates, **kwargs): return {"selected": None, "overrode_majority": False}
+    def apply_adaptive_kv_quant(num_tokens, **kwargs): return {"quantized": False, "memory_ratio": 1.0, "memory_savings_pct": 0.0}
+    def apply_moqae_quant(context_length, **kwargs): return {"memory_ratio": 1.0, "avg_bits": 16.0}
+    def apply_confspec_reasoning(num_steps=12, **kwargs): return {"verify_passes_saved": 0, "speedup_multiplier": 1.0}
+    def apply_speculative_prefill(num_tokens, **kwargs): return {"compressed": False, "kept_tokens": num_tokens, "speedup_multiplier": 1.0, "dropped_tokens": 0}
+    def apply_intuitor_reward(group_token_probs, **kwargs): return {"rewards": [], "best_rollout": -1, "label_free": True}
+    def apply_echo_ttrl(rollouts, **kwargs): return {"selected": -1, "rewards": []}
+    def apply_reinforced_attention(head_contributions, reward=1.0, **kwargs): return {"updated_weights": [], "reinforced_heads": 0}
+    def apply_progressive_thought_encoding(base_thought_tokens, **kwargs): return {"training_token_savings_pct": 0.0, "final_thought_tokens": base_thought_tokens}
 
 # ── Dynamic Workflow Integration ──────────────
 try:
@@ -112,10 +134,14 @@ DEFAULT_CONFIG = {
     "max_log_lines": 200,
     "workflow_interval": 5,
     "continuous_mode": True,
-    "active_papers": ["chain_of_draft", "elastic_reasoning", "fp16_stability"],
+    "active_papers": ["chain_of_draft", "elastic_reasoning", "fp16_stability", "snap_kv", "speculative_decoding", "entropy_guided", "distinct_leaf", "discriminative_verification", "adaptive_kv_quant", "moqae", "confspec", "speculative_prefill", "intuitor", "echo", "reinforced_attention", "progressive_thought"],
     "chain_of_draft_variant": "baseline",
     "elastic_reasoning_budget": {"think": 30, "solve": 120},
     "fp16_enabled": True,
+    "entropy_threshold": 0.55,
+    "self_consistency_budget": 8,
+    "prefill_keep_ratio": 0.4,
+    "confspec_gate": 0.8,
     "max_iterations": 0,
     "user_input_timeout": 45,
     "colors": {
@@ -181,14 +207,32 @@ class LogBuffer:
 
 # ── Paper Integration Engine ─────────────────
 class PaperIntegrationEngine:
-    """Central engine that applies Chain of Draft, Elastic Reasoning, and FP16 Stability."""
+    """Central engine that applies Chain of Draft, Elastic Reasoning, FP16 Stability, SnapKV, and Speculative Decoding."""
     
     def __init__(self, config: Dict[str, Any]):
         self.cfg = config
         self.chain_draft_active = "chain_of_draft" in config.get("active_papers", [])
         self.elastic_active = "elastic_reasoning" in config.get("active_papers", [])
         self.fp16_active = "fp16_stability" in config.get("active_papers", []) or config.get("fp16_enabled", False)
-        
+        self.snapkv_active = "snap_kv" in config.get("active_papers", [])
+        self.speculative_active = "speculative_decoding" in config.get("active_papers", [])
+        self.entropy_active = "entropy_guided" in config.get("active_papers", [])
+        self.distinct_leaf_active = "distinct_leaf" in config.get("active_papers", [])
+        self.disc_verify_active = "discriminative_verification" in config.get("active_papers", [])
+        self.adaptive_kv_active = "adaptive_kv_quant" in config.get("active_papers", [])
+        self.moqae_active = "moqae" in config.get("active_papers", [])
+        self.confspec_active = "confspec" in config.get("active_papers", [])
+        self.spec_prefill_active = "speculative_prefill" in config.get("active_papers", [])
+        self.intuitor_active = "intuitor" in config.get("active_papers", [])
+        self.echo_active = "echo" in config.get("active_papers", [])
+        self.reinforced_attn_active = "reinforced_attention" in config.get("active_papers", [])
+        self.progressive_thought_active = "progressive_thought" in config.get("active_papers", [])
+
+        self.entropy_threshold = config.get("entropy_threshold", 0.55)
+        self.sc_budget = config.get("self_consistency_budget", 8)
+        self.prefill_keep_ratio = config.get("prefill_keep_ratio", 0.4)
+        self.confspec_gate = config.get("confspec_gate", 0.8)
+
         self.chain_variant = config.get("chain_of_draft_variant", "baseline")
         t_budget = config.get("elastic_reasoning_budget", {}).get("think", 30)
         s_budget = config.get("elastic_reasoning_budget", {}).get("solve", 120)
@@ -198,7 +242,21 @@ class PaperIntegrationEngine:
             "chain_draft_applied": 0,
             "elastic_budgets_enforced": 0,
             "fp16_stable_tensors": 0,
-            "total_tokens_saved": 0
+            "total_tokens_saved": 0,
+            "snapkv_compression_runs": 0,
+            "speculative_tokens_accepted": 0,
+            "entropy_sparse_segments": 0,
+            "entropy_speedup": 1.0,
+            "distinct_leaf_samples_saved": 0,
+            "verifier_majority_overrides": 0,
+            "kv_memory_saved_pct": 0.0,
+            "moqae_avg_bits": 16.0,
+            "confspec_verify_saved": 0,
+            "prefill_tokens_dropped": 0,
+            "intuitor_rollouts_scored": 0,
+            "echo_updates": 0,
+            "reinforced_attn_heads": 0,
+            "progressive_thought_savings_pct": 0.0,
         }
     
     def process_prompt(self, prompt: str) -> Tuple[str, Dict[str, Any]]:
@@ -257,6 +315,97 @@ class PaperIntegrationEngine:
         if tensor is not None and self.fp16_active:
             return FP16Stability.check_stability_metrics(tensor)
         return {"stable": True, "note": "FP16 not active or no tensor provided"}
+
+    def apply_entropy_guided(self, context_length: int) -> Dict[str, Any]:
+        """Entropy-guided adaptive attention (arXiv:2606.09508v1)."""
+        if not self.entropy_active:
+            return {}
+        result = apply_entropy_guided_inference(context_length, entropy_threshold=self.entropy_threshold)
+        self.metrics["entropy_sparse_segments"] += result.get("sparse_attention_segments", 0)
+        self.metrics["entropy_speedup"] = result.get("speedup_multiplier", 1.0)
+        return result
+
+    def apply_distinct_leaf(self) -> Dict[str, Any]:
+        """Deterministic distinct-leaf self-consistency (arXiv:2604.20500)."""
+        if not self.distinct_leaf_active:
+            return {}
+        result = apply_distinct_leaf_decoding(sample_budget=self.sc_budget)
+        self.metrics["distinct_leaf_samples_saved"] += result.get("samples_saved", 0)
+        return result
+
+    def select_answer(self, candidates: List[Tuple[str, float]]) -> Dict[str, Any]:
+        """Hybrid vote + discriminative-verifier selection (arXiv:2510.14913)."""
+        if not self.disc_verify_active or not candidates:
+            return {}
+        result = apply_discriminative_verification(candidates)
+        if result.get("overrode_majority"):
+            self.metrics["verifier_majority_overrides"] += 1
+        return result
+
+    def apply_adaptive_kv(self, num_tokens: int) -> Dict[str, Any]:
+        """Adaptive per-token KV-cache quantization (arXiv:2604.04722)."""
+        if not self.adaptive_kv_active:
+            return {}
+        result = apply_adaptive_kv_quant(num_tokens)
+        self.metrics["kv_memory_saved_pct"] = result.get("memory_savings_pct", 0.0)
+        return result
+
+    def apply_moqae(self, context_length: int) -> Dict[str, Any]:
+        """Mixture of Quantization-Aware Experts routing (arXiv:2506.07533)."""
+        if not self.moqae_active:
+            return {}
+        result = apply_moqae_quant(context_length)
+        self.metrics["moqae_avg_bits"] = result.get("avg_bits", 16.0)
+        return result
+
+    def apply_confspec(self, num_steps: int) -> Dict[str, Any]:
+        """Confidence-gated step-level speculative reasoning (arXiv:2602.18447)."""
+        if not self.confspec_active:
+            return {}
+        result = apply_confspec_reasoning(num_steps, confidence_gate=self.confspec_gate)
+        self.metrics["confspec_verify_saved"] += result.get("verify_passes_saved", 0)
+        return result
+
+    def apply_spec_prefill(self, num_tokens: int) -> Dict[str, Any]:
+        """Draft-guided training-free prefill compression (arXiv:2603.02631)."""
+        if not self.spec_prefill_active:
+            return {}
+        result = apply_speculative_prefill(num_tokens, keep_ratio=self.prefill_keep_ratio)
+        self.metrics["prefill_tokens_dropped"] += result.get("dropped_tokens", 0)
+        return result
+
+    def score_intuitor(self, group_token_probs: List[List[float]]) -> Dict[str, Any]:
+        """Label-free self-certainty RL reward (arXiv:2505.19590)."""
+        if not self.intuitor_active or not group_token_probs:
+            return {}
+        result = apply_intuitor_reward(group_token_probs)
+        self.metrics["intuitor_rollouts_scored"] += len(result.get("rewards", []))
+        return result
+
+    def optimize_echo(self, rollouts: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Entropy-confidence hybrid test-time RL update (arXiv:2602.02150)."""
+        if not self.echo_active or not rollouts:
+            return {}
+        result = apply_echo_ttrl(rollouts)
+        if result.get("selected", -1) >= 0:
+            self.metrics["echo_updates"] += 1
+        return result
+
+    def reinforce_attention(self, head_contributions: List[float], reward: float = 1.0) -> Dict[str, Any]:
+        """Reward-weighted reinforcement of attention heads (arXiv:2602.04884)."""
+        if not self.reinforced_attn_active or not head_contributions:
+            return {}
+        result = apply_reinforced_attention(head_contributions, reward)
+        self.metrics["reinforced_attn_heads"] += result.get("reinforced_heads", 0)
+        return result
+
+    def encode_thoughts(self, base_thought_tokens: int) -> Dict[str, Any]:
+        """Progressive thought-compression curriculum (arXiv:2602.16839)."""
+        if not self.progressive_thought_active:
+            return {}
+        result = apply_progressive_thought_encoding(base_thought_tokens)
+        self.metrics["progressive_thought_savings_pct"] = result.get("training_token_savings_pct", 0.0)
+        return result
 
 # ── Dynamic Terminal ─────────────────────────
 class DynamicPaperTerminal:
@@ -317,6 +466,10 @@ class DynamicPaperTerminal:
             paper_names.append(f"ER:{self.paper_engine.elastic.t_budget}/{self.paper_engine.elastic.s_budget}")
         if self.paper_engine.fp16_active:
             paper_names.append("FP16:ON")
+        if self.paper_engine.snapkv_active:
+            paper_names.append("SnapKV:ON")
+        if self.paper_engine.speculative_active:
+            paper_names.append("SpecDec:ON")
         
         header_text = Text(
             f"TruthGPT Dynamic Terminal | Papers: {', '.join(paper_names) if paper_names else 'none active'} | User: {self.user_prefs.get('user_name', 'default')}",
@@ -344,8 +497,8 @@ class DynamicPaperTerminal:
         metrics_table.add_column(justify="left")
         metrics_table.add_column(justify="right")
         metrics_table.add_row(
-            f"[bold]Iter:[/bold] {self.iteration} | [bold]Elapsed:[/bold] {elapsed:.1f}s | [bold]CoD applied:[/bold] {m['chain_draft_applied']}",
-            f"[bold]Elastic:[/bold] {m['elastic_budgets_enforced']} | [bold]FP16 checks:[/bold] {m['fp16_stable_tensors']} | [bold]Tokens saved:[/bold] {m['total_tokens_saved']}"
+            f"[bold]Iter:[/bold] {self.iteration} | [bold]Elapsed:[/bold] {elapsed:.1f}s | [bold]CoD applied:[/bold] {m['chain_draft_applied']} | [bold]SnapKV runs:[/bold] {m['snapkv_compression_runs']}",
+            f"[bold]Elastic:[/bold] {m['elastic_budgets_enforced']} | [bold]FP16 checks:[/bold] {m['fp16_stable_tensors']} | [bold]Tokens saved:[/bold] {m['total_tokens_saved']} | [bold]SpecDec tokens:[/bold] {m['speculative_tokens_accepted']}"
         )
         
         footer_panel = Panel(
@@ -460,6 +613,22 @@ class DynamicPaperTerminal:
                     stability = self.paper_engine.verify_fp16_stability()
                     self.add_workflow_log(f"   FP16 Stability: {'✅ Stable' if stability.get('stable', True) else '⚠️ Issues detected'}")
                 
+                # SnapKV Compression (simulated)
+                if self.paper_engine.snapkv_active:
+                    context_len = 1000 + (self.iteration * 150)
+                    kv_result = apply_snap_kv_compression(context_len)
+                    self.paper_engine.metrics["snapkv_compression_runs"] += 1
+                    self.paper_engine.metrics["total_tokens_saved"] += kv_result.get("tokens_saved", 0)
+                    if kv_result.get("compressed"):
+                        self.add_workflow_log(f"   📉 SnapKV: Compressed KV cache from {kv_result['original_size']} to {kv_result['new_size']} tokens")
+                
+                # Speculative Decoding (simulated)
+                if self.paper_engine.speculative_active:
+                    spec_result = apply_speculative_decoding()
+                    accepted = spec_result.get("accepted_tokens", 0)
+                    self.paper_engine.metrics["speculative_tokens_accepted"] += accepted
+                    self.add_workflow_log(f"   ⚡ SpecDec: {accepted} tokens accepted (Speedup: {spec_result.get('speedup_multiplier', 1.0):.1f}x)")
+                
                 # Update terminal output
                 self.add_terminal_output(f"$ Iteration {self.iteration}: {generated[:80]}...")
                 
@@ -487,6 +656,8 @@ async def main():
     parser.add_argument("--no-fp16", action="store_true", help="Disable FP16 stability")
     parser.add_argument("--no-chain", action="store_true", help="Disable Chain of Draft")
     parser.add_argument("--no-elastic", action="store_true", help="Disable Elastic Reasoning")
+    parser.add_argument("--no-snapkv", action="store_true", help="Disable SnapKV Compression")
+    parser.add_argument("--no-speculative", action="store_true", help="Disable Speculative Decoding")
     
     args = parser.parse_args()
     
@@ -510,6 +681,10 @@ async def main():
         active_papers.remove("chain_of_draft")
     if args.no_elastic and "elastic_reasoning" in active_papers:
         active_papers.remove("elastic_reasoning")
+    if getattr(args, 'no_snapkv', False) and "snap_kv" in active_papers:
+        active_papers.remove("snap_kv")
+    if getattr(args, 'no_speculative', False) and "speculative_decoding" in active_papers:
+        active_papers.remove("speculative_decoding")
     if args.no_fp16:
         config["fp16_enabled"] = False
         if "fp16_stability" in active_papers:

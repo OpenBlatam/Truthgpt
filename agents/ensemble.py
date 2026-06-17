@@ -12,12 +12,13 @@ import json
 from typing import Any, Callable, Dict, List, Optional
 
 from .ensemble_strategies import EngineRun, StrategyFactory
+from .ensemble_utils import parse_agent_json  # re-exported for callers/tests
 
 ALL_ENSEMBLE_MODES = frozenset(
-    {"consensus", "parallel", "race", "majority", "debate", "bayesian"}
+    {"consensus", "parallel", "race", "majority", "debate", "bayesian", "elastic", "mcts"}
 )
 MULTI_ENGINE_MODES = frozenset(
-    {"consensus", "parallel", "majority", "debate", "bayesian"}
+    {"consensus", "parallel", "majority", "debate", "bayesian", "elastic", "mcts"}
 )
 
 def merge_ensemble_responses(mode: str, runs: List[EngineRun]) -> str:
@@ -65,14 +66,11 @@ async def run_ensemble(
         key = eng["key"]
         try:
             return await run_engine(key, eng, prompt, **kwargs)
-        except Exception as exc:
-            err = json.dumps(
-                {
-                    "thought": f"[{key}] error",
-                    "final_answer": f"Error ({key}): {type(exc).__name__}: {str(exc)[:200]}",
-                }
-            )
-            return key, eng.get("model", key), err, 0.0, 0
+        except Exception:
+            # Safety net: run_engine normally catches its own errors, but if it
+            # raises, return empty text so this engine is EXCLUDED from the merge
+            # instead of contributing a bogus error string as a candidate answer.
+            return key, eng.get("model", key), "", 0.0, 0
 
     if mode == "race":
         tasks = {
@@ -94,7 +92,9 @@ async def run_ensemble(
             try:
                 run = task.result()
                 runs.append(run)
-                if winner_run is None or run[3] < winner_run[3]:
+                # Only a run that actually produced text can win — a fast-failing
+                # engine (empty text, ~0s elapsed) must not be crowned winner.
+                if run[2] and (winner_run is None or run[3] < winner_run[3]):
                     winner_run = run
             except Exception:
                 continue
@@ -113,7 +113,9 @@ async def run_ensemble(
         if isinstance(item, Exception):
             continue
         runs.append(item)
-        if record_run:
+        # Don't record a failed engine (empty text) as a benchmark run — it would
+        # skew latency/token stats with a non-result.
+        if record_run and item[2]:
             record_run(item[0], item[1], item[3], item[4])
 
     return merge_ensemble_responses(mode, runs)
