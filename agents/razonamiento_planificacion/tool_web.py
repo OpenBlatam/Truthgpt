@@ -1,10 +1,21 @@
 import asyncio
 import logging
+import re
+from datetime import datetime
 import httpx
 from typing import Optional, List, Dict, Any
 from .tool_base import BaseTool
 
 logger = logging.getLogger(__name__)
+
+
+def _import_search_internet():
+    """Importa el motor de búsqueda compartido, tolerando ambos layouts de paquete."""
+    try:
+        from utils.internet_search import search_internet
+    except ImportError:
+        from optimization_core.utils.internet_search import search_internet
+    return search_internet
 
 class WebSearchTool(BaseTool):
     """
@@ -53,24 +64,28 @@ class WebSearchTool(BaseTool):
 
     # Palabras que sugieren que el usuario quiere información reciente.
     _RECENCY_HINTS = (
-        "latest", "today", "recent", "current", "now", "breaking", "2026",
+        "latest", "today", "recent", "current", "now", "breaking", "news",
         "hoy", "ahora", "reciente", "última", "ultima", "últimas", "actual",
-        "noticias", "news",
+        "noticias",
     )
+    # Límites de palabra para evitar falsos positivos (p.ej. "now" en "knowledge").
+    _RECENCY_RE = re.compile(r"\b(?:" + "|".join(_RECENCY_HINTS) + r")\b", re.IGNORECASE)
+    _YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
 
     @classmethod
     def _detect_recency(cls, query: str) -> Optional[str]:
-        q = query.lower()
-        return "week" if any(h in q for h in cls._RECENCY_HINTS) else None
+        if cls._RECENCY_RE.search(query):
+            return "week"
+        # Mención de un año actual o futuro → también indica recencia.
+        current_year = datetime.now().year
+        if any(int(y) >= current_year for y in cls._YEAR_RE.findall(query)):
+            return "week"
+        return None
 
     async def _try_unified(self, query: str) -> Optional[str]:
         """Delegate to the shared multi-source search engine."""
         try:
-            try:
-                from utils.internet_search import search_internet
-            except ImportError:
-                from optimization_core.utils.internet_search import search_internet
-
+            search_internet = _import_search_internet()
             hits = await search_internet(query, max_results=5, recency=self._detect_recency(query))
             if hits:
                 self._failures = 0
@@ -219,10 +234,7 @@ class DeepResearchTool(BaseTool):
 
         # 1) Buscar (multi-fuente, con caché/dedup/recencia heredados)
         try:
-            try:
-                from utils.internet_search import search_internet
-            except ImportError:
-                from optimization_core.utils.internet_search import search_internet
+            search_internet = _import_search_internet()
             hits: List[Dict[str, Any]] = await search_internet(query, max_results=max(num_pages + 2, 5))
         except Exception as e:
             return f"Error en la fase de búsqueda para '{query}': {e}"
