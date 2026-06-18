@@ -54,7 +54,9 @@ def _normalize_url(url: str) -> str:
         return ""
     try:
         parsed = urlparse(url.strip())
-        netloc = parsed.netloc.lower().lstrip("www.")
+        netloc = parsed.netloc.lower()
+        if netloc.startswith("www."):
+            netloc = netloc[4:]
         path = parsed.path.rstrip("/")
         return urlunparse(("", netloc, path, "", parsed.query, "")).lstrip("/")
     except Exception:
@@ -72,8 +74,18 @@ def _dedupe(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             deduped.append(r)
     return deduped
 
+_ENV_LOADED = False
+
+
 def load_env_manually():
-    """Manually parse .env files to read TAVILY_API_KEY if not in environment."""
+    """Manually parse .env files to read TAVILY_API_KEY if not in environment.
+
+    Idempotent: the .env files are read from disk at most once per process.
+    """
+    global _ENV_LOADED
+    if _ENV_LOADED:
+        return
+    _ENV_LOADED = True
     paths = [
         Path(__file__).resolve().parent / ".env",
         Path(__file__).resolve().parent.parent / ".env",
@@ -216,10 +228,13 @@ async def search_duckduckgo(query: str, max_results: int = 5,
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     }
-    url = f"https://html.duckduckgo.com/html/?q={query.replace(' ', '+')}"
+    url = "https://html.duckduckgo.com/html/"
+    params: Dict[str, str] = {"q": query}
+    if timelimit:
+        params["df"] = timelimit  # filtro temporal (d/w/m/y)
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(url, headers=headers, timeout=15)
+            response = await client.get(url, params=params, headers=headers, timeout=15)
             if response.status_code == 200:
                 soup = BeautifulSoup(response.text, "html.parser")
                 results = []
@@ -277,8 +292,10 @@ async def search_internet(query: str, max_results: int = 5,
             logger.debug("search_internet: cache hit for %r", query)
             return cached
 
-    load_env_manually()
     api_key = os.getenv("TAVILY_API_KEY")
+    if not api_key:
+        load_env_manually()
+        api_key = os.getenv("TAVILY_API_KEY")
 
     results: List[Dict[str, Any]] = []
     if api_key:
