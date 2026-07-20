@@ -59,7 +59,7 @@ def main():
     print("-" * 80)
     
     def create_attention(backend):
-        from optimization_core.polyglot_core.attention import AttentionConfig
+        from optimization_core.polyglot_core.core.attention import AttentionConfig
         return Attention(AttentionConfig(d_model=256, n_heads=4), backend=backend)
     
     def attention_benchmark(attention):

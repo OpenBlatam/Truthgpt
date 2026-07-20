@@ -1,0 +1,20 @@
+[package]
+name = "truthgpt-python-bindings"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[lib]
+name = "truthgpt_rust"
+crate-type = ["cdylib"]
+
+[dependencies]
+truthgpt-core.workspace = true
+truthgpt-models.workspace = true
+truthgpt-inference.workspace = true
+truthgpt-cache.workspace = true
+truthgpt-data.workspace = true
+truthgpt-optimization.workspace = true
+pyo3.workspace = true
+numpy.workspace = true
+anyhow.workspace = true

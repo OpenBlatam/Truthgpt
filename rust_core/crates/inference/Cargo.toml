@@ -1,0 +1,30 @@
+[package]
+name = "truthgpt-inference"
+version = "1.0.0"
+edition = "2021"
+
+[dependencies]
+truthgpt-core = { path = "../core" }
+truthgpt-models = { path = "../models" }
+truthgpt-cache = { path = "../cache" }
+
+# Async runtime
+tokio = { version = "1.35", features = ["full", "rt-multi-thread", "sync"] }
+futures = "0.3"
+async-trait = "0.1"
+
+# Concurrency
+crossbeam = "0.8"
+crossbeam-channel = "0.5"
+parking_lot = "0.12"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+
+# Random (for speculative decoding)
+rand = "0.9"
+rand_distr = "0.5"
+
+# Utilities
+tracing = "0.1"
+chrono = { version = "0.4", features = ["serde"] }

@@ -1,0 +1,22 @@
+[package]
+name = "truthgpt-core"
+version = "1.0.0"
+edition = "2021"
+description = "Foundation crate for TruthGPT: errors, traits, and utilities"
+
+[dependencies]
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging
+tracing = "0.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+
+# Numeric (for data conversion utilities)
+half = { version = "2.3", features = ["std", "num-traits", "serde"] }
+
+# Concurrency (for RingBuffer, AtomicCounter)
+parking_lot = "0.12"

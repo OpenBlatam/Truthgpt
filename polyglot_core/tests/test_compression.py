@@ -3,7 +3,7 @@ Tests for unified Compression module.
 """
 
 import pytest
-from optimization_core.polyglot_core.compression import (
+from optimization_core.polyglot_core.core.compression import (
     Compressor,
     CompressionConfig,
     CompressionAlgorithm,
@@ -11,7 +11,7 @@ from optimization_core.polyglot_core.compression import (
     compress,
     decompress,
 )
-from optimization_core.polyglot_core.backend import Backend
+from optimization_core.polyglot_core.core.backend import Backend
 
 
 def test_compression_config():

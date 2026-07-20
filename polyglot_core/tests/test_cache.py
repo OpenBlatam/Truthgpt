@@ -4,13 +4,13 @@ Tests for unified KV Cache.
 
 import pytest
 import numpy as np
-from optimization_core.polyglot_core.cache import (
+from optimization_core.polyglot_core.core.cache import (
     KVCache,
     KVCacheConfig,
     EvictionStrategy,
     CacheStats,
 )
-from optimization_core.polyglot_core.backend import Backend
+from optimization_core.polyglot_core.core.backend import Backend
 
 
 def test_kvcache_config():

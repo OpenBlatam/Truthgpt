@@ -4,7 +4,7 @@ Tests for unified Attention module.
 
 import pytest
 import numpy as np
-from optimization_core.polyglot_core.attention import (
+from optimization_core.polyglot_core.core.attention import (
     Attention,
     AttentionConfig,
     AttentionPattern,
@@ -12,7 +12,7 @@ from optimization_core.polyglot_core.attention import (
     FlashAttention,
     SparseAttention,
 )
-from optimization_core.polyglot_core.backend import Backend
+from optimization_core.polyglot_core.core.backend import Backend
 
 
 def test_attention_config():

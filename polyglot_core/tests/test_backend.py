@@ -3,7 +3,7 @@ Tests for backend detection and selection.
 """
 
 import pytest
-from optimization_core.polyglot_core.backend import (
+from optimization_core.polyglot_core.core.backend import (
     Backend,
     BackendInfo,
     get_available_backends,

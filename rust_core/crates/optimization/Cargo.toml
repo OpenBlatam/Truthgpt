@@ -1,0 +1,25 @@
+[package]
+name = "truthgpt-optimization"
+version = "1.0.0"
+edition = "2021"
+
+[dependencies]
+truthgpt-core = { path = "../core" }
+
+# Compression
+lz4_flex = "0.11"
+zstd = "0.13"
+
+# Numeric
+half = { version = "2.3", features = ["std", "num-traits", "serde"] }
+rayon = "1.8"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+
+# Error handling
+anyhow = "1.0"
+
+# Random (for hyperparameter optimizer)
+rand = "0.9"
