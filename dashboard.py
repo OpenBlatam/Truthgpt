@@ -57,7 +57,7 @@ for logger_name in [
     "torch",
     "httpx",
     "urllib3",
-    "agents.razonamiento_planificacion.orchestrator"
+    "agents.framework.tools.orchestrator"
 ]:
     logging.getLogger(logger_name).setLevel(logging.WARNING)
 
@@ -79,7 +79,7 @@ if str(current_dir) not in sys.path:
 if str(current_dir.parent) not in sys.path:
     sys.path.insert(0, str(current_dir.parent))
 
-from agents.ssl_context import ensure_ssl_certificates
+from agents.framework.interfaces.client.ssl_context import ensure_ssl_certificates
 
 ensure_ssl_certificates()
 
@@ -109,8 +109,8 @@ async def main_loop():
             
             # Lazy imports one by one to yield the GIL
             from interface import swarm_menu
-            import agents.client as ac
-            import agents.engines as ae
+            import agents.framework.interfaces.client.client as ac
+            import agents.framework.engines as ae
             
             # Use preferred engine from prefs
             from interface.core import USER_PREFS

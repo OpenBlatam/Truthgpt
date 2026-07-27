@@ -7,15 +7,15 @@ import uuid
 from typing import List, Dict, Any, Callable, Protocol, Optional, runtime_checkable, Type, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from truthgpt.agents.memoria_aprendizaje.sqlite_memory import SQLiteMemory, BaseMemory
-    from truthgpt.agents.memoria_aprendizaje.vector_memory import VectorMemory
-    from truthgpt.agents.memoria_aprendizaje.core_memory import CoreMemory
-    from truthgpt.agents.razonamiento_planificacion.tools import BaseTool, ToolResult
-    from truthgpt.agents.engines import AsyncLLMEngine
+    from truthgpt.agents.framework.memory.sqlite_memory import SQLiteMemory, BaseMemory
+    from truthgpt.agents.framework.memory.vector_memory import VectorMemory
+    from truthgpt.agents.framework.memory.core_memory import CoreMemory
+    from truthgpt.agents.framework.tools.tools import BaseTool, ToolResult
+    from truthgpt.agents.framework.engines import AsyncLLMEngine
     from typing import AsyncIterator
 
 from truthgpt.agents.models import AgentAction, AgentResponse, InferenceResult, AgentConfig
-from truthgpt.agents.razonamiento_planificacion.config import settings
+from truthgpt.agents.framework.tools.config import settings
 
 try:
     from truthgpt.interface.cc_style import (
@@ -47,9 +47,9 @@ class MultiUserReActAgent:
         custom_system_instructions: Optional[str] = None,
         tools: Optional[List[BaseTool]] = None
     ):
-        from truthgpt.agents.memoria_aprendizaje.sqlite_memory import SQLiteMemory
-        from truthgpt.agents.memoria_aprendizaje.core_memory import CoreMemory
-        from truthgpt.agents.memoria_aprendizaje.core_memory_tools import CoreMemoryAppendTool, CoreMemoryReplaceTool
+        from truthgpt.agents.framework.memory.sqlite_memory import SQLiteMemory
+        from truthgpt.agents.framework.memory.core_memory import CoreMemory
+        from truthgpt.agents.framework.memory.core_memory_tools import CoreMemoryAppendTool, CoreMemoryReplaceTool
 
         self.config = config
         self.llm = llm_engine or config.llm_engine
@@ -79,8 +79,8 @@ class MultiUserReActAgent:
         """
         Descubre y registra dinámicamente herramientas desde un servidor MCP.
         """
-        from truthgpt.agents.mcp_client import MCPClient
-        from truthgpt.agents.razonamiento_planificacion.tools import MCPTool
+        from truthgpt.agents.framework.interfaces.client.mcp_client import MCPClient
+        from truthgpt.agents.framework.tools.tools import MCPTool
 
         logger.info(f"Cargando herramientas MCP desde {server_url}...")
         client = MCPClient(server_url)
@@ -162,7 +162,7 @@ class MultiUserReActAgent:
 
     async def _run_reflexion(self, user_id: str, current_prompt: str, clean_resp: str, trace_id: str) -> tuple[bool, str]:
         """Evalúa críticamente la respuesta anterior y decide si necesita mejoras."""
-        from truthgpt.agents.engines import safe_llm_call
+        from truthgpt.agents.framework.engines import safe_llm_call
         critique_prompt = (
             f"{current_prompt}\n{clean_resp}\n"
             "[SISTEMA INTERNO]: Evalúa críticamente tu respuesta anterior frente a la petición. "
@@ -185,7 +185,7 @@ class MultiUserReActAgent:
         if self.vector_memory and self.vector_memory.enabled:
             await self.vector_memory.add_episodic(user_id, self.name, f"User: {message}\nAnswer: {final_answer}")
             # Compactar asíncronamente
-            from truthgpt.agents.engines import safe_llm_call
+            from truthgpt.agents.framework.engines import safe_llm_call
             asyncio.create_task(self.vector_memory.compact_episodic_memory(user_id, safe_llm_call))
 
         # 3. Observabilidad — close trace is handled by the unified loop, but cc_agent_done belongs here
@@ -201,7 +201,7 @@ class MultiUserReActAgent:
 
     async def _execute_tool_action(self, trace_id: str, action: AgentAction, user_id: str) -> str:
         """Helper para ejecutar una herramienta y manejar señales internas (Core Memory)."""
-        from truthgpt.agents.razonamiento_planificacion.tools import ToolResult
+        from truthgpt.agents.framework.tools.tools import ToolResult
         
         tool_instance = self.tools[action.tool]
         tool_span = global_tracer.start_span(trace_id, name=action.tool, kind="tool_call", input_data=str(action.tool_input))
@@ -300,10 +300,10 @@ class MultiUserReActAgent:
                 await self._checkpoint(task_id, user_id, message, current_prompt, i)
                 yield {"event": "thinking", "iteration": i + 1}
 
-                from truthgpt.agents.engines import safe_llm_call
+                from truthgpt.agents.framework.engines import safe_llm_call
 
                 if getattr(self, "_scheduler", None) is None:
-                    from truthgpt.agents.scheduler.smart_scheduler import SmartAgentScheduler
+                    from truthgpt.agents.orchestration.scheduler.smart_scheduler import SmartAgentScheduler
                     self._scheduler = SmartAgentScheduler()
 
                 async def llm_coro():
@@ -375,7 +375,7 @@ class MultiUserReActAgent:
                             tool_instance = self.tools[action.tool]
                             if tool_instance.requires_approval:
                                 if getattr(self, "_circuit_breaker", None) is None:
-                                    from truthgpt.agents.scheduler.smart_scheduler import CircuitBreaker
+                                    from truthgpt.agents.orchestration.scheduler.smart_scheduler import CircuitBreaker
                                     self._circuit_breaker = CircuitBreaker(failure_threshold=3)
 
                                 if self._circuit_breaker.can_auto_approve():
@@ -393,7 +393,7 @@ class MultiUserReActAgent:
                                     return
 
                             if getattr(self, "_memory_optimizer", None) is None:
-                                from truthgpt.agents.memoria_aprendizaje.memory_optimizer import optimizer_instance
+                                from truthgpt.agents.framework.memory.memory_optimizer import optimizer_instance
                                 self._memory_optimizer = optimizer_instance
                                 
                             skip, cached_res = self._memory_optimizer.should_skip_redundant_action(action.tool, action.tool_input, user_id)

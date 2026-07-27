@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Optional, List, Callable, Dict, Any
 import numpy as np
 import time
-from .backend import Backend, get_best_backend, is_backend_available
+from polyglot_core.core.backend import Backend, get_best_backend, is_backend_available
 
 
 

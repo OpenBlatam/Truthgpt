@@ -44,7 +44,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.neural_network import MLPRegressor
 
 # Import TruthGPT modules
-from .models import TruthGPTModel, TruthGPTModelConfig
+from .core.models import TruthGPTModel, TruthGPTModelConfig
 from .multi_dimensional_learning import TruthGPTMultiDimensionalManager
 from .quantum_integration import TruthGPTQuantumManager
 from .emotional_intelligence import TruthGPTEmotionalManager

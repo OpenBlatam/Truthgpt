@@ -5,7 +5,7 @@ Main System Orchestrator
 from .imports import *
 from .core import BaseModule
 from .config_manager import ConfigManager
-from .models import create_model_module
+from .core.models import create_model_module
 from .data import create_data_module
 from .training import create_training_module
 from .optimization import create_optimization_module

@@ -94,8 +94,8 @@ async def ask():
 To build a new agent, inherit from `BaseAgent` and implement the `process` method.
 
 ```python
-from agents.arquitecturas_fundamentales.base_agent import BaseAgent
-from agents.models import AgentResponse
+from optimization_core.agents.framework.architectures.base_agent import BaseAgent
+from optimization_core.agents.framework.models import AgentResponse
 
 class MyExpertAgent(BaseAgent):
     def __init__(self):

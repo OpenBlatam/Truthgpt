@@ -13,9 +13,9 @@ __all__ = [
 ]
 
 _LAZY_IMPORTS = {
-    'MetricsCollector': '..metrics',
-    'MetricsSnapshot': '..metrics',
-    'Observability': '..observability',
+    'MetricsCollector': '.metrics',
+    'MetricsSnapshot': '.metrics',
+    'Observability': '.observability',
 }
 
 _import_cache = {}
@@ -34,7 +34,7 @@ def __getattr__(name: str):
     
     module_path = _LAZY_IMPORTS[name]
     try:
-        module = __import__(module_path, fromlist=[name], level=2)
+        module = __import__(module_path, fromlist=[name], level=1)
         obj = getattr(module, name)
         _import_cache[name] = obj
         return obj

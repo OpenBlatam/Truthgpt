@@ -16,7 +16,7 @@ from typing import Any, Optional, Union
 import httpx
 
 from .base import BaseMessagingAdapter
-from ..models import AgentResponse
+from ..core.models import AgentResponse
 
 logger = logging.getLogger(__name__)
 

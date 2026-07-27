@@ -47,6 +47,38 @@ class ErrorHandler:
             logger.warning(f"Error in {func.__name__}: {e}. Using fallback.")
             return fallback()
 
+    @staticmethod
+    def async_with_fallback(
+        fallback_strategy: Callable[..., Any],
+        error_message: Optional[str] = None
+    ) -> Callable:
+        """Decorator to add fallback strategy on error for async functions."""
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+            @wraps(func)
+            async def wrapper(*args, **kwargs) -> Any:
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    if error_message:
+                        logger.warning(f"{error_message}: {e}")
+                    return fallback_strategy()
+            return wrapper
+        return decorator
+    
+    @staticmethod
+    async def async_safe_execute(
+        func: Callable[..., Any],
+        fallback: Callable[[], Any],
+        *args,
+        **kwargs
+    ) -> Any:
+        """Safely execute async function with fallback."""
+        try:
+            return await func(*args, **kwargs)
+        except Exception as e:
+            logger.warning(f"Error in {func.__name__}: {e}. Using fallback.")
+            return fallback()
+
 
 class StrategyErrorHandler:
     """Specialized error handler for optimization strategies."""

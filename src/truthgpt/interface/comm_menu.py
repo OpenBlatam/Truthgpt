@@ -66,8 +66,8 @@ async def handle_executive_prompt(prompt: str):
     """
     Handle executive-level reasoning prompts.
     """
-    from truthgpt.agents.client import AgentClient
-    from truthgpt.agents.engines import engine_registry
+    from truthgpt.agents.framework.interfaces.client.client import AgentClient
+    from truthgpt.agents.framework.engines import engine_registry
     
     console.print(Panel(f"[bold blue]Executive Reasoning Engine[/bold blue]\n[dim]Analyzing: {prompt}[/dim]", border_style="blue"))
     

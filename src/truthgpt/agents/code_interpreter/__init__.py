@@ -12,10 +12,10 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-from ..arquitecturas_fundamentales.base_agent import BaseAgent
-from ..razonamiento_planificacion.orchestrator import MultiUserReActAgent
-from ..models import AgentResponse, AgentConfig
-# from ..registry import get_tool (Lazy loaded in __init__)
+from ..core_architectures.base_agent import BaseAgent
+from ..tools.orchestrator import MultiUserReActAgent
+from ..core.models import AgentResponse, AgentConfig
+# from ..core.registry import get_tool (Lazy loaded in __init__)
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ class CodeInterpreterAgent(BaseAgent):
 
         self._registered_tools: List[str] = []
         for tool_name in self.interpreter_config.tools:
-            from ..registry import get_tool
+            from ..core.registry import get_tool
             tool_cls = get_tool(tool_name)
             if tool_cls:
                 self.react_agent.register_tool(tool_cls())

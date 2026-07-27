@@ -11,15 +11,15 @@ import time
 import inspect
 from typing import Any, AsyncIterator, Dict, Optional, Union
 
-from .multi_agentes.swarm_orchestrator import SwarmOrchestrator
-from .razonamiento_planificacion.orchestrator import MultiUserReActAgent
-from .models import AgentResponse, AgentConfig
-from .registry import registry
+from .multi_agent.swarm_orchestrator import SwarmOrchestrator
+from .tools.orchestrator import MultiUserReActAgent
+from .core.models import AgentResponse, AgentConfig
+from .core.registry import registry
 # Import DummyAsyncLLM from where it is defined (engine_providers), not from the
 # heavy `engines` facade. Going through `engines` creates a latent import cycle:
 # agents/__init__ -> client -> engines -> (engines mid-import) -> client.
-from .engine_providers import DummyAsyncLLM
-from .exceptions import HandoffError
+from .engines.engine_providers import DummyAsyncLLM
+from .core.exceptions import HandoffError
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ class AgentClient:
         self.llm_engine = config.llm_engine or DummyAsyncLLM()
 
         # Lazy import to avoid circular dependency issues
-        from .memoria_aprendizaje.sqlite_memory import SQLiteMemory
+        from .memory.sqlite_memory import SQLiteMemory
         self.memory = SQLiteMemory(db_path=config.memory_db_path)
 
         self.use_swarm = config.use_swarm
@@ -84,7 +84,7 @@ class AgentClient:
         self.vector_memory = None
         if config.use_vector_memory:
             try:
-                from .memoria_aprendizaje.vector_memory import VectorMemory
+                from .memory.vector_memory import VectorMemory
                 self.vector_memory = VectorMemory()
             except ImportError:
                 logger.warning("VectorMemory not available (chromadb missing).")

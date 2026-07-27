@@ -39,7 +39,7 @@ class RevolutionaryQuantumLearningAlgorithm(Enum):
     REVOLUTIONARY_QUANTUM_MEGA_OPTIMIZER = "revolutionary_quantum_mega_optimizer"
     REVOLUTIONARY_QUANTUM_ULTRA_OPTIMIZER = "revolutionary_quantum_ultra_optimizer"
 
-class RevolutionaryQuantumActivationFunction(Enum):
+class RevolutionaryQuantumActivationType(Enum):
     """Revolutionary quantum activation function enum."""
     REVOLUTIONARY_QUANTUM_RELU = "revolutionary_quantum_relu"
     REVOLUTIONARY_QUANTUM_SIGMOID = "revolutionary_quantum_sigmoid"
@@ -49,6 +49,8 @@ class RevolutionaryQuantumActivationFunction(Enum):
     REVOLUTIONARY_QUANTUM_QUANTUM = "revolutionary_quantum_quantum"
     REVOLUTIONARY_QUANTUM_MEGA = "revolutionary_quantum_mega"
     REVOLUTIONARY_QUANTUM_ULTRA = "revolutionary_quantum_ultra"
+
+RevolutionaryQuantumActivationFunctionEnum = RevolutionaryQuantumActivationType
 
 @dataclass
 class RevolutionaryQuantumDeepLearningConfig:
@@ -71,7 +73,9 @@ class RevolutionaryQuantumDeepLearningConfig:
     revolutionary_decoherence_time: float = 200.0
     revolutionary_gate_fidelity: float = 0.999
     learning_algorithm: RevolutionaryQuantumLearningAlgorithm = RevolutionaryQuantumLearningAlgorithm.REVOLUTIONARY_QUANTUM_BACKPROPAGATION
-    activation_function: RevolutionaryQuantumActivationFunction = RevolutionaryQuantumActivationFunction.REVOLUTIONARY_QUANTUM_RELU
+    activation_function: RevolutionaryQuantumActivationType = RevolutionaryQuantumActivationType.REVOLUTIONARY_QUANTUM_RELU
+
+RevolutionaryQuantumConfig = RevolutionaryQuantumDeepLearningConfig
 
 @dataclass
 class RevolutionaryQuantumNeuralLayer:
@@ -124,23 +128,24 @@ class RevolutionaryQuantumActivationFunction:
         self.config = config
         self.logger = logging.getLogger(__name__)
         
-    def apply(self, x: np.ndarray, activation_type: RevolutionaryQuantumActivationFunction) -> np.ndarray:
+    def apply(self, x: np.ndarray, activation_type: Any) -> np.ndarray:
         """Apply revolutionary quantum activation function."""
-        if activation_type == RevolutionaryQuantumActivationFunction.REVOLUTIONARY_QUANTUM_RELU:
+        val = str(getattr(activation_type, 'value', activation_type))
+        if 'relu' in val:
             return self._revolutionary_quantum_relu(x)
-        elif activation_type == RevolutionaryQuantumActivationFunction.REVOLUTIONARY_QUANTUM_SIGMOID:
+        elif 'sigmoid' in val:
             return self._revolutionary_quantum_sigmoid(x)
-        elif activation_type == RevolutionaryQuantumActivationFunction.REVOLUTIONARY_QUANTUM_TANH:
+        elif 'tanh' in val:
             return self._revolutionary_quantum_tanh(x)
-        elif activation_type == RevolutionaryQuantumActivationFunction.REVOLUTIONARY_QUANTUM_GELU:
+        elif 'gelu' in val:
             return self._revolutionary_quantum_gelu(x)
-        elif activation_type == RevolutionaryQuantumActivationFunction.REVOLUTIONARY_QUANTUM_SWISH:
+        elif 'swish' in val:
             return self._revolutionary_quantum_swish(x)
-        elif activation_type == RevolutionaryQuantumActivationFunction.REVOLUTIONARY_QUANTUM_QUANTUM:
+        elif 'quantum' in val:
             return self._revolutionary_quantum_quantum(x)
-        elif activation_type == RevolutionaryQuantumActivationFunction.REVOLUTIONARY_QUANTUM_MEGA:
+        elif 'mega' in val:
             return self._revolutionary_quantum_mega(x)
-        elif activation_type == RevolutionaryQuantumActivationFunction.REVOLUTIONARY_QUANTUM_ULTRA:
+        elif 'ultra' in val:
             return self._revolutionary_quantum_ultra(x)
         else:
             return self._revolutionary_quantum_relu(x)
@@ -293,7 +298,7 @@ class RevolutionaryQuantumNeuralLayer:
     def _initialize_revolutionary_weights(self) -> np.ndarray:
         """Initialize revolutionary weights."""
         # Revolutionary Xavier initialization
-        fan_in = self.config.num_qubits
+        fan_in = 2 ** self.config.num_qubits
         fan_out = self.num_units
         limit = np.sqrt(6.0 / (fan_in + fan_out))
         

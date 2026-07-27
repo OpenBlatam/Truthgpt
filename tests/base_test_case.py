@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 
 from .utils.test_helpers import (
-    create_mock_engine,
     create_mock_processor,
     create_test_config,
     create_temp_directory,

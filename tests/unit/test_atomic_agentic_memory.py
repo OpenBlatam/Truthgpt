@@ -17,7 +17,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from papers.atomic_agentic_memory import AtomicAgenticMemory  # noqa: E402
-from latency_optimizations import apply_atomic_memory  # noqa: E402
+from scripts.latency_optimizations import apply_atomic_memory  # noqa: E402
 
 
 def test_first_observation_is_added():

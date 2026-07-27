@@ -1,5 +1,7 @@
-from factories.registry import Registry
-from trainers.callbacks import PrintLogger, WandbLogger, TensorBoardLogger
+try:
+    from trainers.callbacks import PrintLogger, WandbLogger, TensorBoardLogger
+except ModuleNotFoundError:
+    from ..trainers.callbacks import PrintLogger, WandbLogger, TensorBoardLogger
 
 CALLBACKS = Registry()
 

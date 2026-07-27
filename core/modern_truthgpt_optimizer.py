@@ -5,8 +5,10 @@ Following deep learning best practices for LLM optimization
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.cuda.amp import autocast, GradScaler
+try:
+    from torch.amp import autocast, GradScaler
+except ImportError:
+    from torch.cuda.amp import autocast, GradScaler
 from torch.utils.data import DataLoader, Dataset
 from transformers import (
     AutoTokenizer, AutoModel, AutoConfig,

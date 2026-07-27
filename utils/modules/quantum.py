@@ -62,7 +62,7 @@ except ImportError:
             return np.array([1, 0])
 
 # Import TruthGPT modules
-from .models import TruthGPTModel, TruthGPTModelConfig
+from .core.models import TruthGPTModel, TruthGPTModelConfig
 from .ai_enhancement import TruthGPTAIEnhancementManager
 
 

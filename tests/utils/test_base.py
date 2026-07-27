@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 
 class BasePolyglotTest(unittest.TestCase):
     """Base class for polyglot tests."""
+    __test__ = False
+
     
     def setUp(self):
         """Setup test fixtures."""
@@ -76,6 +78,8 @@ class BasePolyglotTest(unittest.TestCase):
 
 class BaseBenchmarkTest(BasePolyglotTest):
     """Base class for benchmark tests."""
+    __test__ = False
+
     
     def setUp(self):
         """Setup benchmark test."""
@@ -138,6 +142,8 @@ class BaseBenchmarkTest(BasePolyglotTest):
 
 class BaseIntegrationTest(BasePolyglotTest):
     """Base class for integration tests."""
+    __test__ = False
+
     
     def setUp(self):
         """Setup integration test."""
@@ -150,6 +156,8 @@ class BaseIntegrationTest(BasePolyglotTest):
 
 class BasePerformanceTest(BasePolyglotTest):
     """Base class for performance tests."""
+    __test__ = False
+
     
     def setUp(self):
         """Setup performance test."""

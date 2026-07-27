@@ -24,7 +24,7 @@ import random
 from contextlib import asynccontextmanager
 
 # Import TruthGPT modules
-from .models import TruthGPTModel, TruthGPTModelConfig
+from .core.models import TruthGPTModel, TruthGPTModelConfig
 from .inference import TruthGPTInference, TruthGPTInferenceConfig
 from .monitoring import TruthGPTMonitor
 from .analytics import TruthGPTAnalyticsManager

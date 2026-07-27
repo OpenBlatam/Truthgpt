@@ -15,7 +15,7 @@ from .learning_mechanism import LearningMechanism
 from .metrics_calculator import MetricsCalculator
 from .insights_generator import InsightsGenerator
 from .result_builder import ResultBuilder
-from .models import AIOptimizationResult
+from .core.models import AIOptimizationResult
 from .metrics_calculator import AIOptimizationLevel
 from .model_utils import calculate_memory_reduction
 from .error_handler import StrategyErrorHandler

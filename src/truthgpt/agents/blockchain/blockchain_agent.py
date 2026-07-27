@@ -6,7 +6,7 @@ Specialized agent for Web3, DeFi auditing, and Smart Contract interaction.
 
 import logging
 from typing import Optional, Dict, Any
-from ..arquitecturas_fundamentales.base_agent import BaseAgent
+from ..core_architectures.base_agent import BaseAgent
 from .hub import BlockchainHub
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ class BlockchainAgent(BaseAgent):
         # For now, we use the LLM to reason about the request
         response = await self.llm_engine(f"{system_prompt}\nUser Request: {prompt}")
         
-        from ..models import AgentResponse
+        from ..core.models import AgentResponse
         return AgentResponse(
             content=response,
             action_type="final_answer",

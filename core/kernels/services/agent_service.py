@@ -18,8 +18,8 @@ class AgentService(BaseService):
     async def _on_start(self) -> None:
         """Initialize agent subsystem"""
         try:
-            import agents.client as ac
-            import agents.engines as ae
+            import agents.framework.interfaces.client.client as ac
+            import agents.framework.engines as ae
             engine_name = self.config.get("preferred_engine", "deepseek")
             llm = ae.engine_registry.get_engine(engine_name)
             self._swarm_client = ac.AgentClient(use_swarm=True, llm_engine=llm)

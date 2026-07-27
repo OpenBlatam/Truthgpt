@@ -20,7 +20,7 @@ from enum import Enum
 from collections import deque
 import heapq
 
-from ..exceptions import BatchProcessingError
+from ..core.exceptions import BatchProcessingError
 
 logger = logging.getLogger(__name__)
 

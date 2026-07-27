@@ -19,7 +19,7 @@ from typing import Callable, TypeVar, Optional, Any, Dict, List
 from functools import wraps
 import asyncio
 
-from ..exceptions import InferenceEngineError, GenerationError
+from ..core.exceptions import InferenceEngineError, GenerationError
 from ..helpers.engine_helpers import timing_context, format_error_details
 
 logger = logging.getLogger(__name__)

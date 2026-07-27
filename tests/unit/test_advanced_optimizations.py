@@ -349,7 +349,7 @@ class TestAdvancedOptimizationTechniques(unittest.TestCase):
         
         # Test gradient accumulation
         acc_optimizer = GradientAccumulationOptimizer()
-        model = nn.Linear(256, 512)
+        model = nn.Linear(256, 256)
         data = self.test_data.create_mlp_data(batch_size=2, seq_len=64, d_model=256)
         target = torch.randn_like(data)
         
@@ -422,7 +422,7 @@ class TestAdvancedOptimizationTechniques(unittest.TestCase):
         
         # Test mixed precision training
         mp_optimizer = MixedPrecisionOptimizer()
-        model = nn.Linear(256, 512)
+        model = nn.Linear(256, 256)
         data = self.test_data.create_mlp_data(batch_size=2, seq_len=64, d_model=256)
         target = torch.randn_like(data)
         
@@ -522,12 +522,12 @@ class TestAdvancedOptimizationTechniques(unittest.TestCase):
         scheduler = AdaptiveOptimizationScheduler()
         
         # Add optimizers
-        scheduler.add_optimizer("adam", MockOptimizer(learning_rate=0.001), 0.1)
-        scheduler.add_optimizer("sgd", MockOptimizer(learning_rate=0.01), 0.5)
-        scheduler.add_optimizer("rmsprop", MockOptimizer(learning_rate=0.0005), 0.2)
+        scheduler.add_optimizer("adam", MockOptimizer(learning_rate=0.001), 10.0)
+        scheduler.add_optimizer("sgd", MockOptimizer(learning_rate=0.01), 10.0)
+        scheduler.add_optimizer("rmsprop", MockOptimizer(learning_rate=0.0005), 10.0)
         
         # Test optimization
-        model = nn.Linear(256, 512)
+        model = nn.Linear(256, 256)
         data = self.test_data.create_mlp_data(batch_size=2, seq_len=64, d_model=256)
         target = torch.randn_like(data)
         

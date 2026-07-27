@@ -5,7 +5,7 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from ..configs.loader import load_config
-from ..models import build_model
+from ..core.models import build_model
 
 
 API_TOKEN = os.environ.get("TRUTHGPT_API_TOKEN", "changeme")

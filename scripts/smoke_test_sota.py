@@ -14,8 +14,8 @@ async def run_smoke_test():
         # 1. Verificar importaciones
         logger.info("📦 Verificando importaciones core...")
         from openclaw import AgentClient, AgentConfig
-        from agents.registry import registry
-        from agents.engines import engine_registry, DummyAsyncLLM
+        from optimization_core.agents.framework.registry import registry
+        from optimization_core.agents.framework.engines.engines import engine_registry, DummyAsyncLLM
         
         # 2. Verificar Registro de Herramientas
         logger.info("🛠️ Verificando Registro de Herramientas...")

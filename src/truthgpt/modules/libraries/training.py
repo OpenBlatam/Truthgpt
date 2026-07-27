@@ -4,7 +4,7 @@ Training Modules
 
 from .imports import *
 from .core import BaseModule
-from .models import ModelModule
+from .core.models import ModelModule
 from .data import DataModule
 
 class TrainingModule(BaseModule):

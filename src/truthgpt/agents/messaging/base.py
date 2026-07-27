@@ -7,7 +7,7 @@ Abstract base class providing the unified messaging adapter interface.
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, Optional, Union
-from ..models import AgentResponse
+from ..core.models import AgentResponse
 
 logger = logging.getLogger(__name__)
 

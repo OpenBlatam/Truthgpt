@@ -13,8 +13,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
-from ..arquitecturas_fundamentales.base_agent import BaseAgent
-from ..models import AgentResponse, AgentConfig
+from ..core_architectures.base_agent import BaseAgent
+from ..core.models import AgentResponse, AgentConfig
 
 logger = logging.getLogger(__name__)
 

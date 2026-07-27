@@ -39,7 +39,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 # Import TruthGPT modules
-from .models import TruthGPTModel, TruthGPTModelConfig
+from .core.models import TruthGPTModel, TruthGPTModelConfig
 from .ai_enhancement import TruthGPTAIEnhancementManager
 from .quantum_integration import TruthGPTQuantumManager
 from .emotional_intelligence import TruthGPTEmotionalManager

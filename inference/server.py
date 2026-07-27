@@ -5,7 +5,7 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from ..configs.loader import load_config
-from ..models import build_model
+from .core.engine_factory import create_inference_engine, EngineType
 
 
 API_TOKEN = os.environ.get("TRUTHGPT_API_TOKEN", "changeme")
@@ -22,7 +22,8 @@ CONFIG_PATH = os.environ.get(
 
 def _load_model():
     cfg = load_config(CONFIG_PATH, overrides=None)
-    return build_model(cfg.model.family, cfg.dict())
+    model_id = getattr(cfg.model, "path", None) or getattr(cfg.model, "family", "default")
+    return create_inference_engine(model=model_id, engine_type=EngineType.AUTO)
 
 
 app = FastAPI(title="TruthGPT Inference API")
@@ -55,8 +56,9 @@ def generate(q: str, max_new_tokens: int = 64, temperature: float = 0.8, authori
         token = authorization.split(" ", 1)[1]
     if token != API_TOKEN:
         raise HTTPException(status_code=401, detail="unauthorized")
-    out = MODEL.infer({"text": q, "max_new_tokens": max_new_tokens, "temperature": temperature})
-    return out
+    result = MODEL.generate(q, max_new_tokens=max_new_tokens, temperature=temperature)
+    out = result.text if hasattr(result, "text") else result
+    return {"text": out}
 
 
 

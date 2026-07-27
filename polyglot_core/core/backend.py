@@ -144,6 +144,9 @@ class Backend(Enum):
     RUST = auto()    # Rust via PyO3 – 20-50× faster than Python for CPU ops
     CPP = auto()     # C++ via PyBind11 – CUDA/Eigen, 10-100× with GPU
     GO = auto()      # Go services via gRPC / HTTP – horizontal scalability
+    JULIA = auto()   # Julia via PyJulia / C-ABI – Scientific computing
+    ELIXIR = auto()  # Elixir via BEAM / NIFs – Fault-tolerant concurrency
+    SCALA = auto()   # Scala via JVM / Py4J – Distributed data pipelines
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1053,6 +1056,16 @@ def record_backend_error(backend: Backend) -> None:
     the health-aware selection algorithm can demote unreliable backends.
     """
     _registry().record_error(backend)
+
+
+def record_backend_request(backend: Backend, elapsed_ms: float = 0.0, error: bool = False) -> None:
+    """
+    Record execution telemetry (latency and error state) for a backend request.
+    """
+    if error:
+        _registry().record_error(backend)
+    else:
+        _registry().record_success(backend)
 
 
 def refresh_backends() -> None:

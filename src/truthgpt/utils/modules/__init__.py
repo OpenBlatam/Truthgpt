@@ -13,7 +13,7 @@ from .data import (
     create_truthgpt_dataloader, create_truthgpt_dataset
 )
 
-from .models import (
+from .core.models import (
     TruthGPTModel, TruthGPTConfig, TruthGPTModelConfig,
     create_truthgpt_model, load_truthgpt_model, save_truthgpt_model
 )

@@ -8,9 +8,9 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from loguru import logger
 
 from .ssl_context import httpx_verify_setting
-from .models import InferenceResult
-from .exceptions import InferenceError
-from .engine_config import _resolve_api_key
+from .core.models import InferenceResult
+from .core.exceptions import InferenceError
+from .engines.engine_config import _resolve_api_key
 
 @runtime_checkable
 class AsyncLLMEngine(Protocol):

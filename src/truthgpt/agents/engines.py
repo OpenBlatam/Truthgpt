@@ -13,8 +13,8 @@ from loguru import logger
 from .ssl_context import ssl_error_hint
 
 # --- Exporters ---
-from .engine_config import _resolve_api_key, _load_api_keys_from_prefs, _get_user_prefs, _normalize_engine_key
-from .engine_providers import (
+from .engines.engine_config import _resolve_api_key, _load_api_keys_from_prefs, _get_user_prefs, _normalize_engine_key
+from .engines.engine_providers import (
     BaseProvider, 
     DeepSeekProvider, 
     GoogleGeminiProvider, 
@@ -24,8 +24,8 @@ from .engine_providers import (
     AsyncLLMEngine, 
     DummyAsyncLLM
 )
-from .engine_registry import EngineRegistry, engine_registry
-from .engine_benchmark import (
+from .engines.engine_registry import EngineRegistry, engine_registry
+from .engines.engine_benchmark import (
     _benchmark_run_stats, 
     _record_benchmark_run, 
     _compute_benchmark_metrics, 

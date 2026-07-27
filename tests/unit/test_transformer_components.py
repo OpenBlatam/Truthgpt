@@ -202,7 +202,7 @@ class TestLayerNormalization(unittest.TestCase):
         
         # Check normalization properties
         mean = output.mean(dim=-1)
-        std = output.std(dim=-1)
+        std = output.std(dim=-1, unbiased=False)
         
         # Should be approximately normalized
         self.assertTrue(torch.allclose(mean, torch.zeros_like(mean), atol=1e-5))

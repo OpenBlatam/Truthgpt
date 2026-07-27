@@ -5,8 +5,8 @@ from typing import Dict, List, Optional, Type, Union, Any
 
 from loguru import logger
 
-from .engine_config import _load_api_keys_from_prefs, _normalize_engine_key, _get_user_prefs
-from .engine_providers import (
+from .engines.engine_config import _load_api_keys_from_prefs, _normalize_engine_key, _get_user_prefs
+from .engines.engine_providers import (
     BaseProvider,
     DeepSeekProvider,
     GoogleGeminiProvider,
@@ -16,8 +16,8 @@ from .engine_providers import (
     AsyncLLMEngine,
     DummyAsyncLLM
 )
-from .engine_benchmark import _record_benchmark_run
-from .ensemble import ALL_ENSEMBLE_MODES, run_ensemble
+from .engines.engine_benchmark import _record_benchmark_run
+from .ensemble.ensemble import ALL_ENSEMBLE_MODES, run_ensemble
 
 
 class EngineRegistry:

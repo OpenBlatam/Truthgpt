@@ -5,11 +5,14 @@ Following deep learning best practices for LLM optimization
 
 import torch
 import torch.nn as nn
-import torch.optim as optim
-from torch.cuda.amp import autocast, GradScaler
+try:
+    from torch.amp import autocast, GradScaler
+except ImportError:
+    from torch.cuda.amp import autocast, GradScaler
 from torch.utils.data import DataLoader
 import logging
 from typing import Dict, Any, Optional, Union, List
+from .exceptions import OptimizerExecutionError
 from dataclasses import dataclass
 import numpy as np
 from pathlib import Path

@@ -8,9 +8,9 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from agents.arquitecturas_fundamentales.base_agent import BaseAgent
-from agents.models import AgentResponse
-from agents.client import AgentClient
+from optimization_core.agents.framework.architectures.base_agent import BaseAgent
+from optimization_core.agents.framework.models import AgentResponse
+from agents.framework.interfaces.client.client import AgentClient
 
 class MyCustomResearcher(BaseAgent):
     """

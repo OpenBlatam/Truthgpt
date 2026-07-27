@@ -19,15 +19,15 @@ __all__ = [
 ]
 
 _LAZY_IMPORTS = {
-    'CircuitBreaker': '..circuit_breaker',
-    'CircuitState': '..circuit_breaker',
-    'CircuitBreakerConfig': '..circuit_breaker',
-    'CircuitBreakerStats': '..circuit_breaker',
-    'SlidingWindowRateLimiter': '..rate_limiter',
-    'RateLimiterManager': '..rate_limiter',
-    'CacheManager': '..cache_manager',
-    'InMemoryCache': '..cache',
-    'RedisCache': '..cache',
+    'CircuitBreaker': '.circuit_breaker',
+    'CircuitState': '.circuit_breaker',
+    'CircuitBreakerConfig': '.circuit_breaker',
+    'CircuitBreakerStats': '.circuit_breaker',
+    'SlidingWindowRateLimiter': '.rate_limiter',
+    'RateLimiterManager': '.rate_limiter',
+    'CacheManager': '.cache_manager',
+    'InMemoryCache': '.cache',
+    'RedisCache': '.cache',
 }
 
 _import_cache = {}
@@ -46,7 +46,7 @@ def __getattr__(name: str):
     
     module_path = _LAZY_IMPORTS[name]
     try:
-        module = __import__(module_path, fromlist=[name], level=2)
+        module = __import__(module_path, fromlist=[name], level=1)
         obj = getattr(module, name)
         _import_cache[name] = obj
         return obj

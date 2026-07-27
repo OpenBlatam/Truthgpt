@@ -13,8 +13,8 @@ current_dir = Path(__file__).resolve().parent.parent
 if str(current_dir) not in sys.path:
     sys.path.insert(0, str(current_dir))
 
-from agents.blockchain.hub import hub
-from agents.blockchain.provider import WEB3_AVAILABLE
+from agents.domains.blockchain.hub import hub
+from agents.domains.blockchain.provider import WEB3_AVAILABLE
 
 def test_hub_functionality():
     print("Starting Blockchain Hub Verification...")

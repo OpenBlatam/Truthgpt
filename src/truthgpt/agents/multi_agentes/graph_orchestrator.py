@@ -18,11 +18,11 @@ except ImportError:
     HAS_LANGGRAPH = False
 
 try:
-    from truthgpt.agents.arquitecturas_fundamentales.base_agent import BaseAgent
+    from truthgpt.agents.framework.architectures.base_agent import BaseAgent
     from truthgpt.agents.models import AgentResponse
 except ImportError:
-    from ..arquitecturas_fundamentales.base_agent import BaseAgent
-    from ..models import AgentResponse
+    from ..core_architectures.base_agent import BaseAgent
+    from ..core.models import AgentResponse
 
 logger = logging.getLogger(__name__)
 

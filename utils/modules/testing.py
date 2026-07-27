@@ -21,7 +21,7 @@ from pathlib import Path
 # Import all TruthGPT modules
 from .training import TruthGPTTrainer, TruthGPTTrainingConfig, TruthGPTTrainingMetrics
 from .data import TruthGPTDataLoader, TruthGPTDataset, TruthGPTDataConfig
-from .models import TruthGPTModel, TruthGPTModelConfig
+from .core.models import TruthGPTModel, TruthGPTModelConfig
 from .optimizers import TruthGPTOptimizer, TruthGPTScheduler, TruthGPTOptimizerConfig
 from .evaluation import TruthGPTEvaluator, TruthGPTEvaluationConfig
 from .inference import TruthGPTInference, TruthGPTInferenceConfig

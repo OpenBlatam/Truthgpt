@@ -5,7 +5,7 @@ Centralized access to all factory functions in optimization_core.
 """
 
 # Import registry
-from .registry import Registry
+from .core.registry import Registry
 
 # Import all factory modules
 from .attention import (

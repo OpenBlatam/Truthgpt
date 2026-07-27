@@ -66,8 +66,8 @@ async def handle_executive_prompt(prompt: str):
     """
     Handle executive-level reasoning prompts.
     """
-    from agents.client import AgentClient
-    from agents.engines import engine_registry
+    from agents.framework.interfaces.client.client import AgentClient
+    from optimization_core.agents.framework.engines.engines import engine_registry
     
     console.print(Panel(f"[bold blue]Executive Reasoning Engine[/bold blue]\n[dim]Analyzing: {prompt}[/dim]", border_style="blue"))
     

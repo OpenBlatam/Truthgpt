@@ -39,7 +39,7 @@ import nltk
 from nltk.sentiment import SentimentIntensityAnalyzer
 
 # Import TruthGPT modules
-from .models import TruthGPTModel, TruthGPTModelConfig
+from .core.models import TruthGPTModel, TruthGPTModelConfig
 from .ai_enhancement import TruthGPTAIEnhancementManager
 from .quantum_integration import TruthGPTQuantumManager
 from .advanced_security import TruthGPTSecurityManager

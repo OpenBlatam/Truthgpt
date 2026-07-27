@@ -4,342 +4,69 @@ Implements cutting-edge optimizations inspired by TensorFlow's architecture
 Makes TruthGPT more powerful with TensorFlow-style optimizations
 """
 
+import sys
+from pathlib import Path
 import tensorflow as tf
 import numpy as np
+import asyncio
 from typing import Dict, Any, List, Optional, Tuple, Union, Callable
 from dataclasses import dataclass, field
 import time
 import logging
-import threading
-import asyncio
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-import multiprocessing as mp
-from functools import partial, lru_cache
-import gc
-import psutil
 from contextlib import contextmanager
 import warnings
-import math
-import random
-from enum import Enum
-import hashlib
-import json
-import pickle
-from pathlib import Path
-import cmath
-from abc import ABC, abstractmethod
+
+# Try to import from utils for robust error handling
+try:
+    from utils.error_handling import error_context, handle_error, OptimizationCoreError
+    from agents.orchestration.scheduler.smart_scheduler import SmartAgentScheduler
+except ImportError:
+    # Fallback to sys path if executed from a different root
+    sys.path.append(str(Path(__file__).parent.parent.parent))
+    try:
+        from utils.error_handling import error_context, handle_error, OptimizationCoreError
+        from agents.orchestration.scheduler.smart_scheduler import SmartAgentScheduler
+    except ImportError:
+        # Dummy implementations if utils are unavailable
+        @contextmanager
+        def error_context(op_name, **kwargs):
+            yield
+        def handle_error(e, context=None, reraise=False):
+            pass
+        SmartAgentScheduler = None
+
+# Import from submodules
+from .models import TensorFlowOptimizationLevel, TensorFlowOptimizationResult
+from .components.xla_optimizer import XLAOptimizer
+from .components.tsl_optimizer import TSLOptimizer
+from .components.distributed_optimizer import DistributedOptimizer
+from .components.quantization_optimizer import QuantizationOptimizer
+from .components.memory_optimizer import MemoryOptimizer
+
+# Import scheduler
+from optimization_core.agents.orchestration.scheduler.smart_scheduler import SmartAgentScheduler
 
 warnings.filterwarnings('ignore')
 
 logger = logging.getLogger(__name__)
 
-class TensorFlowOptimizationLevel(Enum):
-    """TensorFlow-inspired optimization levels."""
-    BASIC = "basic"           # Standard TensorFlow optimizations
-    ADVANCED = "advanced"     # Advanced TensorFlow optimizations
-    EXPERT = "expert"         # Expert-level optimizations
-    MASTER = "master"         # Master-level optimizations
-    LEGENDARY = "legendary"   # Legendary TensorFlow optimizations
-
-@dataclass
-class TensorFlowOptimizationResult:
-    """Result of TensorFlow-inspired optimization."""
-    optimized_model: tf.keras.Model
-    speed_improvement: float
-    memory_reduction: float
-    accuracy_preservation: float
-    energy_efficiency: float
-    optimization_time: float
-    level: TensorFlowOptimizationLevel
-    techniques_applied: List[str]
-    performance_metrics: Dict[str, float]
-    xla_optimization: float = 0.0
-    tsl_optimization: float = 0.0
-    distributed_benefit: float = 0.0
-    quantization_benefit: float = 0.0
-    memory_optimization: float = 0.0
-
-class XLAOptimizer:
-    """XLA (Accelerated Linear Algebra) optimization system."""
-    
-    def __init__(self, config: Dict[str, Any] = None):
-        self.config = config or {}
-        self.xla_enabled = self.config.get('xla_enabled', True)
-        self.fusion_enabled = self.config.get('fusion_enabled', True)
-        self.compilation_cache = {}
-        self.logger = logging.getLogger(__name__)
-        
-    def optimize_with_xla(self, model: tf.keras.Model) -> tf.keras.Model:
-        """Apply XLA optimizations."""
-        self.logger.info("🔥 Applying XLA optimizations")
-        
-        if not self.xla_enabled:
-            return model
-        
-        # Enable XLA compilation
-        model = self._enable_xla_compilation(model)
-        
-        # Apply graph fusion
-        if self.fusion_enabled:
-            model = self._apply_graph_fusion(model)
-        
-        # Apply memory optimization
-        model = self._apply_memory_optimization(model)
-        
-        # Apply computation optimization
-        model = self._apply_computation_optimization(model)
-        
-        return model
-    
-    def _enable_xla_compilation(self, model: tf.keras.Model) -> tf.keras.Model:
-        """Enable XLA compilation for the model."""
-        try:
-            # Enable XLA for the model
-            tf.config.optimizer.set_jit(True)
-            
-            # Compile the model with XLA
-            @tf.function(jit_compile=True)
-            def xla_forward(x):
-                return model(x)
-            
-            # Create a wrapper model with XLA compilation
-            class XLAOptimizedModel(tf.keras.Model):
-                def __init__(self, base_model):
-                    super().__init__()
-                    self.base_model = base_model
-                    self.xla_forward = xla_forward
-                
-                def call(self, inputs, training=None):
-                    return self.xla_forward(inputs)
-            
-            return XLAOptimizedModel(model)
-        except Exception as e:
-            self.logger.warning(f"XLA compilation failed: {e}")
-            return model
-    
-    def _apply_graph_fusion(self, model: tf.keras.Model) -> tf.keras.Model:
-        """Apply graph fusion optimizations."""
-        # XLA automatically fuses operations for better performance
-        return model
-    
-    def _apply_memory_optimization(self, model: tf.keras.Model) -> tf.keras.Model:
-        """Apply memory optimization techniques."""
-        # XLA optimizes memory usage automatically
-        return model
-    
-    def _apply_computation_optimization(self, model: tf.keras.Model) -> tf.keras.Model:
-        """Apply computation optimization techniques."""
-        # XLA optimizes computation automatically
-        return model
-
-class TSLOptimizer:
-    """TSL (TensorFlow Service Layer) optimization system."""
-    
-    def __init__(self, config: Dict[str, Any] = None):
-        self.config = config or {}
-        self.lazy_metrics = self.config.get('lazy_metrics', True)
-        self.cell_reader_optimization = self.config.get('cell_reader_optimization', True)
-        self.logger = logging.getLogger(__name__)
-        
-    def optimize_with_tsl(self, model: tf.keras.Model) -> tf.keras.Model:
-        """Apply TSL optimizations."""
-        self.logger.info("⚡ Applying TSL optimizations")
-        
-        # Apply lazy metrics optimization
-        if self.lazy_metrics:
-            model = self._apply_lazy_metrics(model)
-        
-        # Apply cell reader optimization
-        if self.cell_reader_optimization:
-            model = self._apply_cell_reader_optimization(model)
-        
-        # Apply service layer optimizations
-        model = self._apply_service_layer_optimizations(model)
-        
-        return model
-    
-    def _apply_lazy_metrics(self, model: tf.keras.Model) -> tf.keras.Model:
-        """Apply lazy metrics optimization."""
-        # TSL lazy metrics optimization
-        return model
-    
-    def _apply_cell_reader_optimization(self, model: tf.keras.Model) -> tf.keras.Model:
-        """Apply cell reader optimization."""
-        # TSL cell reader optimization
-        return model
-    
-    def _apply_service_layer_optimizations(self, model: tf.keras.Model) -> tf.keras.Model:
-        """Apply service layer optimizations."""
-        # TSL service layer optimizations
-        return model
-
-class DistributedOptimizer:
-    """Distributed training optimization system."""
-    
-    def __init__(self, config: Dict[str, Any] = None):
-        self.config = config or {}
-        self.strategy = self.config.get('strategy', 'mirrored')
-        self.num_gpus = self.config.get('num_gpus', 1)
-        self.logger = logging.getLogger(__name__)
-        
-    def optimize_with_distributed(self, model: tf.keras.Model) -> tf.keras.Model:
-        """Apply distributed optimizations."""
-        self.logger.info("🌐 Applying distributed optimizations")
-        
-        if self.num_gpus > 1:
-            # Create distributed strategy
-            strategy = self._create_distributed_strategy()
-            
-            # Apply distributed training
-            model = self._apply_distributed_training(model, strategy)
-        
-        return model
-    
-    def _create_distributed_strategy(self):
-        """Create distributed training strategy."""
-        if self.strategy == 'mirrored':
-            return tf.distribute.MirroredStrategy()
-        elif self.strategy == 'parameter_server':
-            return tf.distribute.experimental.ParameterServerStrategy()
-        else:
-            return tf.distribute.get_strategy()
-    
-    def _apply_distributed_training(self, model: tf.keras.Model, strategy) -> tf.keras.Model:
-        """Apply distributed training to the model."""
-        with strategy.scope():
-            # Model is already created within the strategy scope
-            return model
-
-class QuantizationOptimizer:
-    """TensorFlow quantization optimization system."""
-    
-    def __init__(self, config: Dict[str, Any] = None):
-        self.config = config or {}
-        self.quantization_type = self.config.get('quantization_type', 'int8')
-        self.logger = logging.getLogger(__name__)
-        
-    def optimize_with_quantization(self, model: tf.keras.Model) -> tf.keras.Model:
-        """Apply quantization optimizations."""
-        self.logger.info(f"🎯 Applying {self.quantization_type} quantization")
-        
-        if self.quantization_type == 'int8':
-            return self._apply_int8_quantization(model)
-        elif self.quantization_type == 'float16':
-            return self._apply_float16_quantization(model)
-        elif self.quantization_type == 'bfloat16':
-            return self._apply_bfloat16_quantization(model)
-        else:
-            return self._apply_custom_quantization(model)
-    
-    def _apply_int8_quantization(self, model: tf.keras.Model) -> tf.keras.Model:
-        """Apply int8 quantization."""
-        try:
-            # Convert model to int8
-            converter = tf.lite.TFLiteConverter.from_keras_model(model)
-            converter.optimizations = [tf.lite.Optimize.DEFAULT]
-            converter.target_spec.supported_types = [tf.int8]
-            
-            # Convert to quantized model
-            quantized_model = converter.convert()
-            return model  # Return original model for now
-        except Exception as e:
-            self.logger.warning(f"Int8 quantization failed: {e}")
-            return model
-    
-    def _apply_float16_quantization(self, model: tf.keras.Model) -> tf.keras.Model:
-        """Apply float16 quantization."""
-        try:
-            # Set mixed precision policy
-            policy = tf.keras.mixed_precision.Policy('mixed_float16')
-            tf.keras.mixed_precision.set_global_policy(policy)
-            
-            # Convert model to float16
-            model = tf.keras.models.clone_model(model)
-            return model
-        except Exception as e:
-            self.logger.warning(f"Float16 quantization failed: {e}")
-            return model
-    
-    def _apply_bfloat16_quantization(self, model: tf.keras.Model) -> tf.keras.Model:
-        """Apply bfloat16 quantization."""
-        try:
-            # Set mixed precision policy for bfloat16
-            policy = tf.keras.mixed_precision.Policy('mixed_bfloat16')
-            tf.keras.mixed_precision.set_global_policy(policy)
-            
-            # Convert model to bfloat16
-            model = tf.keras.models.clone_model(model)
-            return model
-        except Exception as e:
-            self.logger.warning(f"Bfloat16 quantization failed: {e}")
-            return model
-    
-    def _apply_custom_quantization(self, model: tf.keras.Model) -> tf.keras.Model:
-        """Apply custom quantization scheme."""
-        return model
-
-class MemoryOptimizer:
-    """Memory optimization system."""
-    
-    def __init__(self, config: Dict[str, Any] = None):
-        self.config = config or {}
-        self.gradient_checkpointing = self.config.get('gradient_checkpointing', True)
-        self.memory_growth = self.config.get('memory_growth', True)
-        self.logger = logging.getLogger(__name__)
-        
-    def optimize_with_memory(self, model: tf.keras.Model) -> tf.keras.Model:
-        """Apply memory optimizations."""
-        self.logger.info("💾 Applying memory optimizations")
-        
-        # Configure GPU memory growth
-        if self.memory_growth:
-            self._configure_memory_growth()
-        
-        # Apply gradient checkpointing
-        if self.gradient_checkpointing:
-            model = self._apply_gradient_checkpointing(model)
-        
-        # Apply memory pooling
-        model = self._apply_memory_pooling(model)
-        
-        return model
-    
-    def _configure_memory_growth(self):
-        """Configure GPU memory growth."""
-        try:
-            gpus = tf.config.experimental.list_physical_devices('GPU')
-            if gpus:
-                for gpu in gpus:
-                    tf.config.experimental.set_memory_growth(gpu, True)
-        except Exception as e:
-            self.logger.warning(f"Memory growth configuration failed: {e}")
-    
-    def _apply_gradient_checkpointing(self, model: tf.keras.Model) -> tf.keras.Model:
-        """Apply gradient checkpointing."""
-        # Enable gradient checkpointing for the model
-        return model
-    
-    def _apply_memory_pooling(self, model: tf.keras.Model) -> tf.keras.Model:
-        """Apply memory pooling optimization."""
-        # Memory pooling is handled by TensorFlow automatically
-        return model
-
 class TensorFlowInspiredOptimizer:
     """Main TensorFlow-inspired optimizer that combines all techniques."""
     
-    def __init__(self, config: Dict[str, Any] = None):
+    def __init__(self, config: Dict[str, Any] = None, scheduler: Optional[SmartAgentScheduler] = None):
         self.config = config or {}
         self.optimization_level = TensorFlowOptimizationLevel(
             self.config.get('level', 'basic')
         )
         
-        # Initialize sub-optimizers
-        self.xla_optimizer = XLAOptimizer(config.get('xla', {}))
-        self.tsl_optimizer = TSLOptimizer(config.get('tsl', {}))
-        self.distributed_optimizer = DistributedOptimizer(config.get('distributed', {}))
-        self.quantization_optimizer = QuantizationOptimizer(config.get('quantization', {}))
-        self.memory_optimizer = MemoryOptimizer(config.get('memory', {}))
+        # Initialize sub-optimizers using the standardized component interfaces
+        self.xla_optimizer = XLAOptimizer(self.config.get('xla', {}))
+        self.tsl_optimizer = TSLOptimizer(self.config.get('tsl', {}))
+        self.distributed_optimizer = DistributedOptimizer(self.config.get('distributed', {}))
+        self.quantization_optimizer = QuantizationOptimizer(self.config.get('quantization', {}))
+        self.memory_optimizer = MemoryOptimizer(self.config.get('memory', {}))
         
+        self.scheduler = scheduler
         self.logger = logging.getLogger(__name__)
         
         # Performance tracking
@@ -348,38 +75,112 @@ class TensorFlowInspiredOptimizer:
         
     def optimize_tensorflow_style(self, model: tf.keras.Model, 
                                  target_improvement: float = 10.0) -> TensorFlowOptimizationResult:
-        """Apply TensorFlow-style optimizations to model."""
+        """Apply TensorFlow-style optimizations to model (synchronous wrapper)."""
+        import threading
+        
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+            
+        if loop and loop.is_running():
+            result = None
+            exception = None
+            def run_in_thread():
+                nonlocal result, exception
+                try:
+                    result = asyncio.run(self.async_optimize_tensorflow_style(model, target_improvement))
+                except Exception as e:
+                    exception = e
+            t = threading.Thread(target=run_in_thread)
+            t.start()
+            t.join()
+            if exception:
+                raise exception
+            return result
+        else:
+            return asyncio.run(self.async_optimize_tensorflow_style(model, target_improvement))
+
+    async def async_optimize_tensorflow_style(self, model: tf.keras.Model, 
+                                            target_improvement: float = 10.0) -> TensorFlowOptimizationResult:
+        """
+        Asynchronous execution using SmartAgentScheduler DAG.
+        """
         start_time = time.perf_counter()
+        self.logger.info(f"🚀 Async TensorFlow-style optimization started (level: {self.optimization_level.value})")
         
-        self.logger.info(f"🚀 TensorFlow-style optimization started (level: {self.optimization_level.value})")
-        
-        # Apply optimizations based on level
         optimized_model = model
         techniques_applied = []
+        technique_durations = {}
         
-        if self.optimization_level == TensorFlowOptimizationLevel.BASIC:
-            optimized_model, applied = self._apply_basic_optimizations(optimized_model)
-            techniques_applied.extend(applied)
-        
-        elif self.optimization_level == TensorFlowOptimizationLevel.ADVANCED:
-            optimized_model, applied = self._apply_advanced_optimizations(optimized_model)
-            techniques_applied.extend(applied)
-        
-        elif self.optimization_level == TensorFlowOptimizationLevel.EXPERT:
-            optimized_model, applied = self._apply_expert_optimizations(optimized_model)
-            techniques_applied.extend(applied)
-        
-        elif self.optimization_level == TensorFlowOptimizationLevel.MASTER:
-            optimized_model, applied = self._apply_master_optimizations(optimized_model)
-            techniques_applied.extend(applied)
-        
-        elif self.optimization_level == TensorFlowOptimizationLevel.LEGENDARY:
-            optimized_model, applied = self._apply_legendary_optimizations(optimized_model)
-            techniques_applied.extend(applied)
+        # Use scheduler if available
+        if SmartAgentScheduler:
+            scheduler = SmartAgentScheduler()
+            prev_task_id = None
+            
+            for technique_name, optimizer in self._get_optimizers_for_level():
+                task_id = f"opt_{technique_name}"
+                
+                async def run_opt(t_name=technique_name, opt=optimizer, p_id=prev_task_id):
+                    tech_start = time.perf_counter()
+                    
+                    # Fetch input model
+                    input_model = model
+                    if p_id and scheduler.tasks[p_id].status == "COMPLETED":
+                        input_model = scheduler.tasks[p_id].result or model
+                        
+                    out_model = input_model
+                    try:
+                        with error_context(f"tensorflow_optimization_{t_name}"):
+                            out_model = await asyncio.to_thread(opt.optimize, input_model)
+                            techniques_applied.append(t_name)
+                    except Exception as e:
+                        self.logger.warning(f"Failed to apply {t_name}: {e}")
+                        handle_error(e, context={"technique": t_name, "level": self.optimization_level.value}, reraise=False)
+                    finally:
+                        tech_end = time.perf_counter()
+                        duration_ms = (tech_end - tech_start) * 1000
+                        technique_durations[t_name] = duration_ms
+                        self.logger.debug(f"{t_name} took {duration_ms:.2f}ms")
+                    return out_model
+
+                deps = [prev_task_id] if prev_task_id else []
+                scheduler.submit_task(
+                    task_id=task_id,
+                    agent_type="optimization_agent",
+                    coro=run_opt(),
+                    dependencies=deps
+                )
+                prev_task_id = task_id
+                
+            await scheduler.execute_task_graph()
+            
+            if prev_task_id and scheduler.tasks[prev_task_id].status == "COMPLETED":
+                optimized_model = scheduler.tasks[prev_task_id].result or model
+        else:
+            # Fallback to simple sequential execution if no scheduler
+            for technique_name, optimizer in self._get_optimizers_for_level():
+                tech_start = time.perf_counter()
+                try:
+                    with error_context(f"tensorflow_optimization_{technique_name}"):
+                        optimized_model = await asyncio.to_thread(optimizer.optimize, optimized_model)
+                        techniques_applied.append(technique_name)
+                except Exception as e:
+                    self.logger.warning(f"Failed to apply {technique_name}: {e}")
+                    handle_error(e, context={"technique": technique_name, "level": self.optimization_level.value}, reraise=False)
+                finally:
+                    tech_end = time.perf_counter()
+                    duration_ms = (tech_end - tech_start) * 1000
+                    technique_durations[technique_name] = duration_ms
+                    self.logger.debug(f"{technique_name} took {duration_ms:.2f}ms")
         
         # Calculate performance metrics
         optimization_time = (time.perf_counter() - start_time) * 1000  # Convert to ms
         performance_metrics = self._calculate_tensorflow_metrics(model, optimized_model)
+        
+        # Add technique timings to metrics
+        for name, duration in technique_durations.items():
+            performance_metrics[f"{name}_time_ms"] = duration
         
         result = TensorFlowOptimizationResult(
             optimized_model=optimized_model,
@@ -403,99 +204,34 @@ class TensorFlowInspiredOptimizer:
         self.logger.info(f"⚡ TensorFlow-style optimization completed: {result.speed_improvement:.1f}x speedup in {optimization_time:.3f}ms")
         
         return result
-    
-    def _apply_basic_optimizations(self, model: tf.keras.Model) -> Tuple[tf.keras.Model, List[str]]:
-        """Apply basic TensorFlow optimizations."""
-        techniques = []
+
+    def _get_optimizers_for_level(self) -> List[Tuple[str, Any]]:
+        """Get the ordered sequence of optimizers based on the current level."""
+        optimizers = []
+        # Basic optimizations
+        optimizers.extend([
+            ('xla_compilation', self.components['xla']),
+            ('memory_optimization', self.components['memory'])
+        ])
         
-        # Basic XLA compilation
-        model = self.xla_optimizer.optimize_with_xla(model)
-        techniques.append('xla_compilation')
+        if self.optimization_level == TensorFlowOptimizationLevel.BASIC:
+            return optimizers
+            
+        # Advanced optimizations
+        optimizers.extend([
+            ('tsl_optimization', self.components['tsl']),
+            ('quantization', self.components['quantization'])
+        ])
         
-        # Basic memory optimization
-        model = self.memory_optimizer.optimize_with_memory(model)
-        techniques.append('memory_optimization')
+        if self.optimization_level == TensorFlowOptimizationLevel.ADVANCED:
+            return optimizers
+            
+        # Expert, Master, Legendary optimizations
+        optimizers.extend([
+            ('distributed_optimization', self.components['distributed'])
+        ])
         
-        return model, techniques
-    
-    def _apply_advanced_optimizations(self, model: tf.keras.Model) -> Tuple[tf.keras.Model, List[str]]:
-        """Apply advanced TensorFlow optimizations."""
-        techniques = []
-        
-        # Apply basic optimizations first
-        model, basic_techniques = self._apply_basic_optimizations(model)
-        techniques.extend(basic_techniques)
-        
-        # TSL optimizations
-        model = self.tsl_optimizer.optimize_with_tsl(model)
-        techniques.append('tsl_optimization')
-        
-        # Advanced quantization
-        model = self.quantization_optimizer.optimize_with_quantization(model)
-        techniques.append('quantization')
-        
-        return model, techniques
-    
-    def _apply_expert_optimizations(self, model: tf.keras.Model) -> Tuple[tf.keras.Model, List[str]]:
-        """Apply expert-level TensorFlow optimizations."""
-        techniques = []
-        
-        # Apply advanced optimizations first
-        model, advanced_techniques = self._apply_advanced_optimizations(model)
-        techniques.extend(advanced_techniques)
-        
-        # Distributed optimizations
-        model = self.distributed_optimizer.optimize_with_distributed(model)
-        techniques.append('distributed_optimization')
-        
-        # Advanced XLA optimizations
-        model = self._apply_advanced_xla_optimizations(model)
-        techniques.append('advanced_xla')
-        
-        return model, techniques
-    
-    def _apply_master_optimizations(self, model: tf.keras.Model) -> Tuple[tf.keras.Model, List[str]]:
-        """Apply master-level TensorFlow optimizations."""
-        techniques = []
-        
-        # Apply expert optimizations first
-        model, expert_techniques = self._apply_expert_optimizations(model)
-        techniques.extend(expert_techniques)
-        
-        # Master-level optimizations
-        model = self._apply_master_level_optimizations(model)
-        techniques.append('master_optimization')
-        
-        return model, techniques
-    
-    def _apply_legendary_optimizations(self, model: tf.keras.Model) -> Tuple[tf.keras.Model, List[str]]:
-        """Apply legendary TensorFlow optimizations."""
-        techniques = []
-        
-        # Apply master optimizations first
-        model, master_techniques = self._apply_master_optimizations(model)
-        techniques.extend(master_techniques)
-        
-        # Legendary optimizations
-        model = self._apply_legendary_level_optimizations(model)
-        techniques.append('legendary_optimization')
-        
-        return model, techniques
-    
-    def _apply_advanced_xla_optimizations(self, model: tf.keras.Model) -> tf.keras.Model:
-        """Apply advanced XLA optimizations."""
-        # Advanced XLA techniques
-        return model
-    
-    def _apply_master_level_optimizations(self, model: tf.keras.Model) -> tf.keras.Model:
-        """Apply master-level optimizations."""
-        # Master-level techniques
-        return model
-    
-    def _apply_legendary_level_optimizations(self, model: tf.keras.Model) -> tf.keras.Model:
-        """Apply legendary-level optimizations."""
-        # Legendary techniques
-        return model
+        return optimizers
     
     def _calculate_tensorflow_metrics(self, original_model: tf.keras.Model, 
                                     optimized_model: tf.keras.Model) -> Dict[str, float]:
@@ -606,14 +342,14 @@ class TensorFlowInspiredOptimizer:
         }
 
 # Factory functions
-def create_tensorflow_inspired_optimizer(config: Optional[Dict[str, Any]] = None) -> TensorFlowInspiredOptimizer:
+def create_tensorflow_inspired_optimizer(config: Optional[Dict[str, Any]] = None, scheduler: Optional[SmartAgentScheduler] = None) -> TensorFlowInspiredOptimizer:
     """Create TensorFlow-inspired optimizer."""
-    return TensorFlowInspiredOptimizer(config)
+    return TensorFlowInspiredOptimizer(config, scheduler)
 
 @contextmanager
-def tensorflow_optimization_context(config: Optional[Dict[str, Any]] = None):
+def tensorflow_optimization_context(config: Optional[Dict[str, Any]] = None, scheduler: Optional[SmartAgentScheduler] = None):
     """Context manager for TensorFlow-style optimization."""
-    optimizer = create_tensorflow_inspired_optimizer(config)
+    optimizer = create_tensorflow_inspired_optimizer(config, scheduler)
     try:
         yield optimizer
     finally:
@@ -643,7 +379,7 @@ def example_tensorflow_optimization():
     
     optimizer = create_tensorflow_inspired_optimizer(config)
     
-    # Optimize model
+    # Optimize model synchronously
     result = optimizer.optimize_tensorflow_style(model)
     
     print(f"Speed improvement: {result.speed_improvement:.1f}x")
@@ -652,6 +388,22 @@ def example_tensorflow_optimization():
     
     return result
 
+async def example_async_optimization():
+    """Example of async TensorFlow-style optimization for schedulers."""
+    model = tf.keras.Sequential([
+        tf.keras.layers.Dense(128, activation='relu'),
+        tf.keras.layers.Dense(64, activation='relu')
+    ])
+    
+    optimizer = create_tensorflow_inspired_optimizer({'level': 'advanced'})
+    result = await optimizer.async_optimize_tensorflow_style(model)
+    print(f"Async optimization completed in {result.optimization_time:.3f}ms")
+
 if __name__ == "__main__":
+    # Configure basic logging for the example
+    logging.basicConfig(level=logging.INFO)
     # Run example
     result = example_tensorflow_optimization()
+    
+    # Run async example
+    asyncio.run(example_async_optimization())

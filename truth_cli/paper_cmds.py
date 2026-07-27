@@ -57,7 +57,7 @@ def register_paper_commands(app: typer.Typer):
             script_path = Path(f"optimization_core/truthgpt_collected/integration_code/papers/research/paper_{p_id_clean}.py")
             if not script_path.exists():
                 console.print(f"[yellow]! Implementation file not found at {script_path}. Synthesizing now...[/yellow]")
-                from optimization_core.agents.system_intelligence.system_tools import PaperSynthesisTool
+                from optimization_core.agents.domains.system_intelligence.system_tools import PaperSynthesisTool
                 import asyncio
                 synthesis = PaperSynthesisTool()
                 asyncio.run(synthesis.run(f"{paper.paper_id}:::{paper.paper_name}:::Category: {paper.category}:::N/A"))

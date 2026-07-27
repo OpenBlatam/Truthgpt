@@ -33,7 +33,7 @@ from typing import (
     Union,
 )
 
-from .exceptions import OptimizationCoreError
+from .core.exceptions import OptimizationCoreError
 from .types import CallableNoArgs, CallableOneArg, DictStrAny
 
 logger = logging.getLogger(__name__)

@@ -2,7 +2,15 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Union, Tuple
 import time
-from .backend import Backend, get_best_backend, is_backend_available
+from polyglot_core.core.backend import Backend, get_best_backend, is_backend_available
+
+
+class CompressionAlgorithm(Enum):
+    LZ4 = "lz4"
+    ZSTD = "zstd"
+    GZIP = "gzip"
+    SNAPPY = "snappy"
+    NONE = "none"
 
 
 

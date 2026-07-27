@@ -173,8 +173,8 @@ async def handle_model_architect():
     clear_screen()
     console.print(Panel("[bold cyan]🛠️ TruthGPT Model Architect[/bold cyan]", border_style="cyan"))
     name = Prompt.ask("Model Name", default="custom_transformer")
-    from agents.client import AgentClient
-    from agents.engines import engine_registry
+    from agents.framework.interfaces.client.client import AgentClient
+    from optimization_core.agents.framework.engines.engines import engine_registry
     llm = engine_registry.get_engine(USER_PREFS.get("preferred_engine", "deepseek"))
     client = AgentClient(use_swarm=False, llm_engine=llm)
     with console.status(f"[bold cyan]AI Designer is synthesizing {name}...[/bold cyan]"):

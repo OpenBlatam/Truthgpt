@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from truthgpt.modules.api_cost import APICostOptimizer, APICostConfig  # noqa: E402
+from modules.api_cost import APICostOptimizer, APICostConfig  # noqa: E402
 
 
 def _build_optimizer(enable_cache: bool, cache_dir: str) -> APICostOptimizer:
@@ -113,7 +113,7 @@ def test_engine_registry_disables_cache_for_rlhf():
 )
 def test_parse_reward(text, expected):
     """The reward parser tolerates messy judgments and clamps to [0, 1]."""
-    from truthgpt.interface.swarm.missions import _parse_reward
+    from src.truthgpt.interface.swarm.missions import _parse_reward
     assert _parse_reward(text) == pytest.approx(expected)
 
 
@@ -122,7 +122,7 @@ async def test_background_mission_carries_history_across_cycles():
     """Each background cycle must build on prior cycles, not restart from the
     bare query — otherwise successive cycles repeat the same work."""
     from types import SimpleNamespace
-    from truthgpt.interface.swarm.missions import BackgroundMission
+    from src.truthgpt.interface.swarm.missions import BackgroundMission
 
     seen_prompts: list[str] = []
     holder: dict = {}

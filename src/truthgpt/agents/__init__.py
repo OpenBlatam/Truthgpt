@@ -6,8 +6,8 @@ observability tracing, scheduling, and the unified exception hierarchy.
 """
 
 from .client import AgentClient
-from .models import AgentAction, AgentResponse, InferenceResult, AgentConfig
-from .exceptions import (
+from .core.models import AgentAction, AgentResponse, InferenceResult, AgentConfig
+from .core.exceptions import (
     TruthGPTError,
     InferenceError,
     ToolExecutionError,

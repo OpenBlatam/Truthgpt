@@ -44,7 +44,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
-from .backend import (
+from polyglot_core.core.backend import (
     Backend,
     get_best_backend,
     is_backend_available,
@@ -58,7 +58,8 @@ from .constants import (
     LARGE_NEGATIVE_VALUE,
     MILLISECONDS_PER_SECOND,
 )
-from .config import AttentionConfig, AttentionPattern, KVCacheConfig, CacheStats
+from .config import AttentionConfig, AttentionPattern
+from polyglot_core.core.cache.config import KVCacheConfig, CacheStats
 
 logger = logging.getLogger(__name__)
 

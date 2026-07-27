@@ -4,19 +4,34 @@ This module has been moved to optimization_core.utils.enhanced_mlp.
 """
 
 import warnings
-from optimization_core.utils.enhanced_mlp import (
-    OptimizedLinear,
-    SwiGLU,
-    GatedMLP,
-    ExpertMLP,
-    MixtureOfExperts,
-    AdaptiveMLP,
-    EnhancedMLPOptimizations,
-    create_swiglu,
-    create_gated_mlp,
-    create_mixture_of_experts,
-    create_adaptive_mlp
-)
+try:
+    from utils.enhanced_mlp import (
+        OptimizedLinear,
+        SwiGLU,
+        GatedMLP,
+        ExpertMLP,
+        MixtureOfExperts,
+        AdaptiveMLP,
+        EnhancedMLPOptimizations,
+        create_swiglu,
+        create_gated_mlp,
+        create_mixture_of_experts,
+        create_adaptive_mlp
+    )
+except ImportError:
+    from optimization_core.utils.enhanced_mlp import (
+        OptimizedLinear,
+        SwiGLU,
+        GatedMLP,
+        ExpertMLP,
+        MixtureOfExperts,
+        AdaptiveMLP,
+        EnhancedMLPOptimizations,
+        create_swiglu,
+        create_gated_mlp,
+        create_mixture_of_experts,
+        create_adaptive_mlp
+    )
 
 warnings.warn(
     "optimization_core.optimizers.techniques.enhanced_mlp is deprecated. "

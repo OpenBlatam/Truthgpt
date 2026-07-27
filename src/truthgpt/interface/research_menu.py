@@ -72,7 +72,7 @@ async def research_menu():
                     p_id_clean = selected.paper_id.replace(".", "_").replace("-", "_")
                     script_path = Path(f"optimization_core/truthgpt_collected/integration_code/papers/research/paper_{p_id_clean}.py")
                     if not script_path.exists():
-                        from optimization_core.agents.system_intelligence.system_tools import PaperSynthesisTool
+                        from optimization_core.agents.domains.system_intelligence.system_tools import PaperSynthesisTool
                         synthesis = PaperSynthesisTool()
                         await synthesis.run(f"{selected.paper_id}:::{selected.title}:::{selected.category}:::N/A")
                     
@@ -147,7 +147,7 @@ async def research_menu():
                 paper_title = f"Manual Discovery: {paper_id}"
 
             if paper_id:
-                from optimization_core.agents.system_intelligence.system_tools import PaperSynthesisTool, SOTAPaperScraperTool
+                from optimization_core.agents.domains.system_intelligence.system_tools import PaperSynthesisTool, SOTAPaperScraperTool
                 with console.status(f"[bold cyan]Scraping Paper {paper_id}...[/bold cyan]"):
                     scraper = SOTAPaperScraperTool()
                     scrape_res = await scraper.run(paper_id)
@@ -164,7 +164,7 @@ async def research_menu():
             if not query:
                 continue
 
-            from optimization_core.agents.system_intelligence.system_tools import SemanticScholarSearchTool
+            from optimization_core.agents.domains.system_intelligence.system_tools import SemanticScholarSearchTool
 
             with console.status(f"[bold magenta]Querying Semantic Scholar for '{query}'...[/bold magenta]"):
                 try:
@@ -210,7 +210,7 @@ async def research_menu():
 
             target = found_papers[int(sub_choice) - 1]
             paper_id, paper_title = target["id"], target["title"]
-            from optimization_core.agents.system_intelligence.system_tools import PaperSynthesisTool, SOTAPaperScraperTool
+            from optimization_core.agents.domains.system_intelligence.system_tools import PaperSynthesisTool, SOTAPaperScraperTool
             # ArXiv-style IDs can be scraped directly; otherwise jump straight to synthesis.
             if paper_id and paper_id[0].isdigit():
                 with console.status(f"[bold cyan]Scraping Paper {paper_id}...[/bold cyan]"):

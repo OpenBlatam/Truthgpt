@@ -1,11 +1,14 @@
 """
 Dynamic factory system with automatic registration.
-Enables dynamic plugin-based component registration.
+Enables dynamic plugin-based component registration with thread safety.
 """
 import logging
-from typing import Dict, Type, TypeVar, Callable, Any, Optional
-from abc import ABC
 import inspect
+import threading
+import fnmatch
+from typing import Dict, Type, TypeVar, Callable, Any, Optional, List
+from abc import ABC
+from .exceptions import OptimizationCoreError
 
 logger = logging.getLogger(__name__)
 
@@ -15,19 +18,14 @@ T = TypeVar('T')
 class DynamicFactory:
     """
     Dynamic factory with automatic registration based on naming conventions
-    and decorators.
+    and decorators. Thread-safe.
     """
     
     def __init__(self, base_class: Optional[Type] = None):
-        """
-        Initialize factory.
-        
-        Args:
-            base_class: Optional base class that all registered types must inherit from
-        """
         self.base_class = base_class
         self._registry: Dict[str, Type] = {}
         self._factories: Dict[str, Callable] = {}
+        self._lock = threading.RLock()
     
     def register(
         self,
@@ -35,26 +33,18 @@ class DynamicFactory:
         component: Type[T],
         override: bool = False
     ) -> None:
-        """
-        Register a component.
-        
-        Args:
-            name: Component name
-            component: Component class or factory function
-            override: Allow overriding existing registrations
-        """
-        # Validate base class if specified
-        if self.base_class and not issubclass(component, self.base_class):
-            raise ValueError(
-                f"Component '{name}' must inherit from {self.base_class.__name__}"
-            )
-        
-        # Check for existing registration
-        if name in self._registry and not override:
-            raise ValueError(f"Component '{name}' already registered")
-        
-        self._registry[name] = component
-        logger.debug(f"Component '{name}' registered")
+        """Register a component class or instance."""
+        with self._lock:
+            if self.base_class and inspect.isclass(component) and not issubclass(component, self.base_class):
+                raise OptimizationCoreError(
+                    f"Component '{name}' must inherit from {self.base_class.__name__}"
+                )
+            
+            if name in self._registry and not override:
+                raise OptimizationCoreError(f"Component '{name}' already registered in factory")
+            
+            self._registry[name] = component
+            logger.debug(f"Component '{name}' registered in factory")
     
     def register_factory(
         self,
@@ -62,19 +52,13 @@ class DynamicFactory:
         factory: Callable,
         override: bool = False
     ) -> None:
-        """
-        Register a factory function.
-        
-        Args:
-            name: Factory name
-            factory: Factory function
-            override: Allow overriding
-        """
-        if name in self._factories and not override:
-            raise ValueError(f"Factory '{name}' already registered")
-        
-        self._factories[name] = factory
-        logger.debug(f"Factory '{name}' registered")
+        """Register a factory callable."""
+        with self._lock:
+            if name in self._factories and not override:
+                raise OptimizationCoreError(f"Factory callable '{name}' already registered")
+            
+            self._factories[name] = factory
+            logger.debug(f"Factory callable '{name}' registered")
     
     def create(
         self,
@@ -82,156 +66,91 @@ class DynamicFactory:
         *args,
         **kwargs
     ) -> Any:
-        """
-        Create a component instance.
-        
-        Args:
-            name: Component name
-            *args: Positional arguments
-            **kwargs: Keyword arguments
-        
-        Returns:
-            Component instance
-        """
-        # Try factory first
-        if name in self._factories:
-            factory = self._factories[name]
-            return factory(*args, **kwargs)
-        
-        # Try registered class
-        if name in self._registry:
-            component_class = self._registry[name]
+        """Create a component instance."""
+        with self._lock:
+            if name in self._factories:
+                factory_fn = self._factories[name]
+                return factory_fn(*args, **kwargs)
             
-            # Check if it's a class or instance
-            if inspect.isclass(component_class):
-                return component_class(*args, **kwargs)
-            else:
+            if name in self._registry:
+                component_class = self._registry[name]
+                if inspect.isclass(component_class):
+                    return component_class(*args, **kwargs)
                 return component_class
-        
-        raise ValueError(f"Component '{name}' not found in factory")
+            
+            raise OptimizationCoreError(f"Component '{name}' not found in factory")
     
-    def list_components(self) -> list[str]:
+    def list_components(self) -> List[str]:
         """List all registered component names."""
-        components = set(self._registry.keys())
-        components.update(self._factories.keys())
-        return sorted(components)
+        with self._lock:
+            components = set(self._registry.keys())
+            components.update(self._factories.keys())
+            return sorted(components)
     
     def auto_register_from_module(
         self,
         module: Any,
         name_pattern: Optional[str] = None
     ) -> None:
-        """
-        Automatically register components from a module.
-        
-        Looks for classes that:
-        1. Inherit from base_class (if specified)
-        2. Match name_pattern (if specified)
-        
-        Args:
-            module: Module to scan
-            name_pattern: Optional name pattern (e.g., "*Optimizer")
-        """
-        for name, obj in inspect.getmembers(module):
-            # Check if it's a class
-            if not inspect.isclass(obj):
-                continue
-            
-            # Check base class
-            if self.base_class and not issubclass(obj, self.base_class):
-                continue
-            
-            # Check name pattern
-            if name_pattern:
-                import fnmatch
-                if not fnmatch.fnmatch(name, name_pattern):
+        """Automatically register components from a module."""
+        with self._lock:
+            for name, obj in inspect.getmembers(module):
+                if not inspect.isclass(obj):
                     continue
-            
-            # Register with lowercase name
-            self.register(name.lower(), obj)
-            logger.debug(f"Auto-registered component: {name}")
+                
+                if self.base_class and not issubclass(obj, self.base_class):
+                    continue
+                
+                if name_pattern:
+                    if not fnmatch.fnmatch(name, name_pattern):
+                        continue
+                
+                self.register(name.lower(), obj, override=True)
+                logger.debug(f"Auto-registered component: {name}")
 
 
-def factory(base_class: Optional[Type] = None):
-    """
-    Decorator to create a factory instance.
-    
-    Usage:
-        @factory(BaseOptimizer)
-        class OptimizerFactory(DynamicFactory):
-            pass
-    """
+def factory(base_class: Optional[Type] = None) -> DynamicFactory:
+    """Decorator / helper to create a factory instance."""
     return DynamicFactory(base_class=base_class)
 
 
-def register_component(name: Optional[str] = None):
-    """
-    Decorator to register a component with a factory.
-    
-    Usage:
-        @register_component("my_optimizer")
-        class MyOptimizer(BaseOptimizer):
-            pass
-    """
+def register_component(factory_instance: DynamicFactory, name: Optional[str] = None):
+    """Decorator to register a class with a specific factory instance."""
     def decorator(cls):
-        # Auto-register with module-level factories
-        # This is a simplified version - actual implementation would
-        # need to track which factory to register with
+        reg_name = name or cls.__name__.lower()
+        factory_instance.register(reg_name, cls)
         return cls
-    
     return decorator
 
 
 class AutoRegisterMeta(type):
-    """
-    Metaclass for automatic factory registration.
-    """
-    
+    """Metaclass for automatic factory registration."""
     def __new__(mcs, name, bases, namespace, factory_instance=None, register_name=None):
         cls = super().__new__(mcs, name, bases, namespace)
-        
         if factory_instance and register_name:
             factory_instance.register(register_name or name.lower(), cls)
-        
         return cls
 
 
-# Example usage pattern
-class BaseComponent(ABC):
-    """Base class for components."""
-    pass
-
-
-class ComponentFactory(DynamicFactory):
-    """Factory for components."""
-    pass
-
-
-# Global factories (can be extended)
 _global_factories: Dict[str, DynamicFactory] = {}
+_factory_lock = threading.RLock()
 
 
 def get_factory(name: str) -> Optional[DynamicFactory]:
     """Get a global factory by name."""
-    return _global_factories.get(name)
+    with _factory_lock:
+        return _global_factories.get(name)
 
 
 def create_factory(
     name: str,
     base_class: Optional[Type] = None
 ) -> DynamicFactory:
-    """
-    Create and register a global factory.
-    
-    Args:
-        name: Factory name
-        base_class: Optional base class
-    
-    Returns:
-        Created factory
-    """
-    factory_instance = DynamicFactory(base_class=base_class)
-    _global_factories[name] = factory_instance
-    return factory_instance
+    """Create and register a global factory."""
+    with _factory_lock:
+        factory_instance = DynamicFactory(base_class=base_class)
+        _global_factories[name] = factory_instance
+        return factory_instance
+
 
 

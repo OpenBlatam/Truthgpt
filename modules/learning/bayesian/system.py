@@ -10,7 +10,7 @@ import numpy as np
 from typing import Dict, Any, List, Tuple, Callable
 
 from .config import BayesianOptimizationConfig
-from .models import GaussianProcessModel
+from .core.models import GaussianProcessModel
 from .acquisition import AcquisitionFunctionOptimizer
 from .optimization import MultiObjectiveOptimizer, ConstrainedOptimizer
 

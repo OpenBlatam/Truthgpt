@@ -20,7 +20,7 @@ def test_registry_base():
         return "test"
     
     assert reg.get("test_item") == test_fn
-    assert reg.build("test_item")() == "test"
+    assert reg.build("test_item") == "test"
     
     with pytest.raises(KeyError):
         reg.get("nonexistent")

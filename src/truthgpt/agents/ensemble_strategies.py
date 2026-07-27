@@ -2,7 +2,7 @@ import json
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Tuple
 
-from .ensemble_utils import (
+from .ensemble.ensemble_utils import (
     _cluster_by_similarity,
     _extract_confidence,
     _extract_final,

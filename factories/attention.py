@@ -2,7 +2,7 @@ from typing import Optional
 import torch
 import torch.nn.functional as F
 
-from factories.registry import Registry
+from .registry import Registry
 
 ATTENTION_BACKENDS = Registry()
 

@@ -46,7 +46,7 @@ import os
 import sys
 
 # Import TruthGPT modules
-from .models import TruthGPTModel, TruthGPTModelConfig
+from .core.models import TruthGPTModel, TruthGPTModelConfig
 from .distributed_computing import DistributedCoordinator, DistributedWorker
 from .real_time_computing import RealTimeManager, StreamProcessor
 from .autonomous_computing import AutonomousManager, DecisionEngine

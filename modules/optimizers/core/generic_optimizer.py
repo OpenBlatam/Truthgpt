@@ -24,6 +24,12 @@ class GenericOptimizationLevel(Enum):
     EXPERT = "expert"
     MASTER = "master"
     LEGENDARY = "legendary"
+    ULTRA_SPEED = "ultra_speed"
+    SUPER_SPEED = "super_speed"
+    LIGHTNING_SPEED = "lightning_speed"
+    ULTRA_FAST = "ultra_fast"
+    ULTIMATE = "ultimate"
+    EXTREME = "extreme"
 
 
 @dataclass

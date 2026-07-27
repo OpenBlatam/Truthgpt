@@ -208,8 +208,8 @@ class SwarmMenuApp:
 async def swarm_menu():
     """Top-level swarm hub loop — dispatches to the appropriate handler."""
     global _client_cache
-    from truthgpt.agents.client import AgentClient
-    from truthgpt.agents.engines import engine_registry
+    from truthgpt.agents.framework.interfaces.client.client import AgentClient
+    from truthgpt.agents.framework.engines import engine_registry
 
     if _client_cache is None:
         engine_name = USER_PREFS.get("preferred_engine", "deepseek")

@@ -20,7 +20,9 @@ _LAZY_IMPORTS = {
     'AdvancedNormalizationOptimizations': '.advanced_normalization',
     'RotaryEmbedding': '.positional_encodings',
     'SwiGLU': '.enhanced_mlp',
+    'EnhancedMLPOptimizations': '.enhanced_mlp',
     'RLPruning': '.rl_pruning',
+    'RLPruningOptimizations': '.rl_pruning',
     'TritonOptimizations': '.triton_optimizations',
     'PositionalEncodingOptimizations': '.positional_encodings',
 }
@@ -45,10 +47,13 @@ __all__ = [
     'AdvancedNormalizationOptimizations',
     'RotaryEmbedding',
     'SwiGLU',
+    'EnhancedMLPOptimizations',
     'RLPruning',
+    'RLPruningOptimizations',
     'TritonOptimizations',
     'PositionalEncodingOptimizations',
 ]
+
 
 __version__ = "1.0.0"
 __author__ = "TruthGPT Optimization Core Team"

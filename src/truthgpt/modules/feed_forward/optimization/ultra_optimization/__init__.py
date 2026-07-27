@@ -5,7 +5,7 @@ Maximum performance optimization with zero-copy operations, model compilation, G
 from .zero_copy_optimizer import ZeroCopyOptimizer
 from .model_compiler import ModelCompiler
 from .dynamic_batcher import DynamicBatcher
-from .models import (
+from .core.models import (
     ZeroCopyConfig,
     CompilationConfig,
     BatchingConfig,

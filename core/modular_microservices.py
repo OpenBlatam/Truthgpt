@@ -44,6 +44,8 @@ warnings.filterwarnings('ignore')
 
 logger = logging.getLogger(__name__)
 
+from .exceptions import MicroserviceCommunicationError
+
 # =============================================================================
 # MODULAR MICROSERVICES INTERFACES AND PROTOCOLS
 # =============================================================================

@@ -5,7 +5,7 @@ Demonstrates dynamic tool registration and auto-discovery.
 
 import asyncio
 from typing import Any, Optional
-from agents.razonamiento_planificacion.tools import BaseTool, ToolResult
+from optimization_core.agents.framework.tools.tools import BaseTool, ToolResult
 
 class AdvancedWebSearchPlugin(BaseTool):
     """

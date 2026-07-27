@@ -10,7 +10,7 @@ To instantiate an agent, use the primary `AgentClient` class. This provides dire
 
 ```python
 import asyncio
-from optimization_core.agents.client import AgentClient
+from optimization_core.agents import AgentClient
 
 async def main():
     # Initialize the client in single-agent mode
@@ -77,7 +77,7 @@ client = AgentClient(use_reflexion=True)
 ### Graph-Based Multi-Agent Orchestrator (State-Machine)
 For predefined, sequential, or complex conditional workflows (unlike the Swarm's dynamic routing), use the DAG Orchestrator:
 ```python
-from agents.multi_agentes.graph_orchestrator import GraphOrchestrator
+from agents.multi_agent.graph_orchestrator import GraphOrchestrator
 graph = GraphOrchestrator()
 graph.add_node("DataScraper", scraper_agent)
 graph.add_node("ReportWriter", writer_agent)
@@ -103,10 +103,10 @@ Agents are structurally isolated inside `optimization_core/agents`:
 
 | Directory | Purpose |
 |-----------|---------|
-| `razonamiento_planificacion/` | Core ReAct orchestrator and base Tool implementations |
+| `tools/` | Core ReAct orchestrator and base Tool implementations |
 | `marketing_intelligence/` | Specialized agents with SEO/Marketing system prompts |
 | `embodied_rl/` | Agents acting as Reinforcement Learning policies in simulations |
-| `multi_agentes/` | Swarm orchestration, hierarchy, and intelligent routing |
+| `multi_agent/` | Swarm orchestration, hierarchy, and intelligent routing |
 | `messaging/` | Adapters for third-party messaging platforms (Telegram, WhatsApp, etc.) |
 
 ---
@@ -164,8 +164,8 @@ result = await agent.process("Read sales.csv and plot the top 10 categories")
 You can schedule agents to execute tasks on a recurring or delayed basis using the `AgentScheduler`.
 
 ```python
-from agents.scheduler import AgentScheduler
-from agents.client import AgentClient
+from optimization_core.agents.orchestration.scheduler.scheduler_api import AgentScheduler
+from agents import AgentClient
 
 client = AgentClient()
 scheduler = AgentScheduler(client)

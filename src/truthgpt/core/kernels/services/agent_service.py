@@ -18,8 +18,8 @@ class AgentService(BaseService):
     async def _on_start(self) -> None:
         """Initialize agent subsystem"""
         try:
-            import truthgpt.agents.client as ac
-            import truthgpt.agents.engines as ae
+            import truthgpt.agents.framework.interfaces.client.client as ac
+            import truthgpt.agents.framework.engines as ae
             engine_name = self.config.get("preferred_engine", "deepseek")
             llm = ae.engine_registry.get_engine(engine_name)
             self._swarm_client = ac.AgentClient(use_swarm=True, llm_engine=llm)

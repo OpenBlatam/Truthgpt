@@ -3,63 +3,78 @@ TruthGPT-Specific Optimizers
 =============================
 Optimizers specifically designed for TruthGPT models.
 """
+from typing import Dict, Any, List
 
-# Import TruthGPT-specific optimizers
-    TruthGPTDynamoOptimizer,
-    TruthGPTDynamoLevel,
-    TruthGPTDynamoResult,
-)
+# Try imports for optional components
+try:
+    from ...truthgpt_dynamo_optimizer import (
+        TruthGPTDynamoOptimizer,
+        TruthGPTDynamoLevel,
+        TruthGPTDynamoResult,
+    )
+except ImportError:
+    TruthGPTDynamoOptimizer = None
+    TruthGPTDynamoLevel = None
+    TruthGPTDynamoResult = None
 
-    TruthGPTInductorOptimizer,
-    TruthGPTInductorLevel,
-    TruthGPTInductorResult,
-)
+try:
+    from ...truthgpt_inductor_optimizer import (
+        TruthGPTInductorOptimizer,
+        TruthGPTInductorLevel,
+        TruthGPTInductorResult,
+    )
+except ImportError:
+    TruthGPTInductorOptimizer = None
+    TruthGPTInductorLevel = None
+    TruthGPTInductorResult = None
 
-    TruthGPTQuantizationOptimizer,
-    TruthGPTQuantizationLevel,
-    TruthGPTQuantizationResult,
-)
+try:
+    from ...truthgpt_quantization_optimizer import (
+        TruthGPTQuantizationOptimizer,
+        TruthGPTQuantizationLevel,
+        TruthGPTQuantizationResult,
+    )
+except ImportError:
+    TruthGPTQuantizationOptimizer = None
+    TruthGPTQuantizationLevel = None
+    TruthGPTQuantizationResult = None
 
-    SupremeTruthGPTOptimizer,
-    SupremeOptimizationLevel,
-    SupremeOptimizationResult,
-)
+try:
+    from optimizers.supreme_truthgpt_optimizer import (
+        SupremeTruthGPTOptimizer,
+        SupremeOptimizationLevel,
+        SupremeOptimizationResult,
+    )
+except ImportError:
+    try:
+        from ...supreme_truthgpt_optimizer import (
+            SupremeTruthGPTOptimizer,
+            SupremeOptimizationLevel,
+            SupremeOptimizationResult,
+        )
+    except ImportError:
+        SupremeTruthGPTOptimizer = None
+        SupremeOptimizationLevel = None
+        SupremeOptimizationResult = None
 
-from ..transformer.transformer_optimizer import (
-    TransformerOptimizer,
-)
+    SupremeOptimizationResult = None
+
+try:
+    from ..transformer.transformer_optimizer import TransformerOptimizer
+except ImportError:
+    TransformerOptimizer = None
 
 
-# Unified factory function for TruthGPT optimizers
-    optimizer_type: str = "dynamo",
-    config: dict = None
-):
-    """
-    Unified factory function to create TruthGPT-specific optimizers.
-    
-    Args:
-        optimizer_type: Type of optimizer to create. Options:
-            - "dynamo" - TruthGPTDynamoOptimizer
-            - "inductor" - TruthGPTInductorOptimizer
-            - "quantization" - TruthGPTQuantizationOptimizer
-            - "supreme" - SupremeTruthGPTOptimizer
-            - "transformer" - TransformerOptimizer
-        config: Optional configuration dictionary
-    
-    Returns:
-        The requested optimizer instance
-    
-    Example:
-        >>> result = optimizer.optimize(model)
-    """
+def create_truthgpt_optimizer(optimizer_type: str = "supreme", config: Dict[str, Any] = None):
+    """Unified factory function to create TruthGPT-specific optimizers."""
     if config is None:
         config = {}
     
     optimizer_type = optimizer_type.lower()
     
     factory_map = {
-        "supreme": lambda cfg: SupremeTruthGPTOptimizer(cfg),
-        "transformer": lambda cfg: TransformerOptimizer(cfg),
+        "supreme": lambda cfg: SupremeTruthGPTOptimizer(cfg) if SupremeTruthGPTOptimizer else None,
+        "transformer": lambda cfg: TransformerOptimizer(cfg) if TransformerOptimizer else None,
     }
     
     if optimizer_type not in factory_map:
@@ -73,81 +88,57 @@ from ..transformer.transformer_optimizer import (
     return factory(config)
 
 
-# Registry of all available TruthGPT optimizers
-    "dynamo": {
-        "class": TruthGPTDynamoOptimizer,
-        "level_enum": TruthGPTDynamoLevel,
-        "result_class": TruthGPTDynamoResult,
-    },
-    "inductor": {
-        "class": TruthGPTInductorOptimizer,
-        "level_enum": TruthGPTInductorLevel,
-        "result_class": TruthGPTInductorResult,
-    },
-    "quantization": {
-        "class": TruthGPTQuantizationOptimizer,
-        "level_enum": TruthGPTQuantizationLevel,
-        "result_class": TruthGPTQuantizationResult,
-    },
+TRUTHGPT_OPTIMIZERS_REGISTRY = {
     "supreme": {
         "class": SupremeTruthGPTOptimizer,
         "level_enum": SupremeOptimizationLevel,
         "result_class": SupremeOptimizationResult,
-        "factory": lambda cfg: SupremeTruthGPTOptimizer(cfg),
+        "factory": lambda cfg: SupremeTruthGPTOptimizer(cfg) if SupremeTruthGPTOptimizer else None,
     },
     "transformer": {
         "class": TransformerOptimizer,
         "level_enum": None,
         "result_class": None,
-        "factory": lambda cfg: TransformerOptimizer(cfg),
+        "factory": lambda cfg: TransformerOptimizer(cfg) if TransformerOptimizer else None,
     },
 }
 
 
+def list_truthgpt_optimizers() -> List[str]:
     """List all available TruthGPT optimizer types."""
+    return list(TRUTHGPT_OPTIMIZERS_REGISTRY.keys())
 
 
-    """
-    Get information about a specific TruthGPT optimizer.
-    
-    Args:
-        optimizer_type: Type of optimizer
-    
-    Returns:
-        Dictionary with optimizer information
-    """
+def get_truthgpt_optimizer_info(optimizer_type: str) -> Dict[str, Any]:
+    """Get information about a specific TruthGPT optimizer."""
+    if optimizer_type not in TRUTHGPT_OPTIMIZERS_REGISTRY:
         raise ValueError(f"Unknown optimizer type: {optimizer_type}")
     
+    registry_entry = TRUTHGPT_OPTIMIZERS_REGISTRY[optimizer_type]
     return {
         "type": optimizer_type,
-        "class": registry_entry["class"].__name__,
+        "class": registry_entry["class"].__name__ if registry_entry["class"] else None,
         "level_enum": registry_entry["level_enum"].__name__ if registry_entry["level_enum"] else None,
         "result_class": registry_entry["result_class"].__name__ if registry_entry["result_class"] else None,
-        "factory": registry_entry["factory"].__name__ if hasattr(registry_entry["factory"], "__name__") else "lambda",
     }
 
 
 __all__ = [
-    # Dynamo optimizer
     "TruthGPTDynamoOptimizer",
     "TruthGPTDynamoLevel",
     "TruthGPTDynamoResult",
-    # Inductor optimizer
     "TruthGPTInductorOptimizer",
     "TruthGPTInductorLevel",
     "TruthGPTInductorResult",
-    # Quantization optimizer
     "TruthGPTQuantizationOptimizer",
     "TruthGPTQuantizationLevel",
     "TruthGPTQuantizationResult",
-    # Supreme optimizer
     "SupremeTruthGPTOptimizer",
     "SupremeOptimizationLevel",
     "SupremeOptimizationResult",
-    # Transformer optimizer
     "TransformerOptimizer",
-    # Unified factory
-    # Registry
+    "create_truthgpt_optimizer",
+    "list_truthgpt_optimizers",
+    "get_truthgpt_optimizer_info",
+    "TRUTHGPT_OPTIMIZERS_REGISTRY",
 ]
-
-

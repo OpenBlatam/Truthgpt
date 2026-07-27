@@ -49,7 +49,7 @@ except ImportError:
     print("Qiskit not available. Quantum features will be simulated.")
 
 # Import TruthGPT modules
-from .models import TruthGPTModel, TruthGPTModelConfig
+from .core.models import TruthGPTModel, TruthGPTModelConfig
 from .quantum import QuantumSimulator, QuantumNeuralNetwork, VariationalQuantumEigensolver
 from .ai_enhancement import TruthGPTAIEnhancementManager
 from .advanced_security import TruthGPTSecurityManager

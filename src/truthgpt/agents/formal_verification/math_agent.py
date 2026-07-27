@@ -20,12 +20,12 @@ import asyncio
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from ..arquitecturas_fundamentales.base_agent import BaseAgent
-from ..models import AgentResponse, AgentConfig
-from ..razonamiento_planificacion.tools import (
+from ..core_architectures.base_agent import BaseAgent
+from ..core.models import AgentResponse, AgentConfig
+from ..tools.tools import (
     BaseTool, FileReadTool, FileWriteTool, DirectoryListTool
 )
-from ..razonamiento_planificacion.orchestrator import MultiUserReActAgent
+from ..tools.orchestrator import MultiUserReActAgent
 
 logger = logging.getLogger(__name__)
 

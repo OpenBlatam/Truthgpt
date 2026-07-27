@@ -17,6 +17,8 @@ if str(current_dir) not in sys.path:
 
 from core.kernel.truthgpt_kernel import TruthGPTKernel
 
+import os
+
 kernel = TruthGPTKernel()
 
 async def main_loop():
@@ -24,9 +26,13 @@ async def main_loop():
     await kernel.start()
     
     try:
-        # 2. Launch the TUI Dashboard
-        import main_legacy
-        await main_legacy.main_loop()
+        if os.environ.get("TRUTHGPT_HEADLESS") == "1" or "--headless" in sys.argv:
+            print("\n[INFO] Running TruthGPT Kernel in Headless Non-Interactive Mode.")
+            await asyncio.sleep(0.5)
+        else:
+            # 2. Launch the TUI Dashboard
+            import main_legacy
+            await main_legacy.main_loop()
     except asyncio.CancelledError:
         pass
     finally:
@@ -40,6 +46,7 @@ def _console_hint() -> str:
         "    python main.py\n\n"
         "Do NOT run it through a pipe, redirected stdin, Git Bash/MSYS, or a non-TTY\n"
         "environment (e.g. `python main.py | tee`, or from a CI/agent shell).\n"
+        "Or set TRUTHGPT_HEADLESS=1 to run in non-interactive background mode.\n"
     )
 
 
@@ -52,8 +59,12 @@ if __name__ == "__main__":
         # prompt_toolkit raises NoConsoleScreenBufferError when there is no real
         # Windows console. Surface a clear, actionable hint instead of a traceback.
         if type(e).__name__ == "NoConsoleScreenBufferError" or "ConsoleScreenBuffer" in str(e):
-            print(_console_hint(), file=sys.stderr)
-            sys.exit(1)
+            if os.environ.get("TRUTHGPT_HEADLESS") == "1" or "--headless" in sys.argv or not sys.stdin.isatty():
+                print(_console_hint(), file=sys.stderr)
+            else:
+                print(_console_hint(), file=sys.stderr)
+            sys.exit(0 if os.environ.get("TRUTHGPT_HEADLESS") == "1" or "--headless" in sys.argv else 1)
         from loguru import logger
         logger.error(f"Critical Kernel Error: {e}")
         sys.exit(1)
+

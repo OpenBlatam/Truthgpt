@@ -293,7 +293,7 @@ class ONNXModelWrapper(nn.Module):
         # Convert back to tensor
         return torch.from_numpy(outputs[0])
 
-from .models import CompilationConfig
+from .core.models import CompilationConfig
 
 class CompilationProfiler:
     """Profiler for compilation performance."""

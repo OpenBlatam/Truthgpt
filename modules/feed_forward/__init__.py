@@ -10,19 +10,29 @@ from .feed_forward import (
     create_feed_forward
 )
 
-from .mlp import (
-    MLP,
-    GatedMLP,
-    create_mlp
-)
+try:
+    from .mlp import (
+        MLP,
+        GatedMLP,
+        create_mlp
+    )
+except ImportError:
+    MLP = None
+    GatedMLP = None
+    create_mlp = None
 
-from .mixture_of_experts import (
-    MixtureOfExperts,
-    create_mixture_of_experts
-)
+try:
+    from .mixture_of_experts import (
+        MixtureOfExperts,
+        create_mixture_of_experts
+    )
+except ImportError:
+    MixtureOfExperts = None
+    create_mixture_of_experts = None
 
 from .pimoe_router import (
     PiMoESystem,
+
     TokenLevelRouter,
     PiMoEExpert,
     ExpertType,

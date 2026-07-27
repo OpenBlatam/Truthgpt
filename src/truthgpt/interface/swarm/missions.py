@@ -447,7 +447,7 @@ class BackgroundMission:
                     t0 = time.time()
                     if key == "arxiv_discovery_scout":
                         cc_tool_call(f"{key}: discovering & integrating papers…")
-                        from truthgpt.agents.system_intelligence.research_agent import ResearchAgent
+                        from truthgpt.agents.domains.system_intelligence.research_agent import ResearchAgent
                         agent = ResearchAgent(llm_engine=self.llm)
                         res = await _call_with_timeout(agent.process(f"discover and integrate papers for {current_prompt}"))
                         content = res.content
@@ -536,8 +536,8 @@ async def handle_continuous_mission():
         f"[dim](tier: {tier_label}{', cost-opt' if cost_optimized else ''})[/dim]"
     )
 
-    from truthgpt.agents.client import AgentClient
-    from truthgpt.agents.engines import engine_registry
+    from truthgpt.agents.framework.interfaces.client.client import AgentClient
+    from truthgpt.agents.framework.engines import engine_registry
 
     # Disable the semantic cache on the cost path: this is a self-refining loop,
     # so near-identical prompts across iterations must NOT replay the first

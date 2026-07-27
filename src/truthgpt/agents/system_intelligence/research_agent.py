@@ -12,8 +12,8 @@ import json
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from rich.console import Console
-from ..arquitecturas_fundamentales.base_agent import BaseAgent
-from ..models import AgentResponse
+from ..core_architectures.base_agent import BaseAgent
+from ..core.models import AgentResponse
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -60,7 +60,7 @@ class ResearchAgent(BaseAgent):
 
             
             # Step 1: Translate and Refine Query via LLM (Industrial SOTA Bridge)
-            from truthgpt.agents.engines import engine_registry
+            from truthgpt.agents.framework.engines import engine_registry
             llm = engine_registry.get_engine(USER_PREFS.get("preferred_engine", "deepseek"))
             
             from datetime import datetime

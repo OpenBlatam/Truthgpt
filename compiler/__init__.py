@@ -11,46 +11,74 @@ from .core.compiler_core import (
 )
 
 # AOT (Ahead-of-Time) Compilation
-from .aot.aot_compiler import (
-    AOTCompiler, AOTCompilationConfig, AOTOptimizationStrategy,
-    create_aot_compiler, aot_compilation_context
-)
+try:
+    from .aot.aot_compiler import (
+        AOTCompiler, AOTCompilationConfig, AOTOptimizationStrategy,
+        create_aot_compiler, aot_compilation_context
+    )
+except ImportError:
+    AOTCompiler = AOTCompilationConfig = AOTOptimizationStrategy = None
+    create_aot_compiler = aot_compilation_context = None
 
 # JIT (Just-in-Time) Compilation
-from .jit.jit_compiler import (
-    JITCompiler, JITCompilationConfig, JITOptimizationStrategy,
-    create_jit_compiler, jit_compilation_context
-)
+try:
+    from .jit.jit_compiler import (
+        JITCompiler, JITCompilationConfig, JITOptimizationStrategy,
+        create_jit_compiler, jit_compilation_context
+    )
+except ImportError:
+    JITCompiler = JITCompilationConfig = JITOptimizationStrategy = None
+    create_jit_compiler = jit_compilation_context = None
 
 # MLIR Compilation Infrastructure
-from .mlir.mlir_compiler import (
-    MLIRCompiler, MLIRDialect, MLIROptimizationPass, MLIRCompilationResult,
-    create_mlir_compiler, mlir_compilation_context
-)
+try:
+    from .mlir.mlir_compiler import (
+        MLIRCompiler, MLIRDialect, MLIROptimizationPass, MLIRCompilationResult,
+        create_mlir_compiler, mlir_compilation_context
+    )
+except ImportError:
+    MLIRCompiler = MLIRDialect = MLIROptimizationPass = MLIRCompilationResult = None
+    create_mlir_compiler = mlir_compilation_context = None
 
 # Plugin System
-from .plugin.plugin_system import (
-    CompilerPlugin, PluginManager, PluginRegistry, PluginInterface,
-    create_plugin_manager, plugin_compilation_context
-)
+try:
+    from .plugin.plugin_system import (
+        CompilerPlugin, PluginManager, PluginRegistry, PluginInterface,
+        create_plugin_manager, plugin_compilation_context
+    )
+except ImportError:
+    CompilerPlugin = PluginManager = PluginRegistry = PluginInterface = None
+    create_plugin_manager = plugin_compilation_context = None
 
 # TensorFlow to TensorRT Compilation
-from .tf2tensorrt.tf2tensorrt_compiler import (
-    TF2TensorRTCompiler, TensorRTConfig, TensorRTOptimizationLevel,
-    create_tf2tensorrt_compiler, tf2tensorrt_compilation_context
-)
+try:
+    from .tf2tensorrt.tf2tensorrt_compiler import (
+        TF2TensorRTCompiler, TensorRTConfig, TensorRTOptimizationLevel,
+        create_tf2tensorrt_compiler, tf2tensorrt_compilation_context
+    )
+except ImportError:
+    TF2TensorRTCompiler = TensorRTConfig = TensorRTOptimizationLevel = None
+    create_tf2tensorrt_compiler = tf2tensorrt_compilation_context = None
 
 # TensorFlow to XLA Compilation
-from .tf2xla.tf2xla_compiler import (
-    TF2XLACompiler, XLAConfig, XLAOptimizationLevel,
-    create_tf2xla_compiler, tf2xla_compilation_context
-)
+try:
+    from .tf2xla.tf2xla_compiler import (
+        TF2XLACompiler, XLAConfig, XLAOptimizationLevel,
+        create_tf2xla_compiler, tf2xla_compilation_context
+    )
+except ImportError:
+    TF2XLACompiler = XLAConfig = XLAOptimizationLevel = None
+    create_tf2xla_compiler = tf2xla_compilation_context = None
 
 # Compiler Utilities
-from .utils.compiler_utils import (
-    CompilerUtils, CodeGenerator, OptimizationAnalyzer,
-    create_compiler_utils, compiler_utils_context
-)
+try:
+    from .utils.compiler_utils import (
+        CompilerUtils, CodeGenerator, OptimizationAnalyzer,
+        create_compiler_utils, compiler_utils_context
+    )
+except ImportError:
+    CompilerUtils = CodeGenerator = OptimizationAnalyzer = None
+    create_compiler_utils = compiler_utils_context = None
 
 # Runtime Compilation
 from .runtime.runtime_compiler import (
@@ -60,11 +88,16 @@ from .runtime.runtime_compiler import (
 )
 
 # Kernel Compilation
-from .kernels.kernel_compiler import (
-    KernelCompiler, KernelOptimizationLevel, KernelCompilationResult,
-    KernelTarget, KernelConfig, KernelOptimizationPass,
-    create_kernel_compiler, kernel_compilation_context
-)
+try:
+    from .kernels.kernel_compiler import (
+        KernelCompiler, KernelOptimizationLevel, KernelCompilationResult,
+        KernelTarget, KernelConfig, KernelOptimizationPass,
+        create_kernel_compiler, kernel_compilation_context
+    )
+except ImportError:
+    KernelCompiler = KernelOptimizationLevel = KernelCompilationResult = None
+    KernelTarget = KernelConfig = KernelOptimizationPass = None
+    create_kernel_compiler = kernel_compilation_context = None
 
 __all__ = [
     # Core compiler infrastructure

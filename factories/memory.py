@@ -1,4 +1,4 @@
-from factories.registry import Registry
+from .registry import Registry
 from modules.memory.advanced_memory_manager import create_advanced_memory_manager, create_memory_config
 
 MEMORY_MANAGERS = Registry()

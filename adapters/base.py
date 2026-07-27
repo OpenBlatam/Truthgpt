@@ -22,10 +22,10 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, computed_field
 
 try:
-    from optimization_core.agents.razonamiento_planificacion.tools import BaseTool, ToolResult
+    from optimization_core.agents.framework.tools.tools import BaseTool, ToolResult
 except (ImportError, ValueError, KeyError):
     # Fallback for environments where optimization_core is the root
-    from agents.razonamiento_planificacion.tools import BaseTool, ToolResult
+    from optimization_core.agents.framework.tools.tools import BaseTool, ToolResult
 
 logger = logging.getLogger(__name__)
 

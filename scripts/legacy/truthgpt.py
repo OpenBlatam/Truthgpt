@@ -4,7 +4,7 @@ A high-level Python entry point for researchers to interact with the swarm.
 """
 
 from typing import Optional, List
-from agents.client import AgentClient
+from agents.framework.interfaces.client.client import AgentClient
 from modules.base.core_system.core.papers import PaperRegistry, PaperAdapter
 
 class TruthGPT:

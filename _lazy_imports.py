@@ -316,7 +316,7 @@ _CORE_LAZY_IMPORTS: Dict[str, str] = {
     'OptimizationLevel': '.core.common_runtime',
     'OptimizationConfig': '.core.common_runtime',
     'Environment': '.core.common_runtime',
-    'ConfigManager': '.core.common_runtime',
+    'ConfigManager': '.core.config',
     'SystemMonitor': '.core.common_runtime',
     'ModelValidator': '.core.common_runtime',
     'CacheManager': '.core.common_runtime',

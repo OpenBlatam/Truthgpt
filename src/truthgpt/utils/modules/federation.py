@@ -34,7 +34,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import base64
 
 # Import TruthGPT modules
-from .models import TruthGPTModel, TruthGPTModelConfig
+from .core.models import TruthGPTModel, TruthGPTModelConfig
 from .orchestration import AIOrchestrator, AIAgent, AgentType
 from .blockchain import TruthGPTBlockchainManager, BlockchainConfig
 from .ai_enhancement import TruthGPTAIEnhancementManager

@@ -1,6 +1,6 @@
 from typing import Iterable
 import torch
-from factories.registry import Registry
+from .registry import Registry
 
 OPTIMIZERS = Registry()
 

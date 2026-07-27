@@ -283,7 +283,7 @@ class PipelineOptimizer:
             })
         return stats
 
-from .models import BatchingConfig
+from .core.models import BatchingConfig
 
 class DynamicBatcher:
     """

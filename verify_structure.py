@@ -136,8 +136,9 @@ sys.meta_path.insert(0, MockFinder())
 
 
 # Fix for metaclass conflict and Pydantic inheritance
-class MockModule(ABC):
+class MockModule:
     pass
+
 
 class MockBaseModel:
     def __init__(self, **kwargs):

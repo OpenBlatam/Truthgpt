@@ -7,5 +7,4 @@ __all__ = [
     "KVCacheConfig",
     "CacheStats",
     "KVCache",
-    "_PythonKVCache",
 ]

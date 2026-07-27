@@ -4,7 +4,7 @@ import sys
 import asyncio
 import logging
 from typing import Any, Dict, Optional
-from ..razonamiento_planificacion.tools import BaseTool, ToolResult
+from ..tools.tools import BaseTool, ToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -344,7 +344,7 @@ class PaperSynthesisTool(BaseTool):
             # Use DeepSeek to generate PERFECT implementation
             try:
                 try:
-                    from optimization_core.agents.engines import engine_registry
+                    from optimization_core.agents.framework.engines import engine_registry
                 except ImportError:
                     from ..engines import engine_registry
                 

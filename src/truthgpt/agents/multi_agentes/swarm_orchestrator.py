@@ -13,10 +13,10 @@ from typing import Any, Dict, List, Optional, Type
 
 from pydantic import BaseModel, Field, AliasChoices
 
-from ..arquitecturas_fundamentales.base_agent import BaseAgent
-from ..models import AgentResponse
-from ..exceptions import RoutingError
-from ..cost_intelligence import get_cost_intelligence
+from ..core_architectures.base_agent import BaseAgent
+from ..core.models import AgentResponse
+from ..core.exceptions import RoutingError
+from ..intelligence.cost_intelligence import get_cost_intelligence
 
 try:
     from truthgpt.interface.cc_style import cc_action, cc_result

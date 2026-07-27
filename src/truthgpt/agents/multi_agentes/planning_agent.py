@@ -6,7 +6,7 @@ Wraps the SwarmOrchestrator to provide a standard agent interface.
 
 import logging
 from typing import Optional, Dict, Any
-from ..arquitecturas_fundamentales.base_agent import BaseAgent
+from ..core_architectures.base_agent import BaseAgent
 from .swarm_orchestrator import SwarmOrchestrator, SwarmConfig
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ class PlanningAgent(BaseAgent):
             # Simple planning logic via LLM
             plan_prompt = f"Develop a strategic plan for: {prompt}"
             response = await self.llm_engine(plan_prompt)
-            from ..models import AgentResponse
+            from ..core.models import AgentResponse
             return AgentResponse(content=response, action_type="final_answer")
             
         return await self.orchestrator.route_and_process(prompt, context)

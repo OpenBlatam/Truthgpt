@@ -1,5 +1,5 @@
 """
-Unit tests for agents.scheduler — ScheduledTask & AgentScheduler.
+Unit tests for agents.orchestration.scheduler — ScheduledTask & AgentScheduler.
 """
 
 import pytest
@@ -14,7 +14,7 @@ class TestScheduledTask:
     """Test the ScheduledTask Pydantic model."""
 
     def test_default_is_active(self):
-        from optimization_core.agents.scheduler import ScheduledTask
+        from optimization_core.agents.orchestration.scheduler import ScheduledTask
         task = ScheduledTask(
             task_id="t1",
             user_id="u1",
@@ -26,7 +26,7 @@ class TestScheduledTask:
         assert task.cancelled is False
 
     def test_cancel_deactivates(self):
-        from optimization_core.agents.scheduler import ScheduledTask
+        from optimization_core.agents.orchestration.scheduler import ScheduledTask
         task = ScheduledTask(
             task_id="t1", user_id="u1", prompt="p", interval_seconds=10,
         )
@@ -35,7 +35,7 @@ class TestScheduledTask:
         assert task.cancelled is True
 
     def test_max_runs_deactivates(self):
-        from optimization_core.agents.scheduler import ScheduledTask
+        from optimization_core.agents.orchestration.scheduler import ScheduledTask
         task = ScheduledTask(
             task_id="t1", user_id="u1", prompt="p",
             interval_seconds=10, max_runs=3, run_count=3,
@@ -43,7 +43,7 @@ class TestScheduledTask:
         assert task.is_active is False
 
     def test_model_dump_roundtrip(self):
-        from optimization_core.agents.scheduler import ScheduledTask
+        from optimization_core.agents.orchestration.scheduler import ScheduledTask
         task = ScheduledTask(
             task_id="t1", user_id="u1", prompt="hello",
             interval_seconds=30, repeat=True, max_runs=5,
@@ -54,12 +54,12 @@ class TestScheduledTask:
         assert restored.interval_seconds == 30
 
 
-class TestTaskSummary:
-    """Test the TaskSummary response model."""
+class TestTaskStatus:
+    """Test the TaskStatus response model."""
 
     def test_creation(self):
-        from optimization_core.agents.scheduler import TaskSummary
-        summary = TaskSummary(
+        from optimization_core.agents.orchestration.scheduler.scheduler_api import TaskStatus
+        summary = TaskStatus(
             task_id="t1", user_id="u1", prompt="hello",
             interval=60, repeat=True, runs=5,
             cancelled=False, is_active=True,
@@ -79,7 +79,7 @@ class TestAgentScheduler:
 
     @pytest.fixture
     def scheduler(self, mock_client, tmp_path):
-        from optimization_core.agents.scheduler import AgentScheduler
+        from optimization_core.agents.orchestration.scheduler import AgentScheduler
         return AgentScheduler(mock_client, persistence_path=str(tmp_path / "sched.json"))
 
     def test_add_recurring(self, scheduler):
@@ -114,7 +114,7 @@ class TestAgentScheduler:
         assert ids == {"a", "b"}
 
     def test_persistence(self, mock_client, tmp_path):
-        from optimization_core.agents.scheduler import AgentScheduler
+        from optimization_core.agents.orchestration.scheduler import AgentScheduler
         path = str(tmp_path / "persist_sched.json")
 
         s1 = AgentScheduler(mock_client, persistence_path=path)

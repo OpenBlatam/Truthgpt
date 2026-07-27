@@ -3,7 +3,7 @@ from .base import (
     OptimizationTrigger, RuntimeOptimizationStrategy,
     RuntimeCompilationConfig, RuntimeCompilationResult
 )
-from .models import NeuralGuidanceModel, QuantumOptimizationState, CompilationPipeline
+from .core.models import NeuralGuidanceModel, QuantumOptimizationState, CompilationPipeline
 from .compiler import RuntimeCompiler
 
 def create_runtime_compiler(config: RuntimeCompilationConfig) -> RuntimeCompiler:

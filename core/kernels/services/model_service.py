@@ -17,7 +17,7 @@ class ModelService(BaseService):
 
     async def _on_start(self) -> None:
         try:
-            import agents.engines as ae
+            import agents.framework.engines as ae
             self._engine_registry = ae.engine_registry
             self.logger.info("ModelService: engine registry loaded")
         except Exception as e:

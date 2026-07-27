@@ -13,7 +13,7 @@ from collections import deque
 from enum import Enum
 import statistics
 
-from ..exceptions import InferenceEngineError
+from ..core.exceptions import InferenceEngineError
 
 
 class MetricType(Enum):

@@ -52,6 +52,8 @@ ExtremeOptimizationEngine = _create_generic_compat_optimizer(GenericOptimization
 
 # Additional master-level optimizers
 UltimateOptimizerCompat = _create_generic_compat_optimizer(GenericOptimizationLevel.ULTIMATE, "master")
+AdvancedTruthGPTOptimizer = _create_generic_compat_optimizer(GenericOptimizationLevel.MASTER, "master")
+ModernTruthGPTOptimizer = _create_generic_compat_optimizer(GenericOptimizationLevel.MASTER, "master")
 
 # Note: ultimate_optimizer.py is more complex (integration system) and may need special handling
 # For now, we provide basic compatibility
@@ -65,5 +67,8 @@ __all__ = [
     'UltimateOptimizer',
     'ExtremeOptimizationEngine',
     'UltimateOptimizerCompat',
+    'AdvancedTruthGPTOptimizer',
+    'ModernTruthGPTOptimizer',
 ]
+
 

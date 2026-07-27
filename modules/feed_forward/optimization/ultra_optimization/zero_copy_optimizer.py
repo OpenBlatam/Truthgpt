@@ -236,7 +236,7 @@ class ZeroCopyTensor:
         """Delegate to underlying tensor."""
         return getattr(self.data, name)
 
-from .models import ZeroCopyConfig
+from .core.models import ZeroCopyConfig
 
 class ZeroCopyOptimizer:
     """

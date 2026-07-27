@@ -18,7 +18,7 @@ import smtplib
 from email.mime.text import MIMEText
 from typing import Any, Dict, Optional, Union
 
-from ..models import AgentResponse
+from ..core.models import AgentResponse
 from .base import BaseMessagingAdapter
 
 logger = logging.getLogger(__name__)

@@ -17,7 +17,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from papers.dynamic_topology_routing import DynamicTopologyRouter  # noqa: E402
-from latency_optimizations import apply_dynamic_topology_routing  # noqa: E402
+from scripts.latency_optimizations import apply_dynamic_topology_routing  # noqa: E402
 
 
 def _agents() -> list[dict]:

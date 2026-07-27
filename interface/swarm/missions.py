@@ -318,7 +318,7 @@ class BackgroundMission:
                     t0 = time.time()
                     if key == "arxiv_discovery_scout":
                         cc_tool_call(f"{key}: discovering & integrating papers…")
-                        from agents.system_intelligence.research_agent import ResearchAgent
+                        from agents.domains.system_intelligence.research_agent import ResearchAgent
                         agent = ResearchAgent(llm_engine=self.llm)
                         res = await agent.process(f"descubrir e integrar papers de {current_prompt}")
                         content = res.content
@@ -399,8 +399,8 @@ async def handle_continuous_mission():
         f"[dim](tier: {tier}{', cost-opt' if cost_optimized else ''})[/dim]"
     )
 
-    from agents.client import AgentClient
-    from agents.engines import engine_registry
+    from agents.framework.interfaces.client.client import AgentClient
+    from optimization_core.agents.framework.engines.engines import engine_registry
 
     llm = engine_registry.build_tiered_engine(
         tier, USER_PREFS["preferred_engine"], cost_optimized=cost_optimized

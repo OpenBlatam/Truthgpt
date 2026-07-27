@@ -14,9 +14,9 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from modules.persistence.task_manager import TaskSnapshot, get_persistence_manager
-from agents.razonamiento_planificacion.orchestrator import MultiUserReActAgent
-from agents.models import AgentConfig, AgentResponse
-from agents.engines import engine_registry
+from optimization_core.agents.framework.architectures.react_agent import MultiUserReActAgent
+from optimization_core.agents.framework.models import AgentConfig, AgentResponse
+from optimization_core.agents.framework.engines.engines import engine_registry
 
 # Configure specialized logging for the node
 logger.add("swarm_node.log", rotation="50 MB", level="DEBUG", backtrace=True, diagnose=True)

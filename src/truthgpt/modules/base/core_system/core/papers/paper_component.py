@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 
 from ..interfaces import IComponent
 from ..base_classes import BaseComponent
-from ..exceptions import OptimizationCoreError, ResourceError
+from ..core.exceptions import OptimizationCoreError, ResourceError
 from .paper_metadata import PaperModule
 
 logger = logging.getLogger(__name__)

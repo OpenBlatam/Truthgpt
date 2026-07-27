@@ -6,7 +6,7 @@ Calculates statistics from optimization history
 import numpy as np
 from typing import Dict, Any, List
 
-from .models import AIOptimizationResult
+from .core.models import AIOptimizationResult
 from .learning_mechanism import LearningMechanism
 from .metrics_calculator import AIOptimizationLevel
 

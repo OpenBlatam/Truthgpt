@@ -2,8 +2,8 @@ import time
 from typing import Dict, Any, Optional
 from loguru import logger
 
-from .engine_config import _get_user_prefs, _normalize_engine_key
-from .ensemble import ALL_ENSEMBLE_MODES
+from .engines.engine_config import _get_user_prefs, _normalize_engine_key
+from .ensemble.ensemble import ALL_ENSEMBLE_MODES
 
 try:
     from truthgpt.interface.cc_style import CC_AVAILABLE, cc_spinner, cc_result, _fmt_elapsed, _fmt_tokens
@@ -200,7 +200,7 @@ async def _display_truthgpt_benchmark(
     live_key = _normalize_engine_key(engine_key) if engine_key else None
     
     # Lazy import to avoid circular dependency
-    from .engine_registry import engine_registry
+    from .engines.engine_registry import engine_registry
     
     if not live_key and model_name:
         for eng in engine_registry.get_active_engines():

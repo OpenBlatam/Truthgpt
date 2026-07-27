@@ -9,15 +9,21 @@ from .runtime_compiler import (
     create_runtime_compiler, runtime_compilation_context
 )
 
-from .adaptive_compiler import (
-    AdaptiveCompiler, AdaptiveCompilationConfig, AdaptiveOptimizationStrategy,
-    create_adaptive_compiler, adaptive_compilation_context
-)
+try:
+    from .adaptive_compiler import (
+        AdaptiveCompiler, AdaptiveCompilationConfig, AdaptiveOptimizationStrategy,
+        create_adaptive_compiler, adaptive_compilation_context
+    )
+except ImportError:
+    pass
 
-from .profile_guided_compiler import (
-    ProfileGuidedCompiler, ProfileGuidedConfig, ProfileGuidedOptimization,
-    create_profile_guided_compiler, profile_guided_context
-)
+try:
+    from .profile_guided_compiler import (
+        ProfileGuidedCompiler, ProfileGuidedConfig, ProfileGuidedOptimization,
+        create_profile_guided_compiler, profile_guided_context
+    )
+except ImportError:
+    pass
 
 __all__ = [
     'RuntimeCompiler',

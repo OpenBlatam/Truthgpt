@@ -13,7 +13,7 @@ from .base import (
     RuntimeCompilationConfig, RuntimeCompilationResult, RuntimeTarget,
     CompilationMode, OptimizationTrigger, RuntimeOptimizationStrategy
 )
-from .models import NeuralGuidanceModel, QuantumOptimizationState, CompilationPipeline
+from .core.models import NeuralGuidanceModel, QuantumOptimizationState, CompilationPipeline
 from ...core.compiler_core import CompilerCore
 
 logger = logging.getLogger(__name__)

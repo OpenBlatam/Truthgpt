@@ -30,7 +30,7 @@ if "agents" in sys.modules:
             agents_mod.__path__.insert(0, str(local_agents))
 
 # Force-import critical local modules into sys.modules to prevent shadowing on sub-imports
-for mod_name in ["agents.ssl_context", "agents.engines", "agents.ensemble"]:
+for mod_name in ["agents.framework.interfaces.client.ssl_context", "agents.framework.engines", "agents.orchestration.ensemble"]:
     rel_path = mod_name.split(".")[-1] + ".py"
     full_path = ROOT / "agents" / rel_path
     if full_path.exists():
@@ -39,14 +39,14 @@ for mod_name in ["agents.ssl_context", "agents.engines", "agents.ensemble"]:
         sys.modules[mod_name] = mod
         spec.loader.exec_module(mod)
         # Attach to the parent package so dotted-path resolution (e.g. pytest's
-        # monkeypatch.setattr("agents.engines....")) can find it via getattr.
+        # monkeypatch.setattr("agents.framework.engines....")) can find it via getattr.
         # Manual exec_module, unlike normal import, does not do this for us.
         parent_name, _, child = mod_name.rpartition(".")
         parent = sys.modules.get(parent_name)
         if parent is not None:
             setattr(parent, child, mod)
 
-from agents.ensemble import (  # noqa: E402
+from agents.orchestration.ensemble.ensemble import (  # noqa: E402
     ALL_ENSEMBLE_MODES,
     merge_ensemble_responses,
     parse_agent_json,
@@ -224,7 +224,7 @@ async def test_run_ensemble_race_cancels_slow_mocked():
 
 @pytest.mark.asyncio
 async def test_registry_builds_ensemble_for_multi_engine(monkeypatch):
-    from agents.engines import EngineRegistry, _benchmark_run_stats
+    from agents.framework.engines.engines import EngineRegistry, _benchmark_run_stats
 
     registry = EngineRegistry()
     registry._providers.clear()
@@ -271,7 +271,7 @@ async def test_registry_builds_ensemble_for_multi_engine(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_registry_race_mode(monkeypatch):
-    from agents.engines import EngineRegistry
+    from agents.framework.engines.engines import EngineRegistry
 
     registry = EngineRegistry()
     registry._providers.clear()
@@ -313,7 +313,7 @@ async def test_registry_race_mode(monkeypatch):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mode", ["consensus", "majority", "debate", "bayesian", "parallel"])
 async def test_registry_all_merge_modes(monkeypatch, mode: str):
-    from agents.engines import EngineRegistry
+    from agents.framework.engines.engines import EngineRegistry
 
     registry = EngineRegistry()
     registry._providers.clear()

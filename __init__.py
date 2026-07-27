@@ -15,10 +15,35 @@ Performance Benefits:
 
 from __future__ import annotations
 
+import sys
 import threading
 from typing import Any, Dict, List
 
 __version__ = "1.0.0"
+
+import sys
+import importlib
+import importlib.util
+
+class OptimizationCoreMetaFinder:
+    """Meta path finder ensuring 'optimization_core.xyz' maps to 'xyz' in the workspace."""
+    def find_spec(self, fullname, path, target=None):
+        if fullname.startswith("optimization_core."):
+            real_name = fullname[len("optimization_core."):]
+            try:
+                spec = importlib.util.find_spec(real_name)
+                if spec is not None:
+                    return spec
+            except Exception:
+                pass
+        return None
+
+if not any(isinstance(finder, OptimizationCoreMetaFinder) for finder in sys.meta_path):
+    sys.meta_path.insert(0, OptimizationCoreMetaFinder())
+
+_curr_mod = sys.modules.get(__name__)
+if _curr_mod:
+    sys.modules["optimization_core"] = _curr_mod
 
 # All imports are now handled lazily via __getattr__
 # This provides ~90% faster startup time (from ~2-5s to ~0.1-0.3s)
@@ -132,17 +157,3 @@ __all__ = [
     'ProductionOptimizer',
     'create_production_optimizer',
     'production_optimization_context',
-    'MemoryOptimizer',
-    'MemoryOptimizationConfig',
-    'create_memory_optimizer',
-    'FusedAttention',
-    'BatchOptimizer',
-    'ComputationalOptimizer',
-    'create_computational_optimizer',
-    'OptimizationRegistry',
-    'apply_optimizations',
-    'get_optimization_config',
-    'register_optimization',
-    'get_optimization_report',
-    '__version__',
-] + list(_ALL_LAZY_IMPORTS.keys())

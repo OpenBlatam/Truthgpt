@@ -1,0 +1,10 @@
+{
+  "date": "2026-07-24",
+  "metrics": {
+    "total_usd": 0.0,
+    "input_tokens": 285,
+    "output_tokens": 10,
+    "request_count": 5
+  },
+  "savings_usd": 0.0
+}

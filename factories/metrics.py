@@ -1,7 +1,7 @@
 import math
 from typing import Dict, Any
 
-from factories.registry import Registry
+from .registry import Registry
 
 METRICS = Registry()
 

@@ -5,7 +5,7 @@ Demonstrates dynamic tool registration and auto-discovery.
 
 import asyncio
 from typing import Any, Optional
-from truthgpt.agents.razonamiento_planificacion.tools import BaseTool, ToolResult
+from truthgpt.agents.framework.tools.tools import BaseTool, ToolResult
 
 class AdvancedWebSearchPlugin(BaseTool):
     """

@@ -2,7 +2,7 @@
 Advanced Batch Processing for Inference
 ========================================
 
-High-performance batch processing with:
+High-performance async-native batch processing with:
 - Dynamic batching
 - Priority queues
 - Batch optimization
@@ -11,18 +11,13 @@ High-performance batch processing with:
 """
 
 import time
-import threading
-import queue
+import asyncio
 import logging
 from dataclasses import dataclass, field
-from typing import List, Optional, Callable, Any, Dict, Generic, TypeVar
+from typing import List, Optional, Callable, Any, Dict, Generic, TypeVar, Awaitable
 from enum import Enum
-from collections import deque
-import heapq
 
 from ..exceptions import BatchProcessingError
-
-logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
@@ -78,36 +73,18 @@ class Batch(Generic[T]):
 
 class DynamicBatcher(Generic[T, R]):
     """
-    Dynamic batcher with priority queue and optimization.
-    
-    Features:
-    - Priority-based batching
-    - Dynamic batch sizing
-    - Time-based flushing
-    - Memory-efficient
-    - Thread-safe
+    Dynamic batcher with priority queue and optimization using native asyncio.
     """
     
     def __init__(
         self,
-        processor: Callable[[List[T]], List[R]],
+        processor: Callable[[List[T]], Awaitable[List[R]]],
         max_batch_size: int = 32,
         min_batch_size: int = 1,
         max_wait_time: float = 0.1,
         max_queue_size: int = 1000,
         optimize_batches: bool = True
     ):
-        """
-        Initialize dynamic batcher.
-        
-        Args:
-            processor: Function to process batches
-            max_batch_size: Maximum batch size
-            min_batch_size: Minimum batch size before processing
-            max_wait_time: Maximum time to wait before processing
-            max_queue_size: Maximum queue size
-            optimize_batches: Whether to optimize batch order
-        """
         self.processor = processor
         self.max_batch_size = max_batch_size
         self.min_batch_size = min_batch_size
@@ -115,51 +92,48 @@ class DynamicBatcher(Generic[T, R]):
         self.max_queue_size = max_queue_size
         self.optimize_batches = optimize_batches
         
-        self._queue: queue.PriorityQueue = queue.PriorityQueue(maxsize=max_queue_size)
-        self._lock = threading.Lock()
+        self._queue: asyncio.PriorityQueue = asyncio.PriorityQueue(maxsize=max_queue_size)
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._task: Optional[asyncio.Task] = None
+        
         self._stats = {
             "batches_processed": 0,
             "items_processed": 0,
             "total_wait_time": 0.0,
             "total_process_time": 0.0,
         }
+        self._stats_lock = asyncio.Lock()
     
     def start(self):
-        """Start the batcher thread."""
+        """Start the async batcher loop."""
         if self._running:
             return
         
         self._running = True
-        self._thread = threading.Thread(target=self._process_loop, daemon=True)
-        self._thread.start()
-        logger.info("Dynamic batcher started")
+        self._task = asyncio.create_task(self._process_loop())
+        logger.info("Async Dynamic batcher started")
     
-    def stop(self, timeout: Optional[float] = None):
-        """Stop the batcher thread."""
+    async def stop(self):
+        """Stop the async batcher loop."""
         if not self._running:
             return
         
         self._running = False
-        if self._thread:
-            self._thread.join(timeout=timeout)
-        logger.info("Dynamic batcher stopped")
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+        logger.info("Async Dynamic batcher stopped")
     
-    def submit(
+    async def submit(
         self,
         item: T,
         priority: BatchPriority = BatchPriority.NORMAL,
         metadata: Optional[Dict[str, Any]] = None
     ) -> None:
-        """
-        Submit an item for batching.
-        
-        Args:
-            item: Item to batch
-            priority: Item priority
-            metadata: Optional metadata
-        """
+        """Submit an item for batching."""
         batch_item = BatchItem(
             data=item,
             priority=priority,
@@ -168,29 +142,28 @@ class DynamicBatcher(Generic[T, R]):
         
         try:
             self._queue.put_nowait(batch_item)
-        except queue.Full:
+        except asyncio.QueueFull:
             raise BatchProcessingError("Batch queue is full")
     
-    def _process_loop(self):
+    async def _process_loop(self):
         """Main processing loop."""
         current_batch: List[BatchItem[T]] = []
         batch_start_time = time.time()
         
         while self._running:
             try:
-                # Try to get item with timeout
                 try:
-                    item = self._queue.get(timeout=self.max_wait_time)
+                    # Wait for an item with timeout
+                    item = await asyncio.wait_for(self._queue.get(), timeout=self.max_wait_time)
                     current_batch.append(item)
-                except queue.Empty:
-                    # Timeout - process batch if we have items
+                    self._queue.task_done()
+                except asyncio.TimeoutError:
                     if current_batch:
-                        self._process_batch(current_batch)
+                        await self._process_batch(current_batch)
                         current_batch = []
                         batch_start_time = time.time()
                     continue
                 
-                # Check if batch should be processed
                 should_process = (
                     len(current_batch) >= self.max_batch_size or
                     (len(current_batch) >= self.min_batch_size and
@@ -198,34 +171,31 @@ class DynamicBatcher(Generic[T, R]):
                 )
                 
                 if should_process:
-                    self._process_batch(current_batch)
+                    await self._process_batch(current_batch)
                     current_batch = []
                     batch_start_time = time.time()
                 
+            except asyncio.CancelledError:
+                break
             except Exception as e:
-                logger.error(f"Error in batch processing loop: {e}", exc_info=True)
+                logger.error(f"Error in async batch processing loop: {e}", exc_info=True)
     
-    def _process_batch(self, items: List[BatchItem[T]]):
+    async def _process_batch(self, items: List[BatchItem[T]]):
         """Process a batch of items."""
         if not items:
             return
         
         start_time = time.time()
-        
-        # Extract data from batch items
         batch_data = [item.data for item in items]
         
-        # Optimize batch order if enabled
         if self.optimize_batches:
             batch_data = self._optimize_batch(batch_data)
         
         try:
-            # Process batch
-            results = self.processor(batch_data)
+            results = await self.processor(batch_data)
             
-            # Update stats
             process_time = time.time() - start_time
-            with self._lock:
+            async with self._stats_lock:
                 self._stats["batches_processed"] += 1
                 self._stats["items_processed"] += len(items)
                 self._stats["total_process_time"] += process_time
@@ -233,22 +203,18 @@ class DynamicBatcher(Generic[T, R]):
                     time.time() - item.created_at for item in items
                 )
             
-            logger.debug(
-                f"Processed batch of {len(items)} items in {process_time:.3f}s"
-            )
+            logger.debug(f"Processed batch of {len(items)} items in {process_time:.3f}s")
         except Exception as e:
             logger.error(f"Error processing batch: {e}", exc_info=True)
             raise BatchProcessingError(f"Batch processing failed: {e}") from e
     
     def _optimize_batch(self, batch: List[T]) -> List[T]:
         """Optimize batch order for better performance."""
-        # Default: no optimization
-        # Subclasses can override for custom optimization
         return batch
     
-    def get_stats(self) -> Dict[str, Any]:
+    async def get_stats(self) -> Dict[str, Any]:
         """Get batcher statistics."""
-        with self._lock:
+        async with self._stats_lock:
             avg_batch_size = (
                 self._stats["items_processed"] / self._stats["batches_processed"]
                 if self._stats["batches_processed"] > 0 else 0
@@ -273,63 +239,81 @@ class DynamicBatcher(Generic[T, R]):
 
 class ContinuousBatcher(DynamicBatcher[T, R]):
     """
-    Continuous batcher that processes items as they arrive.
-    
-    Similar to dynamic batcher but optimized for continuous streams.
+    Continuous batcher that processes items as they arrive using asyncio.
     """
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._pending_results: Dict[int, queue.Queue] = {}
+        self._pending_results: Dict[int, asyncio.Future] = {}
         self._result_counter = 0
-        self._result_lock = threading.Lock()
     
-    def submit_async(
+    async def submit_async(
         self,
         item: T,
         priority: BatchPriority = BatchPriority.NORMAL,
         metadata: Optional[Dict[str, Any]] = None
-    ) -> int:
+    ) -> Awaitable[R]:
         """
-        Submit item and return result ID for async retrieval.
-        
-        Returns:
-            Result ID for retrieving result later
+        Submit item and return an asyncio.Future for the result.
         """
-        result_id = self._get_next_result_id()
-        result_queue = queue.Queue()
+        self._result_counter += 1
+        result_id = self._result_counter
         
-        with self._result_lock:
-            self._pending_results[result_id] = result_queue
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        self._pending_results[result_id] = future
         
-        # Add result_id to metadata
         if metadata is None:
             metadata = {}
         metadata["result_id"] = result_id
         
-        self.submit(item, priority, metadata)
+        await self.submit(item, priority, metadata)
+        return future
+            
+    async def _process_batch(self, items: List[BatchItem[T]]):
+        """Process batch and dispatch results back to pending futures."""
+        if not items:
+            return
+            
+        start_time = time.time()
+        batch_data = [item.data for item in items]
         
-        return result_id
-    
-    def get_result(self, result_id: int, timeout: Optional[float] = None) -> R:
-        """Get result for a submitted item."""
-        with self._result_lock:
-            if result_id not in self._pending_results:
-                raise ValueError(f"Result ID {result_id} not found")
-            result_queue = self._pending_results[result_id]
-        
+        if self.optimize_batches:
+            batch_data = self._optimize_batch(batch_data)
+            
         try:
-            result = result_queue.get(timeout=timeout)
-            with self._result_lock:
-                del self._pending_results[result_id]
-            return result
-        except queue.Empty:
-            raise TimeoutError(f"Result for {result_id} not available within timeout")
-    
-    def _get_next_result_id(self) -> int:
-        """Get next result ID."""
-        with self._result_lock:
-            self._result_counter += 1
-            return self._result_counter
-
-
+            results = await self.processor(batch_data)
+            
+            if not isinstance(results, list):
+                results = [results] * len(items)
+            elif len(results) != len(items):
+                logger.warning(f"Batch results length ({len(results)}) doesn't match items ({len(items)}).")
+                results = results[:len(items)]
+                results.extend([None] * (len(items) - len(results)))
+                
+            for item, result in zip(items, results):
+                result_id = item.metadata.get("result_id")
+                if result_id is not None:
+                    future = self._pending_results.pop(result_id, None)
+                    if future and not future.done():
+                        future.set_result(result)
+                            
+            process_time = time.time() - start_time
+            async with self._stats_lock:
+                self._stats["batches_processed"] += 1
+                self._stats["items_processed"] += len(items)
+                self._stats["total_process_time"] += process_time
+                self._stats["total_wait_time"] += sum(
+                    time.time() - item.created_at for item in items
+                )
+                
+            logger.debug(f"Processed continuous batch of {len(items)} items in {process_time:.3f}s")
+            
+        except Exception as e:
+            logger.error(f"Error processing batch in ContinuousBatcher: {e}", exc_info=True)
+            for item in items:
+                result_id = item.metadata.get("result_id")
+                if result_id is not None:
+                    future = self._pending_results.pop(result_id, None)
+                    if future and not future.done():
+                        future.set_exception(e)

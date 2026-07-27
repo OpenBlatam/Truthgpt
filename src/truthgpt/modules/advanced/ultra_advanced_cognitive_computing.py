@@ -44,7 +44,7 @@ from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 
 # Import TruthGPT modules
-from .models import TruthGPTModel, TruthGPTModelConfig
+from .core.models import TruthGPTModel, TruthGPTModelConfig
 from .quantum_integration import TruthGPTQuantumManager
 from .emotional_intelligence import TruthGPTEmotionalManager
 from .self_evolution import TruthGPTSelfEvolutionManager

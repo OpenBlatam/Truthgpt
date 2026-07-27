@@ -13,15 +13,31 @@ This module provides organized access to core components:
 """
 from __future__ import annotations
 
+import sys
+if "optimization_core.core" not in sys.modules:
+    sys.modules["optimization_core.core"] = sys.modules[__name__]
+
 # Direct imports for backward compatibility
-from .config import ConfigManager, TrainerConfig
-from .interfaces import (
-    BaseTrainer,
-    BaseEvaluator,
-    BaseModelManager,
-    BaseDataLoader,
-    BaseCheckpointManager,
-)
+try:
+    from .config import ConfigManager, TrainerConfig, ModelConfig, DataConfig, OptimizerConfig
+except ImportError:
+    from .config import ConfigManager, TrainerConfig, ModelConfig, DataConfig  # type: ignore
+    OptimizerConfig = None  # type: ignore
+
+try:
+    from .interfaces import (
+        BaseTrainer,
+        BaseEvaluator,
+        BaseModelManager,
+        BaseDataLoader,
+        BaseCheckpointManager,
+    )
+except ImportError:
+    BaseTrainer = None  # type: ignore
+    BaseEvaluator = None  # type: ignore
+    BaseModelManager = None  # type: ignore
+    BaseDataLoader = None  # type: ignore
+    BaseCheckpointManager = None  # type: ignore
 from .composition import (
     ComponentAssembler,
     WorkflowBuilder,
@@ -31,6 +47,15 @@ from .validation import (
     ModelValidator,
     DataValidator,
     ConfigValidator,
+)
+from .exceptions import (
+    TruthGPTCoreError,
+    PluginError,
+    ServiceRegistryError,
+    OptimizerExecutionError,
+    MicroserviceCommunicationError,
+    ConfigValidationError,
+    OptimizationCoreError,
 )
 
 # Lazy imports for organized submodules
@@ -112,6 +137,14 @@ __all__ = [
     # Config
     "ConfigManager",
     "TrainerConfig",
+    # Exceptions
+    "TruthGPTCoreError",
+    "PluginError",
+    "ServiceRegistryError",
+    "OptimizerExecutionError",
+    "MicroserviceCommunicationError",
+    "ConfigValidationError",
+    "OptimizationCoreError",
     # Interfaces
     "BaseTrainer",
     "BaseEvaluator",

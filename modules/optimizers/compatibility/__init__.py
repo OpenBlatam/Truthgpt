@@ -16,6 +16,8 @@ _LAZY_IMPORTS = {
     'generic_shims': '.generic_shims',
     'GenericShim': '.generic_shims',
     'create_shim': '.generic_shims',
+    'AdvancedTruthGPTOptimizer': '.generic_shims',
+    'ModernTruthGPTOptimizer': '.generic_shims',
 }
 
 
@@ -33,7 +35,10 @@ __all__ = [
     'generic_shims',
     'GenericShim',
     'create_shim',
+    'AdvancedTruthGPTOptimizer',
+    'ModernTruthGPTOptimizer',
 ]
+
 
 __version__ = "1.0.0"
 __author__ = "TruthGPT Optimization Core Team"

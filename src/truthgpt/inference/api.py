@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field, validator
 import uvicorn
 
 from ..configs.loader import load_config
-from ..models import build_model
+from ..core.models import build_model
 
 
 # ============================================================================

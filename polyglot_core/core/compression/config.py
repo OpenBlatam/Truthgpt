@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Union, Tuple
 import time
-from .backend import Backend, get_best_backend, is_backend_available
+from polyglot_core.core.backend import Backend, get_best_backend, is_backend_available
 
 from .constants import *
 

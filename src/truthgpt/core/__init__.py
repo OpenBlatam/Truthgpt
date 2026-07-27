@@ -14,14 +14,29 @@ This module provides organized access to core components:
 from __future__ import annotations
 
 # Direct imports for backward compatibility
-from .config import ConfigManager, TrainerConfig
-from .interfaces import (
-    BaseTrainer,
-    BaseEvaluator,
-    BaseModelManager,
-    BaseDataLoader,
-    BaseCheckpointManager,
-)
+try:
+    from .config import ConfigManager, TrainerConfig
+except ImportError:
+    try:
+        from core.config import ConfigManager, TrainerConfig  # type: ignore
+    except ImportError:
+        ConfigManager = None  # type: ignore
+        TrainerConfig = None  # type: ignore
+
+try:
+    from .interfaces import (
+        BaseTrainer,
+        BaseEvaluator,
+        BaseModelManager,
+        BaseDataLoader,
+        BaseCheckpointManager,
+    )
+except ImportError:
+    BaseTrainer = None  # type: ignore
+    BaseEvaluator = None  # type: ignore
+    BaseModelManager = None  # type: ignore
+    BaseDataLoader = None  # type: ignore
+    BaseCheckpointManager = None  # type: ignore
 from .composition import (
     ComponentAssembler,
     WorkflowBuilder,

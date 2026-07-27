@@ -10,8 +10,8 @@ import time
 from typing import Optional
 
 import truthgpt
-from agents.client import AgentClient
-from agents.models import AgentConfig, AgentResponse
+from agents.framework.interfaces.client.client import AgentClient
+from optimization_core.agents.framework.models import AgentConfig, AgentResponse
 
 # Alias for the main API instance
 api = truthgpt.api
@@ -70,7 +70,7 @@ async def deep_refine(prompt: str, hours: float = 0.016, criteria: str = "Clarit
                             
                             # Integrar Benchmark de TruthGPT
                             try:
-                                from agents.engine_benchmark import _display_truthgpt_benchmark, _record_benchmark_run
+                                from optimization_core.agents.framework.engines.engine_benchmark import _display_truthgpt_benchmark, _record_benchmark_run
                                 tokens = len(output_text) // 4
                                 _record_benchmark_run("openclaw", f"OpenClaw ({provider})", elapsed, tokens)
                                 await _display_truthgpt_benchmark(elapsed, model_name=f"OpenClaw ({provider})", tokens=tokens, engine_key="openclaw")

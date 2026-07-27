@@ -9,7 +9,7 @@ import numpy as np
 from typing import Dict, Any, List, Tuple
 from .config import BayesianOptimizationConfig
 from .enums import AcquisitionFunction
-from .models import GaussianProcessModel
+from .core.models import GaussianProcessModel
 
 logger = logging.getLogger(__name__)
 

@@ -34,7 +34,7 @@ import signal
 import sys
 
 # Import TruthGPT modules
-from .models import TruthGPTModel, TruthGPTModelConfig
+from .core.models import TruthGPTModel, TruthGPTModelConfig
 from .distributed_computing import DistributedCoordinator, DistributedWorker
 
 

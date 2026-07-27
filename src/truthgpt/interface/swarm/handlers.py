@@ -100,7 +100,7 @@ async def handle_expert_matrix(agents):
 
 async def handle_mcp_connect():
     import os
-    from truthgpt.agents.mcp_client import MCPClient
+    from truthgpt.agents.framework.interfaces.client.mcp_client import MCPClient
 
     url = get_input(
         "Enter MCP Server URL",
@@ -154,8 +154,8 @@ async def handle_math_verification():
     console.print(cmd_table)
 
     try:
-        from truthgpt.agents.formal_verification.math_agent import MathVerificationAgent
-        from truthgpt.agents.engines import engine_registry
+        from truthgpt.agents.domains.formal_verification.math_agent import MathVerificationAgent
+        from truthgpt.agents.framework.engines import engine_registry
 
         llm = engine_registry.get_engine(USER_PREFS["preferred_engine"])
         agent = MathVerificationAgent(llm_engine=llm)
@@ -188,7 +188,7 @@ async def handle_agent_composer():
     ))
 
     try:
-        from truthgpt.agents.composer.agent_composer import (
+        from truthgpt.agents.orchestration.composer.agent_composer import (
             _build_catalog, save_blueprint, load_blueprints, ComposedAgent,
         )
     except ImportError as e:
@@ -237,7 +237,7 @@ async def handle_agent_composer():
         idx = int(get_input("Select blueprint to deploy", default="1"))
         if 1 <= idx <= len(blueprints):
             bp = blueprints[idx - 1]
-            from truthgpt.agents.engines import engine_registry
+            from truthgpt.agents.framework.engines import engine_registry
             llm = engine_registry.get_engine(USER_PREFS["preferred_engine"])
             agent = ComposedAgent(
                 name=bp["name"],
@@ -282,7 +282,7 @@ async def handle_agent_composer():
         path = save_blueprint(agent_name, selected_caps, {"role": agent_role})
         console.print(f"[dim]Blueprint saved to {path}[/dim]")
 
-    from truthgpt.agents.engines import engine_registry
+    from truthgpt.agents.framework.engines import engine_registry
     llm = engine_registry.get_engine(USER_PREFS["preferred_engine"])
     agent = ComposedAgent(
         name=agent_name,

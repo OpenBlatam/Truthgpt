@@ -28,7 +28,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import multiprocessing as mp
 
 # Import TruthGPT modules
-from .models import TruthGPTModel, TruthGPTModelConfig
+from .core.models import TruthGPTModel, TruthGPTModelConfig
 from .ai_enhancement import TruthGPTAIEnhancementManager, AdaptiveLearningEngine
 from .blockchain import TruthGPTBlockchainManager
 from .quantum import QuantumMachineLearning

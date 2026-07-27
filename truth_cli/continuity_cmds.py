@@ -37,9 +37,9 @@ def list_tasks():
 def resume_task(task_id: str):
     """Manually resume a specific task."""
     async def _resume():
-        from agents.razonamiento_planificacion.orchestrator import MultiUserReActAgent
-        from agents.models import AgentConfig
-        from agents.engines import engine_registry
+        from optimization_core.agents.framework.architectures.react_agent import MultiUserReActAgent
+        from optimization_core.agents.framework.models import AgentConfig
+        from optimization_core.agents.framework.engines.engines import engine_registry
         
         llm = engine_registry.get_engine("deepseek") or engine_registry.get_engine("google")
         agent = MultiUserReActAgent(config=AgentConfig(llm_engine=llm, persistent=True))

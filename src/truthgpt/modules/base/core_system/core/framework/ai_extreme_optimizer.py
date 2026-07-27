@@ -14,7 +14,7 @@ import warnings
 
 from .metrics_calculator import AIOptimizationLevel
 from .state_persistence import StatePersistence
-from .models import AIOptimizationResult
+from .core.models import AIOptimizationResult
 from .statistics_calculator import StatisticsCalculator
 from .component_factory import ComponentFactory
 from .state_manager import StateManager

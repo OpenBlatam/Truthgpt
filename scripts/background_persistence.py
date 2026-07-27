@@ -14,9 +14,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
 from modules.persistence.task_manager import get_persistence_manager
-from agents.razonamiento_planificacion.orchestrator import MultiUserReActAgent
-from agents.models import AgentConfig
-from agents.engines import engine_registry
+from optimization_core.agents.framework.architectures.react_agent import MultiUserReActAgent
+from optimization_core.agents.framework.models import AgentConfig
+from optimization_core.agents.framework.engines.engines import engine_registry
 
 async def resume_all_tasks():
     """Resumes all active tasks in the local database."""

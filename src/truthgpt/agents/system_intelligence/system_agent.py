@@ -4,9 +4,9 @@ import time
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
-from ..arquitecturas_fundamentales.base_agent import BaseAgent
-from ..razonamiento_planificacion.orchestrator import MultiUserReActAgent
-from ..models import AgentResponse, AgentConfig
+from ..core_architectures.base_agent import BaseAgent
+from ..tools.orchestrator import MultiUserReActAgent
+from ..core.models import AgentResponse, AgentConfig
 from .system_tools import (
     ListPapersTool,
     PaperInfoTool,
@@ -15,7 +15,7 @@ from .system_tools import (
     ModelInferenceTool,
     ModelTrainTool
 )
-from ..razonamiento_planificacion.tools import (
+from ..tools.tools import (
     FileReadTool,
     FileWriteTool,
     DirectoryListTool,

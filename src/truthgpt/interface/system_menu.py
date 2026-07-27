@@ -55,7 +55,7 @@ async def opts_menu():
             console.print("[green]Report Generated: All systems optimized for System 5.9 Gold Standard.[/green]")
         elif choice == "6":
             cc_action("Initiating SOTA System Benchmarking", status="RUN")
-            from truthgpt.agents.engines import engine_registry
+            from truthgpt.agents.framework.engines import engine_registry
             llm = engine_registry.get_engine(USER_PREFS.get("preferred_engine", "deepseek"))
             
             with cc_spinner("Benchmarking Inference Latency") as sp:

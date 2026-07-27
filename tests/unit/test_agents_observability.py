@@ -13,7 +13,7 @@ class TestSpan:
     """Test the Span Pydantic model."""
 
     def test_span_default_fields(self):
-        from optimization_core.agents.observability import Span
+        from optimization_core.agents.framework.observability import Span
 
         span = Span(name="test_span", agent_name="TestAgent")
         assert span.name == "test_span"
@@ -25,7 +25,7 @@ class TestSpan:
         assert len(span.span_id) == 8
 
     def test_span_finish(self):
-        from optimization_core.agents.observability import Span
+        from optimization_core.agents.framework.observability import Span
 
         span = Span(name="test")
         time.sleep(0.01)
@@ -38,14 +38,14 @@ class TestSpan:
         assert span.metadata["key"] == "val"
 
     def test_span_finish_error(self):
-        from optimization_core.agents.observability import Span
+        from optimization_core.agents.framework.observability import Span
 
         span = Span(name="test")
         span.finish(output="fail", status="error")
         assert span.status == "error"
 
     def test_span_to_dict(self):
-        from optimization_core.agents.observability import Span
+        from optimization_core.agents.framework.observability import Span
 
         span = Span(name="test", trace_id="abc123", agent_name="Agent")
         d = span.to_dict()
@@ -55,7 +55,7 @@ class TestSpan:
         assert "duration_ms" in d
 
     def test_span_model_dump(self):
-        from optimization_core.agents.observability import Span
+        from optimization_core.agents.framework.observability import Span
 
         span = Span(name="test")
         dumped = span.model_dump()
@@ -63,7 +63,7 @@ class TestSpan:
         assert "span_id" in dumped
 
     def test_span_model_validate_roundtrip(self):
-        from optimization_core.agents.observability import Span
+        from optimization_core.agents.framework.observability import Span
 
         span = Span(name="roundtrip", trace_id="x")
         span.finish(output="done")
@@ -78,7 +78,7 @@ class TestTracer:
     """Test the Tracer class."""
 
     def _make_tracer(self, tmp_path: Path):
-        from optimization_core.agents.observability import Tracer
+        from optimization_core.agents.framework.observability import Tracer
         return Tracer(max_traces=50, persistence_path=str(tmp_path / "test_traces.json"))
 
     def test_start_trace(self, tmp_path):
@@ -131,14 +131,14 @@ class TestTracer:
         assert stats["error_rate"] == 0.5
 
     def test_eviction(self, tmp_path):
-        from optimization_core.agents.observability import Tracer
+        from optimization_core.agents.framework.observability import Tracer
         tracer = Tracer(max_traces=3, persistence_path=str(tmp_path / "evict.json"))
         for i in range(5):
             tracer.start_trace(f"trace_{i}")
         assert tracer.get_stats()["total_traces"] == 3
 
     def test_persistence_roundtrip(self, tmp_path):
-        from optimization_core.agents.observability import Tracer
+        from optimization_core.agents.framework.observability import Tracer
 
         path = str(tmp_path / "persist.json")
 

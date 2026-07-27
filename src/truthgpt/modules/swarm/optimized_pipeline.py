@@ -108,7 +108,7 @@ class OptimizedOrchestrator:
                     if prompt in self.arxiv_cache:
                         return self.arxiv_cache[prompt]
                     
-                    from truthgpt.agents.system_intelligence.research_agent import ResearchAgent
+                    from truthgpt.agents.domains.system_intelligence.research_agent import ResearchAgent
                     agent = ResearchAgent(config=self.config, llm_engine=self.llm)
                     res = await agent.process(prompt, context=context)
                     self.arxiv_cache[prompt] = res

@@ -43,6 +43,8 @@ def __getattr__(name: str) -> Any:
         'BaseTruthGPTOptimizer': ('.core.base_truthgpt_optimizer', 'BaseTruthGPTOptimizer'),
         'UnifiedTruthGPTOptimizer': ('.core.base_truthgpt_optimizer', 'UnifiedTruthGPTOptimizer'),
         'OptimizationLevel': ('.core.base_truthgpt_optimizer', 'OptimizationLevel'),
+        'UnifiedOptimizationCore': ('.unified_core', 'UnifiedOptimizationCore'),
+        'create_optimization_core': ('.unified_core', 'create_optimization_core'),
     }
     
     if name in class_map:
@@ -78,5 +80,6 @@ def create_production_optimizer(config: Dict[str, Any] = None):
 __all__ = list(_LAZY_IMPORTS.keys()) + [
     'ProductionOptimizer', 'UnifiedOptimizer', 'BaseTruthGPTOptimizer',
     'UnifiedTruthGPTOptimizer', 'OptimizationLevel', 'create_truthgpt_optimizer',
-    'create_production_optimizer'
+    'create_production_optimizer', 'UnifiedOptimizationCore', 'create_optimization_core'
 ]
+

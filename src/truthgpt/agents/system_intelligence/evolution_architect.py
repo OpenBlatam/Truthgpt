@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from truthgpt.agents.models import AgentResponse
-from truthgpt.agents.code_interpreter import CodeInterpreterAgent
+from truthgpt.agents.domains.code_interpreter import CodeInterpreterAgent
 
 class EvolutionArchitect(CodeInterpreterAgent):
     """

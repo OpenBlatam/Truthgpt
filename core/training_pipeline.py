@@ -5,8 +5,10 @@ Following deep learning best practices for LLM training
 
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, random_split
-from torch.cuda.amp import autocast, GradScaler
+try:
+    from torch.amp import autocast, GradScaler
+except ImportError:
+    from torch.cuda.amp import autocast, GradScaler
 import logging
 import time
 import json

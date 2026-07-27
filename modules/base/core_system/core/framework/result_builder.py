@@ -6,7 +6,7 @@ Constructs AIOptimizationResult objects
 import torch.nn as nn
 from typing import Dict, Any
 
-from .models import AIOptimizationResult
+from .core.models import AIOptimizationResult
 from .metrics_calculator import AIOptimizationLevel
 
 

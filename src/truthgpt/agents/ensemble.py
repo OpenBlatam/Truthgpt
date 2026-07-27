@@ -11,8 +11,8 @@ import asyncio
 import json
 from typing import Any, Callable, Dict, List, Optional
 
-from .ensemble_strategies import EngineRun, StrategyFactory
-from .ensemble_utils import parse_agent_json  # re-exported for callers/tests
+from .ensemble.ensemble_strategies import EngineRun, StrategyFactory
+from .ensemble.ensemble_utils import parse_agent_json  # re-exported for callers/tests
 
 ALL_ENSEMBLE_MODES = frozenset(
     {"consensus", "parallel", "race", "majority", "debate", "bayesian", "elastic", "mcts"}

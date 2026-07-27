@@ -6,7 +6,7 @@ Advanced Bayesian optimization with Gaussian processes and acquisition functions
 """
 from .enums import AcquisitionFunction, KernelType, OptimizationStrategy
 from .config import BayesianOptimizationConfig
-from .models import GaussianProcessModel
+from .core.models import GaussianProcessModel
 from .acquisition import AcquisitionFunctionOptimizer
 from .optimization import MultiObjectiveOptimizer, ConstrainedOptimizer
 from .system import BayesianOptimizer

@@ -190,11 +190,11 @@ async def _rerun_phase(item, key, p_res, trace, config, llm):
         console.print(f"[bold cyan]Invoking {key} for refinement...[/bold cyan]")
 
         if key == "arxiv_discovery_scout":
-            from agents.system_intelligence.research_agent import ResearchAgent
+            from agents.domains.system_intelligence.research_agent import ResearchAgent
             agent = ResearchAgent(llm_engine=llm)
             res = await agent.process(new_prompt)
         else:
-            from agents.registry import registry
+            from optimization_core.agents.framework.registry import registry
             agents_map = registry.get_all_agents()
             agent_cls = agents_map[key]
             sig = inspect.signature(agent_cls.__init__)

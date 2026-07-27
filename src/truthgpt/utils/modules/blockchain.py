@@ -33,7 +33,7 @@ from solana.publickey import PublicKey
 from solana.keypair import Keypair
 
 # Import TruthGPT modules
-from .models import TruthGPTModel, TruthGPTModelConfig
+from .core.models import TruthGPTModel, TruthGPTModelConfig
 from .ai_enhancement import TruthGPTAIEnhancementManager
 
 

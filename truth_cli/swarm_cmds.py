@@ -7,8 +7,8 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from .core import console
 
 async def async_swarm_ask(prompt: str, user_id: str = "cli_user", stream: bool = False, engine: str = "deepseek"):
-    from optimization_core.agents.client import AgentClient
-    from optimization_core.agents.engines import engine_registry
+    from optimization_core.agents.framework.interfaces.client import AgentClient
+    from optimization_core.agents.framework.engines import engine_registry
     llm = engine_registry.get_engine(engine)
     client = AgentClient(use_swarm=True, llm_engine=llm)
     from .core import get_theme_color, get_theme_panel
@@ -17,7 +17,7 @@ async def async_swarm_ask(prompt: str, user_id: str = "cli_user", stream: bool =
         task = progress.add_task("Routing to experts...", total=None)
         response = await client.run(user_id=user_id, prompt=prompt, return_response=True)
         progress.update(task, description="Response received")
-    from optimization_core.agents.models import AgentResponse
+    from optimization_core.agents.framework.models import AgentResponse
     if not isinstance(response, AgentResponse):
         content, agent_name, action_type = str(response), "Swarm", "final_answer"
     else:
@@ -41,7 +41,7 @@ def register_swarm_commands(app: typer.Typer):
     @app.command(name="agents")
     def swarm_list_agents():
         """List all agents registered in the swarm."""
-        from optimization_core.agents.client import AgentClient
+        from optimization_core.agents.framework.interfaces.client import AgentClient
         client = AgentClient(use_swarm=True)
         table = Table(title="🐝 Active Swarm Agents")
         table.add_column("Name", style="cyan")

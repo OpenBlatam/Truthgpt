@@ -37,7 +37,7 @@ import etcd3
 import os
 
 # Import TruthGPT modules
-from .models import TruthGPTModel, TruthGPTModelConfig
+from .core.models import TruthGPTModel, TruthGPTModelConfig
 from .orchestration import AIOrchestrator, AIAgent, AgentType
 from .federation import DecentralizedAINetwork, FederatedNode
 

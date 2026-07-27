@@ -15,9 +15,10 @@ os.environ["TRUTHGPT_CONFIG"] = "configs/llm_default.yaml"
 os.environ["ENABLE_METRICS"] = "true"
 
 try:
-    from ..api import app
+    from optimization_core.inference.api import app
     APP_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    print(f"ImportError: {e}")
     APP_AVAILABLE = False
 
 pytestmark = pytest.mark.skipif(not APP_AVAILABLE, reason="API module not available")

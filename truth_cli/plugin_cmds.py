@@ -9,7 +9,7 @@ def register_plugin_commands(app: typer.Typer):
     @app.command(name="list")
     def plugins_list():
         """List all dynamically discovered plugins and registered tools."""
-        from optimization_core.agents.registry import registry
+        from optimization_core.agents.framework.registry import registry
         tools = registry.get_all_tools()
         table = Table(title="[Plugin] Registered Tools & Plugins")
         table.add_column("Tool Name", style="cyan")
@@ -26,7 +26,7 @@ def register_plugin_commands(app: typer.Typer):
     @app.command(name="info")
     def plugins_info(name: str = typer.Argument(..., help="Tool name")):
         """Show detailed information for a specific tool or plugin."""
-        from optimization_core.agents.registry import registry
+        from optimization_core.agents.framework.registry import registry
         tool = registry.get_tool(name)
         if not tool:
             console.print(f"[red]✗ Tool not found: {name}[/red]")

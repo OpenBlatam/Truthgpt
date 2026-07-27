@@ -10,7 +10,7 @@ from typing import List, Dict, Any, Optional
 import torch
 import logging
 
-from factories.registry import Registry
+from .registry import Registry
 
 logger = logging.getLogger(__name__)
 

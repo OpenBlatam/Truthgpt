@@ -17,7 +17,7 @@ class ResearchService(BaseService):
 
     async def _on_start(self) -> None:
         try:
-            from modules.base.core_system.core.papers.paper_registry import get_paper_registry
+            from optimization_core.modules.base.core_system.core.papers.paper_registry import get_paper_registry
             loop = asyncio.get_event_loop()
             self._paper_registry = await loop.run_in_executor(
                 None,

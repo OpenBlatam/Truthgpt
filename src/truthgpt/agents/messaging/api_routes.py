@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from ..models import AgentResponse
+from ..core.models import AgentResponse
 
 from .telegram_bot import TelegramAdapter
 from .whatsapp_webhook import WhatsAppAdapter

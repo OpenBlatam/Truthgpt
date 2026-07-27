@@ -41,7 +41,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
 
 # Import TruthGPT modules
-from .models import TruthGPTModel, TruthGPTModelConfig
+from .core.models import TruthGPTModel, TruthGPTModelConfig
 from .quantum_integration import TruthGPTQuantumManager
 from .emotional_intelligence import TruthGPTEmotionalManager
 from .self_evolution import TruthGPTSelfEvolutionManager

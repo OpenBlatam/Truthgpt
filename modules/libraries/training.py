@@ -3,9 +3,14 @@ Training Modules
 """
 
 from .imports import *
-from .core import BaseModule
-from .models import ModelModule
-from .data import DataModule
+try:
+    from .core import BaseModule
+    from .models import ModelModule
+    from .data import DataModule
+except (ImportError, ModuleNotFoundError):
+    from modules.libraries.core import BaseModule
+    from modules.libraries.models import ModelModule
+    from modules.libraries.data import DataModule
 
 class TrainingModule(BaseModule):
     """Base class for training modules"""

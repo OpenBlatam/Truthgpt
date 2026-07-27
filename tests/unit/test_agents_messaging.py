@@ -1,5 +1,5 @@
 """
-Unit tests for the agents.messaging module.
+Unit tests for the agents.domains.messaging module.
 
 Tests that all adapters are importable, instantiate correctly with mock
 clients, and have the correct method signatures.
@@ -15,39 +15,39 @@ class TestMessagingImports:
     """Verify that every adapter can be imported from the unified __init__."""
 
     def test_import_base(self):
-        from optimization_core.agents.messaging import BaseMessagingAdapter
+        from optimization_core.agents.domains.messaging import BaseMessagingAdapter
         assert BaseMessagingAdapter is not None
 
     def test_import_telegram(self):
-        from optimization_core.agents.messaging import TelegramAdapter
+        from optimization_core.agents.domains.messaging import TelegramAdapter
         assert TelegramAdapter is not None
 
     def test_import_whatsapp(self):
-        from optimization_core.agents.messaging import WhatsAppAdapter
+        from optimization_core.agents.domains.messaging import WhatsAppAdapter
         assert WhatsAppAdapter is not None
 
     def test_import_discord(self):
-        from optimization_core.agents.messaging import DiscordAdapter
+        from optimization_core.agents.domains.messaging import DiscordAdapter
         assert DiscordAdapter is not None
 
     def test_import_signal(self):
-        from optimization_core.agents.messaging import SignalAdapter
+        from optimization_core.agents.domains.messaging import SignalAdapter
         assert SignalAdapter is not None
 
     def test_import_slack(self):
-        from optimization_core.agents.messaging import SlackAdapter
+        from optimization_core.agents.domains.messaging import SlackAdapter
         assert SlackAdapter is not None
 
     def test_import_teams(self):
-        from optimization_core.agents.messaging import TeamsAdapter
+        from optimization_core.agents.domains.messaging import TeamsAdapter
         assert TeamsAdapter is not None
 
     def test_import_email(self):
-        from optimization_core.agents.messaging import EmailAdapter
+        from optimization_core.agents.domains.messaging import EmailAdapter
         assert EmailAdapter is not None
 
     def test_import_router_factory(self):
-        from optimization_core.agents.messaging import create_messaging_router
+        from optimization_core.agents.domains.messaging import create_messaging_router
         assert callable(create_messaging_router)
 
 
@@ -65,27 +65,27 @@ class TestAdapterInstantiation:
         return client
 
     def test_telegram_init(self, mock_client):
-        from optimization_core.agents.messaging import TelegramAdapter
+        from optimization_core.agents.domains.messaging import TelegramAdapter
         adapter = TelegramAdapter(mock_client, bot_token="test-token")
         assert adapter.agent_client is mock_client
 
     def test_discord_init(self, mock_client):
-        from optimization_core.agents.messaging import DiscordAdapter
+        from optimization_core.agents.domains.messaging import DiscordAdapter
         adapter = DiscordAdapter(mock_client, bot_token="test-token")
         assert adapter.agent_client is mock_client
 
     def test_signal_init(self, mock_client):
-        from optimization_core.agents.messaging import SignalAdapter
+        from optimization_core.agents.domains.messaging import SignalAdapter
         adapter = SignalAdapter(mock_client)
         assert adapter.agent_client is mock_client
 
     def test_slack_init(self, mock_client):
-        from optimization_core.agents.messaging import SlackAdapter
+        from optimization_core.agents.domains.messaging import SlackAdapter
         adapter = SlackAdapter(mock_client)
         assert adapter.agent_client is mock_client
 
     def test_teams_init(self, mock_client):
-        from optimization_core.agents.messaging import TeamsAdapter
+        from optimization_core.agents.domains.messaging import TeamsAdapter
         adapter = TeamsAdapter(mock_client)
         assert adapter.agent_client is mock_client
         # Verify _token_expires_at is initialised
@@ -93,12 +93,12 @@ class TestAdapterInstantiation:
         assert adapter._token_expires_at == 0.0
 
     def test_email_init(self, mock_client):
-        from optimization_core.agents.messaging import EmailAdapter
+        from optimization_core.agents.domains.messaging import EmailAdapter
         adapter = EmailAdapter(mock_client)
         assert adapter.agent_client is mock_client
 
     def test_whatsapp_init(self, mock_client):
-        from optimization_core.agents.messaging import WhatsAppAdapter
+        from optimization_core.agents.domains.messaging import WhatsAppAdapter
         adapter = WhatsAppAdapter(mock_client)
         assert adapter.agent_client is mock_client
 
@@ -120,19 +120,19 @@ class TestAdapterSignatures:
 
     @pytest.mark.parametrize("cls_name", ADAPTER_CLASSES)
     def test_has_on_message(self, cls_name):
-        import optimization_core.agents.messaging as msg
+        import optimization_core.agents.domains.messaging as msg
         cls = getattr(msg, cls_name)
         assert hasattr(cls, "on_message"), f"{cls_name} missing on_message"
 
     @pytest.mark.parametrize("cls_name", ADAPTER_CLASSES)
     def test_has_send_response(self, cls_name):
-        import optimization_core.agents.messaging as msg
+        import optimization_core.agents.domains.messaging as msg
         cls = getattr(msg, cls_name)
         assert hasattr(cls, "send_response"), f"{cls_name} missing send_response"
 
     @pytest.mark.parametrize("cls_name", ADAPTER_CLASSES)
     def test_has_handle(self, cls_name):
-        import optimization_core.agents.messaging as msg
+        import optimization_core.agents.domains.messaging as msg
         cls = getattr(msg, cls_name)
         assert hasattr(cls, "handle"), f"{cls_name} missing handle"
 
@@ -143,7 +143,7 @@ class TestAgentModels:
     """Verify Pydantic models are importable and valid."""
 
     def test_agent_response_creation(self):
-        from optimization_core.agents.models import AgentResponse
+        from optimization_core.agents.framework.models import AgentResponse
         response = AgentResponse(
             content="Hello",
             action_type="final_answer",
@@ -154,7 +154,7 @@ class TestAgentModels:
         assert response.tool_calls == []
 
     def test_agent_action_creation(self):
-        from optimization_core.agents.models import AgentAction
+        from optimization_core.agents.framework.models import AgentAction
         action = AgentAction(
             thought="thinking...",
             tool="web_search",
@@ -164,13 +164,13 @@ class TestAgentModels:
         assert action.tool == "web_search"
 
     def test_inference_result_creation(self):
-        from optimization_core.agents.models import InferenceResult
+        from optimization_core.agents.framework.models import InferenceResult
         result = InferenceResult(text="generated text")
         assert result.text == "generated text"
         assert result.tokens_generated is None
 
     def test_agent_config_creation(self):
-        from optimization_core.agents.models import AgentConfig
+        from optimization_core.agents.framework.models import AgentConfig
         config = AgentConfig(
             memory_db_path="test.db",
             use_swarm=True,

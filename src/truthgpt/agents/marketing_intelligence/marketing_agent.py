@@ -11,10 +11,10 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-from ..arquitecturas_fundamentales.base_agent import BaseAgent
-from ..razonamiento_planificacion.orchestrator import MultiUserReActAgent
-from ..models import AgentResponse, AgentConfig
-# from ..registry import get_tool (Moved to local import to avoid circularity)
+from ..core_architectures.base_agent import BaseAgent
+from ..tools.orchestrator import MultiUserReActAgent
+from ..core.models import AgentResponse, AgentConfig
+# from ..core.registry import get_tool (Moved to local import to avoid circularity)
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,7 @@ class MarketingAgent(BaseAgent):
 
         self._registered_tools: List[str] = []
         for tool_name in self.marketing_config.tools:
-            from ..registry import get_tool
+            from ..core.registry import get_tool
             tool_cls = get_tool(tool_name)
             if tool_cls:
                 self._react.register_tool(tool_cls())

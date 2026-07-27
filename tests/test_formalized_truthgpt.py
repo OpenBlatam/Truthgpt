@@ -9,12 +9,14 @@ import os
 import asyncio
 from pathlib import Path
 
-# Force UTF-8 for safe execution in Windows consoles
-if sys.platform == "win32":
+# Force UTF-8 for safe execution in Windows consoles (Disabled to prevent pytest I/O errors)
+if sys.platform == "win32" and "pytest" not in sys.modules:
     try:
         import io
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+        if hasattr(sys.stdout, 'buffer'):
+            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+        if hasattr(sys.stderr, 'buffer'):
+            sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
     except Exception:
         pass
 

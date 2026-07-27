@@ -18,7 +18,7 @@ class SwarmAssistant:
     async def _get_llm(self):
         try:
             from interface.core import USER_PREFS
-            from agents.engines import engine_registry
+            from optimization_core.agents.framework.engines.engines import engine_registry
             engine_name = USER_PREFS.get("preferred_engine", "deepseek")
             engine_name = engine_name.split(",")[0].strip()
             return engine_registry.get_engine(engine_name)

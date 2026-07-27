@@ -53,6 +53,8 @@ class BackendTag(str, Enum):
     CPP = "cpp"
     GO = "go"
     JULIA = "julia"
+    ELIXIR = "elixir"
+    SCALA = "scala"
 
     @classmethod
     def from_string(cls, value: str) -> "BackendTag":

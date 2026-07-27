@@ -12,9 +12,9 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type
 
-from ..arquitecturas_fundamentales.base_agent import BaseAgent
-from ..models import AgentResponse, AgentConfig
-from ..razonamiento_planificacion.tools import BaseTool
+from ..core_architectures.base_agent import BaseAgent
+from ..core.models import AgentResponse, AgentConfig
+from ..tools.tools import BaseTool
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ def _build_catalog() -> Dict[str, Dict[str, Any]]:
 
     # Core Tools
     try:
-        from ..razonamiento_planificacion.tools import (
+        from ..tools.tools import (
             WebSearchTool, WebReaderTool, FileReadTool, FileWriteTool,
             PythonExecutionTool, SystemBashTool,
         )

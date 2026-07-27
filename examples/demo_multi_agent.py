@@ -5,8 +5,8 @@ import asyncio
 # Añadir optimization_core al path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from agents.razonamiento_planificacion.orchestrator import MultiUserReActAgent
-from agents.razonamiento_planificacion.tools import WebSearchTool, SystemBashTool
+from optimization_core.agents.framework.architectures.react_agent import MultiUserReActAgent
+from optimization_core.agents.framework.tools.tools import WebSearchTool, SystemBashTool
 
 # ---------------------------------------------------------
 # 1. Mock de Inferencia Asíncrona

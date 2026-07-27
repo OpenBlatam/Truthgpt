@@ -3,7 +3,7 @@ from typing import Any, Dict, Tuple
 from datasets import load_dataset
 from transformers import AutoTokenizer
 
-from .registry import register_dataset
+from .core.registry import register_dataset
 
 
 def _get_tokenizer(model_name: str):

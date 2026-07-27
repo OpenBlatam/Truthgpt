@@ -1,47 +1,54 @@
 """
 EMA Manager - Handles Exponential Moving Average weights.
 
-Separated from trainer for better modularity.
+Provides precision-aware tracking and weight swapping for model evaluation and inference.
 """
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, Iterator
+from contextlib import contextmanager
 import torch
 import torch.nn as nn
 
-from trainers.config import EMAConfig
+from .config import EMAConfig
+from .interfaces import BaseEMAManager
+from .exceptions import EMAError
 
 logger = logging.getLogger(__name__)
 
 
-class EMAManager:
+class EMAManager(BaseEMAManager):
     """
     Manages Exponential Moving Average (EMA) of model weights.
     
     Responsibilities:
-    - Initialize EMA shadow parameters
-    - Update EMA on each optimizer step
-    - Apply/restore EMA weights for evaluation
+    - Maintain shadow parameters matching model device and precision (or CPU offload)
+    - Update EMA parameters on each optimizer step
+    - Swap/restore model weights for evaluation and inference
+    - Provide context manager for safe temporary weight swapping
     """
     
-    def __init__(self, ema_config: EMAConfig, model: nn.Module):
+    def __init__(self, ema_config: EMAConfig, model: nn.Module) -> None:
         """
         Initialize EMAManager.
         
         Args:
             ema_config: EMA configuration
-            model: Model to track
+            model: PyTorch model instance
         """
+        if model is None:
+            raise EMAError("Model cannot be None for EMAManager.")
         self.ema_config = ema_config
         self.model = model
         self._ema_shadow: Optional[Dict[str, torch.Tensor]] = None
         self._ema_backup: Optional[Dict[str, torch.Tensor]] = None
+        self._update_count: int = 0
         
-        if ema_config.enabled:
+        if getattr(ema_config, "enabled", True):
             self._init_ema()
-            logger.info(f"EMA initialized with decay={ema_config.decay}")
+            logger.info(f"EMA initialized with decay={getattr(ema_config, 'decay', 0.999)}")
     
     def _get_base_model(self) -> nn.Module:
-        """Get base model (handles parallel wrappers)."""
+        """Get base model unwrap parallel containers."""
         model = self.model
         if isinstance(model, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
             model = model.module
@@ -50,31 +57,40 @@ class EMAManager:
         return model
     
     def _init_ema(self) -> None:
-        """Initialize EMA shadow parameters."""
-        self._ema_shadow = {}
-        model = self._get_base_model()
-        for name, param in model.named_parameters():
-            if param.requires_grad:
-                self._ema_shadow[name] = param.detach().clone().to(device=param.device)
+        """Initialize shadow parameter dictionary matching precision and device."""
+        try:
+            self._ema_shadow = {}
+            model = self._get_base_model()
+            offload_cpu = getattr(self.ema_config, "offload_to_cpu", False)
+            for name, param in model.named_parameters():
+                if param.requires_grad:
+                    target_device = torch.device("cpu") if offload_cpu else param.device
+                    self._ema_shadow[name] = param.detach().clone().to(device=target_device, dtype=param.dtype)
+        except Exception as e:
+            raise EMAError(f"Failed to initialize EMA shadow parameters: {e}") from e
     
     @torch.no_grad()
     def update(self) -> None:
-        """Update EMA shadow parameters."""
-        if not self.ema_config.enabled or self._ema_shadow is None:
+        """Update EMA shadow weights using exponential decay."""
+        if not getattr(self.ema_config, "enabled", True) or self._ema_shadow is None:
             return
         
-        decay = self.ema_config.decay
+        decay = getattr(self.ema_config, "decay", 0.999)
         model = self._get_base_model()
         
         for name, param in model.named_parameters():
-            if not param.requires_grad:
+            if not param.requires_grad or name not in self._ema_shadow:
                 continue
-            if name in self._ema_shadow:
-                self._ema_shadow[name].mul_(decay).add_(param.detach(), alpha=1.0 - decay)
+            shadow_tensor = self._ema_shadow[name]
+            param_detached = param.detach().to(device=shadow_tensor.device)
+            shadow_tensor.mul_(decay).add_(param_detached, alpha=1.0 - decay)
+        
+        self._update_count += 1
     
+    @torch.no_grad()
     def apply_ema(self) -> None:
-        """Apply EMA weights to model."""
-        if not self.ema_config.enabled or self._ema_shadow is None:
+        """Swap model weights with EMA shadow parameters."""
+        if not getattr(self.ema_config, "enabled", True) or self._ema_shadow is None:
             return
         
         self._ema_backup = {}
@@ -82,14 +98,14 @@ class EMAManager:
         
         for name, param in model.named_parameters():
             if name in self._ema_shadow and param.requires_grad:
-                # Backup current weights
                 self._ema_backup[name] = param.detach().clone()
-                # Apply EMA weights
-                param.data.copy_(self._ema_shadow[name].data)
+                shadow_data = self._ema_shadow[name].data.to(device=param.device)
+                param.data.copy_(shadow_data)
     
+    @torch.no_grad()
     def restore_from_ema(self) -> None:
-        """Restore model weights from EMA backup."""
-        if not self.ema_config.enabled or self._ema_backup is None:
+        """Restore original model weights from backup after evaluation."""
+        if not getattr(self.ema_config, "enabled", True) or self._ema_backup is None:
             return
         
         model = self._get_base_model()
@@ -98,13 +114,24 @@ class EMAManager:
             if name in self._ema_backup and param.requires_grad:
                 param.data.copy_(self._ema_backup[name].data)
         
-        self._ema_backup = {}
+        self._ema_backup = None
+
+    @contextmanager
+    def ema_scope(self) -> Iterator[None]:
+        """Context manager to apply EMA weights and restore original weights on exit."""
+        self.apply_ema()
+        try:
+            yield
+        finally:
+            self.restore_from_ema()
     
-    def get_ema_state_dict(self) -> Dict[str, torch.Tensor]:
-        """Get EMA state dict."""
+    def get_ema_state_dict(self, to_cpu: bool = False) -> Dict[str, torch.Tensor]:
+        """Get EMA shadow state dictionary."""
         if self._ema_shadow is None:
             return {}
-        return {k: v.clone() for k, v in self._ema_shadow.items()}
+        if to_cpu:
+            return {k: v.detach().cpu().clone() for k, v in self._ema_shadow.items()}
+        return {k: v.detach().clone() for k, v in self._ema_shadow.items()}
 
 
-
+__all__ = ["EMAManager"]

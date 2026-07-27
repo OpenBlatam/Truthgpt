@@ -10,7 +10,7 @@ from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from .models import AgentResponse as InternalAgentResponse
+from .core.models import AgentResponse as InternalAgentResponse
 import time
 import logging
 
@@ -93,7 +93,7 @@ def create_agent_router(agent_client: "AgentClient") -> APIRouter:  # noqa: F821
                 if req.enable_swarm and not getattr(agent_client, "swarm", None):
                     # Lazy import: decouple from specific orchestrator module
                     try:
-                        from .multi_agentes.swarm_orchestrator import SwarmOrchestrator
+                        from .multi_agent.swarm_orchestrator import SwarmOrchestrator
                         agent_client.swarm = SwarmOrchestrator(
                             llm_engine=agent_client.llm_engine,
                         )

@@ -7,8 +7,10 @@ from dataclasses import dataclass, field
 from typing import Dict, Any, Optional
 from pathlib import Path
 import logging
+from .exceptions import ConfigValidationError
 
 logger = logging.getLogger(__name__)
+
 
 
 @dataclass
@@ -25,6 +27,16 @@ class ModelConfig:
     kv_cache_block_size: int = 128
     memory_policy: str = "adaptive"
 
+
+@dataclass
+class OptimizerConfig:
+    """Optimizer configuration alias."""
+    optimizer_type: str = "adamw"
+    learning_rate: float = 5e-5
+    weight_decay: float = 0.01
+    warmup_ratio: float = 0.06
+    scheduler: str = "cosine"
+    fused_adamw: bool = True
 
 @dataclass
 class TrainingConfig:
@@ -312,96 +324,81 @@ class ConfigManager:
     """
     Configuration manager for loading and validating YAML configs.
     """
-    
+
     @staticmethod
     def load_yaml(path: str) -> Dict[str, Any]:
-        """
-        Load YAML configuration file with validation.
-        
-        Args:
-            path: Path to YAML file
-        
-        Returns:
-            Configuration dictionary
-        
-        Raises:
-            FileNotFoundError: If file doesn't exist
-            ValueError: If file is invalid or empty
-            yaml.YAMLError: If YAML parsing fails
-        """
+        """Load YAML configuration file with validation."""
         if not os.path.exists(path):
-            raise FileNotFoundError(f"Config file not found: {path}")
-        
+            raise ConfigValidationError(f"Config file not found: {path}", config_key="path")
+
         try:
             with open(path, "r", encoding="utf-8") as f:
-                config = yaml.safe_load(f)
-            
+                content = f.read()
+
+            import re
+            def env_replacer(match):
+                var_name = match.group(1)
+                default_val = match.group(3) if match.group(3) is not None else ""
+                return os.environ.get(var_name, default_val)
+
+            content = re.sub(r"\$\{([A-Za-z0-9_]+)(:([^}]+))?\}", env_replacer, content)
+            config = yaml.safe_load(content)
+
             if config is None:
-                raise ValueError(f"Empty or invalid YAML file: {path}")
-            
+                raise ConfigValidationError(f"Empty or invalid YAML file: {path}", config_key="file")
+
             logger.info(f"Successfully loaded config from {path}")
             return config
-            
+
         except yaml.YAMLError as e:
             logger.error(f"YAML parsing error in {path}: {e}", exc_info=True)
-            raise
+            raise ConfigValidationError(f"YAML syntax error: {e}") from e
         except Exception as e:
+            if isinstance(e, ConfigValidationError):
+                raise
             logger.error(f"Error reading config file {path}: {e}", exc_info=True)
-            raise
-    
+            raise ConfigValidationError(f"Error reading config file {path}: {e}") from e
+
     @staticmethod
     def validate_config(config_dict: Dict[str, Any]) -> bool:
-        """
-        Validate configuration dictionary.
-        
-        Args:
-            config_dict: Configuration dictionary
-        
-        Returns:
-            True if valid
-        
-        Raises:
-            ValueError: If configuration is invalid
-        """
+        """Validate configuration dictionary."""
         required_keys = ["model", "training", "data"]
-        
+
         for key in required_keys:
             if key not in config_dict:
-                raise ValueError(f"Missing required configuration section: {key}")
-        
-        # Validate model config
+                raise ConfigValidationError(f"Missing required configuration section: {key}", config_key=key)
+
         model = config_dict.get("model", {})
         if "name_or_path" not in model:
-            raise ValueError("model.name_or_path is required")
-        
-        # Validate training config
+            raise ConfigValidationError("model.name_or_path is required", config_key="model.name_or_path")
+
         training = config_dict.get("training", {})
         if "epochs" in training and training["epochs"] < 1:
-            raise ValueError("training.epochs must be >= 1")
+            raise ConfigValidationError("training.epochs must be >= 1", config_key="training.epochs")
         if "learning_rate" in training and training["learning_rate"] <= 0:
-            raise ValueError("training.learning_rate must be > 0")
-        
-        # Validate data config
+            raise ConfigValidationError("training.learning_rate must be > 0", config_key="training.learning_rate")
+
         data = config_dict.get("data", {})
         if "dataset" not in data:
-            raise ValueError("data.dataset is required")
-        
+            raise ConfigValidationError("data.dataset is required", config_key="data.dataset")
+
         logger.debug("Configuration validation passed")
         return True
-    
+
     @classmethod
     def load_config(cls, path: str) -> TrainerConfig:
-        """
-        Load and validate configuration from YAML file.
-        
-        Args:
-            path: Path to YAML configuration file
-        
-        Returns:
-            TrainerConfig instance
-        """
+        """Load and validate configuration from YAML file."""
         config_dict = cls.load_yaml(path)
         cls.validate_config(config_dict)
         return TrainerConfig.from_dict(config_dict)
+
+
+# Backward compatibility aliases
+OptimizerConfig = TrainingConfig
+OptimizationConfig = TrainingConfig
+TruthGPTConfigManager = ConfigManager
+
+
+
 
 

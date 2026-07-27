@@ -3,9 +3,9 @@ Agent Tools for Core Memory Manipulation.
 """
 
 try:
-    from truthgpt.agents.razonamiento_planificacion.tools import BaseTool, ToolResult
+    from truthgpt.agents.framework.tools.tools import BaseTool, ToolResult
 except ImportError:
-    from ..razonamiento_planificacion.tools import BaseTool, ToolResult
+    from ..tools.tools import BaseTool, ToolResult
 
 class CoreMemoryAppendTool(BaseTool):
     """Tool to append new information to the agent's core memory."""

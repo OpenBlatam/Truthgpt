@@ -13,10 +13,10 @@ from typing import Any, Dict, List, Optional, Type
 
 from pydantic import BaseModel, Field
 
-from .razonamiento_planificacion.tools import (
+from .tools.tools import (
     BaseTool,
 )
-from .arquitecturas_fundamentales.base_agent import BaseAgent
+from .core_architectures.base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ class ComponentRegistry:
     def _init_builtins(self) -> None:
         """Populate lazy-loading maps for core components."""
         # Core reasoning tools
-        core_tools_mod = "agents.razonamiento_planificacion.tools"
+        core_tools_mod = "agents.framework.tools.tools"
         self._tool_map.update({
             "system_bash": (core_tools_mod, "SystemBashTool"),
             "web_search": (core_tools_mod, "WebSearchTool"),
@@ -82,7 +82,7 @@ class ComponentRegistry:
         })
 
         # System intelligence tools
-        sys_tools_mod = "agents.system_intelligence.system_tools"
+        sys_tools_mod = "agents.domains.system_intelligence.system_tools"
         self._tool_map.update({
             "system_papers_list": (sys_tools_mod, "ListPapersTool"),
             "system_papers_info": (sys_tools_mod, "PaperInfoTool"),
@@ -100,26 +100,26 @@ class ComponentRegistry:
 
         # Agent Blueprints
         self._agent_map.update({
-            "research_agent": ("agents.system_intelligence.research_agent", "ResearchAgent"),
-            "marketing_agent": ("agents.marketing_intelligence.marketing_agent", "MarketingAgent"),
-            "rl_agent": ("agents.embodied_rl.rl_agent", "RLAgent"),
-            "system_agent": ("agents.system_intelligence.system_agent", "SystemAgent"),
-            "blockchain_agent": ("agents.blockchain.blockchain_agent", "BlockchainAgent"),
-            "code_architect": ("agents.code_interpreter", "CodeInterpreterAgent"),
-            "planning_agent": ("agents.multi_agentes.planning_agent", "PlanningAgent"),
-            "forensic_agent": ("agents.system_intelligence.system_agent", "SystemAgent"),
-            "data_analysis": ("agents.data_analysis", "DataAnalysisAgent"),
-            "arxiv_discovery_scout": ("agents.system_intelligence.research_agent", "ResearchAgent"),
-            "sota_integrator": ("agents.system_intelligence.research_agent", "ResearchAgent"),
-            "security_analyst": ("agents.system_intelligence.system_agent", "SystemAgent"),
-            "defi_expert": ("agents.blockchain.blockchain_agent", "BlockchainAgent"),
-            "evolution_architect": ("agents.system_intelligence.evolution_architect", "EvolutionArchitect"),
+            "research_agent": ("agents.domains.system_intelligence.research_agent", "ResearchAgent"),
+            "marketing_agent": ("agents.domains.marketing_intelligence.marketing_agent", "MarketingAgent"),
+            "rl_agent": ("agents.domains.embodied_rl.rl_agent", "RLAgent"),
+            "system_agent": ("agents.domains.system_intelligence.system_agent", "SystemAgent"),
+            "blockchain_agent": ("agents.domains.blockchain.blockchain_agent", "BlockchainAgent"),
+            "code_architect": ("agents.domains.code_interpreter", "CodeInterpreterAgent"),
+            "planning_agent": ("agents.multi_agent.planning_agent", "PlanningAgent"),
+            "forensic_agent": ("agents.domains.system_intelligence.system_agent", "SystemAgent"),
+            "data_analysis": ("agents.domains.data_analysis", "DataAnalysisAgent"),
+            "arxiv_discovery_scout": ("agents.domains.system_intelligence.research_agent", "ResearchAgent"),
+            "sota_integrator": ("agents.domains.system_intelligence.research_agent", "ResearchAgent"),
+            "security_analyst": ("agents.domains.system_intelligence.system_agent", "SystemAgent"),
+            "defi_expert": ("agents.domains.blockchain.blockchain_agent", "BlockchainAgent"),
+            "evolution_architect": ("agents.domains.system_intelligence.evolution_architect", "EvolutionArchitect"),
         })
         
         # Math tools are special as they might fail to import
         try:
             # We still keep this part a bit dynamic but we could also lazy-load it
-            self._agent_map["math_verifier"] = ("agents.formal_verification.math_agent", "MathVerificationAgent")
+            self._agent_map["math_verifier"] = ("agents.domains.formal_verification.math_agent", "MathVerificationAgent")
         except: pass
 
     # --- Tool Management ---
@@ -157,7 +157,7 @@ class ComponentRegistry:
         # Check math tools lazily too
         if name.startswith("math_") or name in ["solve", "prove", "simplify"]:
              try:
-                 from truthgpt.agents.formal_verification.math_agent import MATH_TOOLS
+                 from truthgpt.agents.domains.formal_verification.math_agent import MATH_TOOLS
                  if name in MATH_TOOLS:
                      self._tools[name] = MATH_TOOLS[name]
                      return MATH_TOOLS[name]

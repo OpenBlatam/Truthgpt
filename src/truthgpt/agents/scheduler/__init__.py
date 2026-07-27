@@ -73,8 +73,8 @@ class AgentScheduler:
 
     Usage::
 
-        from truthgpt.agents.client import AgentClient
-        from truthgpt.agents.scheduler import AgentScheduler
+        from truthgpt.agents.framework.interfaces.client.client import AgentClient
+        from truthgpt.agents.orchestration.scheduler import AgentScheduler
 
         client = AgentClient()
         scheduler = AgentScheduler(client)

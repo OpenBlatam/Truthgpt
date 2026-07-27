@@ -1,12 +1,14 @@
 """
 Event system for decoupled communication between modules.
-Implements Observer pattern for maximum modularity.
+Implements Observer pattern for maximum modularity with async & sync handler support.
 """
 import logging
-from typing import Dict, List, Callable, Any, Optional
+import asyncio
+import inspect
+from typing import Dict, List, Callable, Any, Optional, Union
 from enum import Enum
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 import threading
 
 logger = logging.getLogger(__name__)
@@ -31,139 +33,131 @@ class EventType(Enum):
 @dataclass
 class Event:
     """Event data structure."""
-    event_type: EventType
-    data: Dict[str, Any]
-    timestamp: datetime = None
+    event_type: Union[EventType, str]
+    data: Dict[str, Any] = field(default_factory=dict)
+    timestamp: Optional[datetime] = None
     source: Optional[str] = None
     
     def __post_init__(self):
         if self.timestamp is None:
-            self.timestamp = datetime.now()
+            self.timestamp = datetime.now(timezone.utc)
+    
+    @property
+    def key(self) -> str:
+        return self.event_type.value if isinstance(self.event_type, EventType) else str(self.event_type)
 
 
 class EventEmitter:
     """
     Event emitter for publishing events.
-    Implements Observer pattern.
+    Supports synchronous and asynchronous handlers, thread-safety, and wildcards.
     """
     
     def __init__(self):
-        self._listeners: Dict[EventType, List[Callable]] = {}
+        self._listeners: Dict[str, List[Callable]] = {}
         self._global_listeners: List[Callable] = []
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
+    
+    def _to_key(self, event_type: Union[EventType, str]) -> str:
+        return event_type.value if isinstance(event_type, EventType) else str(event_type)
     
     def on(
         self,
-        event_type: EventType,
-        handler: Callable[[Event], None]
+        event_type: Union[EventType, str],
+        handler: Callable[[Event], Any]
     ) -> None:
-        """
-        Register an event handler.
-        
-        Args:
-            event_type: Type of event to listen to
-            handler: Handler function
-        """
+        """Register an event handler."""
+        key = self._to_key(event_type)
         with self._lock:
-            if event_type not in self._listeners:
-                self._listeners[event_type] = []
-            self._listeners[event_type].append(handler)
-            logger.debug(f"Handler registered for {event_type.value}")
+            if key not in self._listeners:
+                self._listeners[key] = []
+            if handler not in self._listeners[key]:
+                self._listeners[key].append(handler)
+            logger.debug(f"Handler registered for {key}")
     
     def once(
         self,
-        event_type: EventType,
-        handler: Callable[[Event], None]
+        event_type: Union[EventType, str],
+        handler: Callable[[Event], Any]
     ) -> None:
-        """
-        Register a one-time event handler.
+        """Register a one-time event handler."""
+        key = self._to_key(event_type)
         
-        Args:
-            event_type: Type of event
-            handler: Handler function
-        """
         def wrapper(event: Event):
-            handler(event)
-            self.off(event_type, wrapper)
+            try:
+                if inspect.iscoroutinefunction(handler):
+                    try:
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(handler(event))
+                    except RuntimeError:
+                        asyncio.run(handler(event))
+                else:
+                    handler(event)
+            finally:
+                self.off(key, wrapper)
         
-        self.on(event_type, wrapper)
+        self.on(key, wrapper)
     
     def off(
         self,
-        event_type: EventType,
+        event_type: Union[EventType, str],
         handler: Optional[Callable] = None
     ) -> None:
-        """
-        Unregister an event handler.
-        
-        Args:
-            event_type: Type of event
-            handler: Specific handler to remove (all if None)
-        """
+        """Unregister an event handler."""
+        key = self._to_key(event_type)
         with self._lock:
-            if event_type in self._listeners:
+            if key in self._listeners:
                 if handler:
-                    self._listeners[event_type].remove(handler)
+                    self._listeners[key] = [h for h in self._listeners[key] if h != handler]
                 else:
-                    self._listeners[event_type].clear()
-                logger.debug(f"Handler unregistered for {event_type.value}")
+                    self._listeners[key].clear()
+                logger.debug(f"Handler unregistered for {key}")
     
     def emit(
         self,
-        event_type: EventType,
+        event_type: Union[EventType, str],
         data: Optional[Dict[str, Any]] = None,
         source: Optional[str] = None
     ) -> None:
-        """
-        Emit an event.
-        
-        Args:
-            event_type: Type of event
-            data: Event data
-            source: Event source identifier
-        """
+        """Emit an event to all registered listeners."""
+        key = self._to_key(event_type)
         event = Event(
             event_type=event_type,
             data=data or {},
             source=source
         )
         
-        # Call specific handlers
         with self._lock:
-            handlers = self._listeners.get(event_type, [])
-            all_handlers = handlers + self._global_listeners
+            handlers = list(self._listeners.get(key, []))
+            all_handlers = handlers + list(self._global_listeners)
         
         for handler in all_handlers:
             try:
-                handler(event)
+                if inspect.iscoroutinefunction(handler):
+                    try:
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(handler(event))
+                    except RuntimeError:
+                        asyncio.run(handler(event))
+                else:
+                    handler(event)
             except Exception as e:
-                logger.error(
-                    f"Error in event handler for {event_type.value}: {e}",
-                    exc_info=True
-                )
+                logger.error(f"Error in event handler for {key}: {e}", exc_info=True)
         
-        logger.debug(f"Event emitted: {event_type.value} from {source}")
+        logger.debug(f"Event emitted: {key} from {source}")
     
-    def on_any(self, handler: Callable[[Event], None]) -> None:
-        """
-        Register a handler for all events.
-        
-        Args:
-            handler: Handler function
-        """
+    def on_any(self, handler: Callable[[Event], Any]) -> None:
+        """Register a handler for all events."""
         with self._lock:
-            self._global_listeners.append(handler)
+            if handler not in self._global_listeners:
+                self._global_listeners.append(handler)
     
-    def remove_all_listeners(self, event_type: Optional[EventType] = None) -> None:
-        """
-        Remove all listeners for an event type or all events.
-        
-        Args:
-            event_type: Event type (None for all)
-        """
+    def remove_all_listeners(self, event_type: Optional[Union[EventType, str]] = None) -> None:
+        """Remove all listeners for an event type or all events."""
         with self._lock:
             if event_type:
-                self._listeners.pop(event_type, None)
+                key = self._to_key(event_type)
+                self._listeners.pop(key, None)
             else:
                 self._listeners.clear()
                 self._global_listeners.clear()
@@ -179,7 +173,7 @@ def get_event_emitter() -> EventEmitter:
 
 
 def emit_event(
-    event_type: EventType,
+    event_type: Union[EventType, str],
     data: Optional[Dict[str, Any]] = None,
     source: Optional[str] = None
 ) -> None:
@@ -188,10 +182,11 @@ def emit_event(
 
 
 def on_event(
-    event_type: EventType,
-    handler: Callable[[Event], None]
+    event_type: Union[EventType, str],
+    handler: Callable[[Event], Any]
 ) -> None:
     """Register an event handler."""
     _event_emitter.on(event_type, handler)
+
 
 

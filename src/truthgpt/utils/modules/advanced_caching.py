@@ -40,7 +40,7 @@ import tempfile
 import shutil
 
 # Import TruthGPT modules
-from .models import TruthGPTModel, TruthGPTModelConfig
+from .core.models import TruthGPTModel, TruthGPTModelConfig
 from .advanced_security import TruthGPTSecurityManager, SecurityConfig
 from .distributed_computing import DistributedCoordinator, DistributedWorker
 from .real_time_computing import RealTimeManager, StreamProcessor

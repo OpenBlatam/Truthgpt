@@ -267,7 +267,7 @@ async def _dispatch_mcp(content: str):
         selected_url = mcp_urls[0]
 
     try:
-        from agents.mcp_client import MCPClient
+        from agents.framework.interfaces.client.mcp_client import MCPClient
         client = MCPClient(selected_url)
         tools = await client.list_tools()
         if tools:
@@ -371,9 +371,9 @@ async def handle_swarm_fusion(initial_prompt: Optional[str] = None):
         if mode == "0":
             return
 
-    from agents.registry import registry
-    from agents.models import AgentConfig
-    from agents.engines import engine_registry
+    from optimization_core.agents.framework.registry import registry
+    from optimization_core.agents.framework.models import AgentConfig
+    from optimization_core.agents.framework.engines.engines import engine_registry
 
     agents_map = registry.get_all_agents()
     config = AgentConfig()
@@ -652,7 +652,7 @@ async def _execute_fusion(
         try:
             if key == "arxiv_discovery_scout":
                 cc_tool_call("Querying SOTA academic data sources...")
-                from agents.system_intelligence.research_agent import ResearchAgent
+                from agents.domains.system_intelligence.research_agent import ResearchAgent
                 agent = ResearchAgent(llm_engine=llm)
                 res = await agent.process(f"descubrir e integrar papers de {phase_prompt}")
                 p_content = res.content
@@ -779,7 +779,7 @@ async def _post_mission_actions(content, initial_prompt, config, llm):
         return
     elif post_choice == "3":
         console.print("[bold blue]🛡️ Code Architect is refining the mission output...[/bold blue]")
-        from agents.code_interpreter import CodeInterpreterAgent
+        from agents.domains.code_interpreter import CodeInterpreterAgent
         architect = CodeInterpreterAgent(config=config, llm_engine=llm)
         refinement = await architect.process(f"Refine and industrialize this code for System 5.9: {content}")
         console.print(Panel(refinement.content, title="🛡️ Architectural Refinement", border_style="blue"))

@@ -44,7 +44,7 @@ class OptimizedOrchestrator:
     """Industrial Orchestrator with Parallel Execution, Multi-Layer Caching, and Forensic Loop Protection."""
     
     def __init__(self, llm, agents_map, memory_config, config=None):
-        from agents.models import AgentConfig
+        from optimization_core.agents.framework.models import AgentConfig
         self.llm = llm
         self.agents_map = agents_map
         self.memory_config = memory_config
@@ -108,7 +108,7 @@ class OptimizedOrchestrator:
                     if prompt in self.arxiv_cache:
                         return self.arxiv_cache[prompt]
                     
-                    from agents.system_intelligence.research_agent import ResearchAgent
+                    from agents.domains.system_intelligence.research_agent import ResearchAgent
                     agent = ResearchAgent(config=self.config, llm_engine=self.llm)
                     res = await agent.process(prompt, context=context)
                     self.arxiv_cache[prompt] = res
@@ -116,7 +116,7 @@ class OptimizedOrchestrator:
                 else:
                     agent_cls = self.agents_map.get(key)
                     if not agent_cls:
-                        from agents.registry import registry
+                        from optimization_core.agents.framework.registry import registry
                         agent_cls = registry.get_agent(key) or registry.get_agent("system_agent")
                     
                     # Dynamically handle __init__ arguments

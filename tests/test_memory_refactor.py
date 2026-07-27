@@ -5,7 +5,7 @@ import sys
 # Añadir el path base al sistema para los imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from agents.memoria_aprendizaje.sqlite_memory import SQLiteMemory
+from agents.framework.memory.sqlite_memory import SQLiteMemory
 
 async def test_memory():
     db_path = "test_agent_memory.db"

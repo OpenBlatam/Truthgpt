@@ -63,11 +63,16 @@ def __getattr__(name: str):
     
     module_path = _LAZY_IMPORTS[name]
     try:
-        module = __import__(module_path, fromlist=[name], level=2)
-        obj = getattr(module, name)
-        _import_cache[name] = obj
-        return obj
+        import importlib
+        module = importlib.import_module(module_path, __package__)
+        if hasattr(module, name):
+            obj = getattr(module, name)
+            _import_cache[name] = obj
+            return obj
+        _import_cache[name] = module
+        return module
     except (ImportError, AttributeError) as e:
+
         raise AttributeError(
             f"module '{__name__}' has no attribute '{name}'. "
             f"Failed to import: {e}"

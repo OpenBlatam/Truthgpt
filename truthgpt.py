@@ -248,11 +248,11 @@ class TruthGPT_API:
         if self._orchestrator is None:
             try:
                 try:
-                    from agents.client import AgentClient
-                    from agents.engines import engine_registry
+                    from agents.framework.interfaces.client.client import AgentClient
+                    from optimization_core.agents.framework.engines.engines import engine_registry
                 except ImportError:
-                    from optimization_core.agents.client import AgentClient
-                    from optimization_core.agents.engines import engine_registry
+                    from optimization_core.agents.framework.interfaces.client import AgentClient
+                    from optimization_core.agents.framework.engines import engine_registry
                 llm = engine_registry.get_engine("deepseek")
                 self._orchestrator = AgentClient(use_swarm=True, llm_engine=llm)
             except ImportError:

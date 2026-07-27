@@ -16,7 +16,7 @@ from optimization_core.core.helpers import (
     batch_items,
 )
 
-from ..exceptions import (
+from ..core.exceptions import (
     InferenceEngineError,
     EngineNotInitializedError,
     GenerationError

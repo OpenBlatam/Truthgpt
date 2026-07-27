@@ -4,10 +4,9 @@ Testing utilities for optimization_core.
 Provides shared testing utilities, fixtures, and helpers for all test modules.
 """
 from .test_helpers import (
-    create_mock_engine,
-    create_mock_processor,
-    create_test_config,
-    assert_metrics_valid,
+    create_test_data_file,
+    load_test_data,
+    assert_dict_contains,
     assert_performance_improvement,
 )
 from .test_fixtures import (
@@ -25,10 +24,9 @@ from .test_assertions import (
 
 __all__ = [
     # Helpers
-    "create_mock_engine",
-    "create_mock_processor",
-    "create_test_config",
-    "assert_metrics_valid",
+    "create_test_data_file",
+    "load_test_data",
+    "assert_dict_contains",
     "assert_performance_improvement",
     # Fixtures
     "MockInferenceEngine",
@@ -41,16 +39,3 @@ __all__ = [
     "assert_config_valid",
     "assert_error_handled",
 ]
-
-
-
-
-
-
-
-
-
-
-
-
-
