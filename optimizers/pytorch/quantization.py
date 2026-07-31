@@ -2,35 +2,37 @@ import torch
 import torch.nn as nn
 import torch.quantization
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from .interfaces import PyTorchSubOptimizer
 
 class QuantizationOptimizer(PyTorchSubOptimizer):
-    """Advanced quantization system inspired by PyTorch's quantization."""
+    """Advanced quantization system supporting PyTorch dynamic, static, QAT, and half-precision quantization passes."""
     
-    def __init__(self, config: Dict[str, Any] = None):
-        super().__init__(config)
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        super().__init__(config or {})
         self.quantization_schemes = {
-            'int8': torch.quint8,
-            'int4': torch.quint4x2,
+            'int8': getattr(torch, 'quint8', torch.int8),
+            'int4': getattr(torch, 'quint4x2', torch.int8),
             'float16': torch.float16,
             'bfloat16': torch.bfloat16
         }
         self.logger = logging.getLogger(__name__)
         
     def optimize(self, model: nn.Module, quantization_type: str = 'int8') -> nn.Module:
-        """Apply quantization optimizations."""
-        self.logger.info(f"🎯 Applying {quantization_type} quantization")
+        """Apply quantization optimizations on model instance."""
+        self.logger.info(f"Applying '{quantization_type}' quantization pass")
         
-        if quantization_type == 'dynamic':
+        mode = quantization_type.lower()
+        if mode in ('dynamic', 'int8'):
             return self._apply_dynamic_quantization(model)
-        elif quantization_type == 'static':
+        elif mode == 'static':
             return self._apply_static_quantization(model)
-        elif quantization_type == 'qat':
+        elif mode == 'qat':
             return self._apply_qat_quantization(model)
         else:
             return self._apply_custom_quantization(model, quantization_type)
+
     
     def _apply_dynamic_quantization(self, model: nn.Module) -> nn.Module:
         """Apply dynamic quantization."""

@@ -181,6 +181,8 @@ class GPUAcceleratorConfig:
             self.enable_multi_gpu = False
             logger.warning("Multi-GPU disabled: insufficient GPUs")
 
+GPUConfig = GPUAcceleratorConfig
+
 class GPUDeviceManager:
     """Advanced GPU device management with automatic configuration."""
     
@@ -1655,7 +1657,9 @@ if __name__ == "__main__":
         logger.info("✅ Hybrid GPU acceleration example completed")
         
         logger.info("🎉 All GPU acceleration examples completed successfully!")
-        
+    except Exception as e:
+        logger.error(f"GPU acceleration example failed: {e}")
+
 # Advanced GPU Memory Optimization
 class AdvancedGPUMemoryOptimizer:
     """Advanced GPU memory optimization with intelligent allocation strategies."""

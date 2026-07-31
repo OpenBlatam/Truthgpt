@@ -1,0 +1,23 @@
+{
+  "product": "SaaS Test",
+  "persona": "CEO / Founder B2B",
+  "channel": "WhatsApp / SMS Direct Sales",
+  "messages": [
+    {
+      "step": "Mensaje 1 (Primer Contacto)",
+      "timing": "Inmediato tras registro",
+      "text": "Hola! 👋 Vi tu interés en SaaS Test. Preparé Demo Ejecutiva + Acceso prioritario a SaaS Test para ayudarte a escalar ingresos sin escalar equipo de marketing.. Te lo envío por aquí?"
+    },
+    {
+      "step": "Mensaje 2 (Prueba Social & Valor)",
+      "timing": "+24 horas",
+      "text": "Hola de nuevo! Solo quería mostrarte cómo otras empresas lograron resolver no tiene tiempo para experimentar. necesita roi comprobado. usando SaaS Test. Te gustaría ver un caso rápido de 2 minutos?"
+    },
+    {
+      "step": "Mensaje 3 (Cierre Directo / Urgencia)",
+      "timing": "+48 horas",
+      "text": "Última llamada ⏰ Estamos ofreciendo onboarding prioritario para SaaS Test esta semana. ¿Hablamos 10 minutos para dejar tu cuenta lista?"
+    }
+  ],
+  "predicted_reply_rate": "28.5%"
+}

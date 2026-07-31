@@ -4,12 +4,18 @@ Base compiler classes and interfaces
 """
 
 import enum
+import hashlib
 import logging
+import time
 from typing import Dict, List, Optional, Any, Union, Callable
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
-import torch
-import numpy as np
+
+try:
+    import psutil
+    _HAS_PSUTIL = True
+except ImportError:
+    _HAS_PSUTIL = False
 
 logger = logging.getLogger(__name__)
 
@@ -75,54 +81,72 @@ class CompilationError(Exception):
     pass
 
 class CompilationContext:
-    """Context manager for compilation process"""
-    
+    """Context manager for compilation process.
+
+    On exit, ``elapsed`` (seconds) and ``memory_used`` (bytes) are stored as
+    instance attributes so that callers can reference them after the ``with``
+    block completes.
+    """
+
     def __init__(self, config: CompilationConfig):
         self.config = config
-        self.start_time = None
-        self.memory_start = None
-        
+        self.start_time: Optional[float] = None
+        self.memory_start: Optional[int] = None
+        self.elapsed: float = 0.0
+        self.memory_used: int = 0
+
     def __enter__(self):
-        import time
-        import psutil
-        
         self.start_time = time.time()
-        self.memory_start = psutil.Process().memory_info().rss
+        if _HAS_PSUTIL:
+            self.memory_start = psutil.Process().memory_info().rss
+        else:
+            self.memory_start = 0
         logger.info(f"Starting compilation with target: {self.config.target}")
         return self
-        
+
     def __exit__(self, exc_type, exc_val, exc_tb):
-        import time
-        import psutil
-        
-        if self.start_time:
-            elapsed = time.time() - self.start_time
-            memory_used = psutil.Process().memory_info().rss - self.memory_start
-            logger.info(f"Compilation completed in {elapsed:.2f}s, memory used: {memory_used / 1024 / 1024:.2f}MB")
+        if self.start_time is not None:
+            self.elapsed = time.time() - self.start_time
+            if _HAS_PSUTIL and self.memory_start is not None:
+                self.memory_used = psutil.Process().memory_info().rss - self.memory_start
+            else:
+                self.memory_used = 0
+            logger.info(
+                f"Compilation completed in {self.elapsed:.2f}s, "
+                f"memory used: {self.memory_used / 1024 / 1024:.2f}MB"
+            )
 
 class CompilerCore(ABC):
     """Base class for all compiler implementations"""
-    
+
+    # Default profile template — subclasses can override to add extra fields.
+    _DEFAULT_PROFILE: Dict[str, Any] = {
+        "execution_count": 0,
+        "total_time": 0.0,
+        "last_execution": 0.0,
+        "optimization_level": 0,
+    }
+
     def __init__(self, config: CompilationConfig):
         self.config = config
         self.logger = logging.getLogger(self.__class__.__name__)
-        
+
     @abstractmethod
     def compile(self, model: Any, input_spec: Optional[Dict] = None) -> CompilationResult:
         """Compile a model for the target platform"""
         pass
-        
+
     @abstractmethod
     def optimize(self, model: Any, optimization_passes: List[str] = None) -> CompilationResult:
         """Apply optimizations to a model"""
         pass
-        
+
     def validate_input(self, model: Any) -> bool:
         """Validate input model"""
         if model is None:
             raise CompilationError("Model cannot be None")
         return True
-        
+
     def get_compilation_info(self) -> Dict[str, Any]:
         """Get information about the compiler"""
         return {
@@ -132,6 +156,40 @@ class CompilerCore(ABC):
             "quantization_enabled": self.config.enable_quantization,
             "fusion_enabled": self.config.enable_fusion
         }
+
+    # --- Shared utilities (eliminate duplication in subclasses) ---
+
+    @staticmethod
+    def generate_cache_key(model: Any, config: Any, input_spec: Optional[Dict] = None) -> str:
+        """Generate a deterministic cache key for a model/config/input_spec triple.
+
+        Uses SHA-256 for collision resistance.  Subclasses that previously
+        implemented their own ``_get_cache_key`` should delegate here.
+        """
+        model_str = str(id(model))
+        config_str = str(config.__dict__) if hasattr(config, '__dict__') else str(config)
+        input_str = str(input_spec) if input_spec else ""
+        combined = f"{model_str}_{config_str}_{input_str}"
+        return hashlib.sha256(combined.encode()).hexdigest()
+
+    def get_or_create_profile(
+        self,
+        profiles: Dict[int, Dict[str, Any]],
+        model: Any,
+        extra_fields: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Return the execution profile for *model*, creating one if absent.
+
+        The default template is ``_DEFAULT_PROFILE``; pass *extra_fields* to
+        add compiler-specific keys (e.g. ``neural_guidance_score``).
+        """
+        model_id = id(model)
+        if model_id not in profiles:
+            profile = dict(self._DEFAULT_PROFILE)
+            if extra_fields:
+                profile.update(extra_fields)
+            profiles[model_id] = profile
+        return profiles[model_id]
 
 class TruthGPTCompilerCore(CompilerCore):
     """Specialized compiler core for TruthGPT models"""
@@ -165,7 +223,7 @@ class TruthGPTCompilerCore(CompilerCore):
                 return CompilationResult(
                     success=True,
                     compiled_model=compiled_model,
-                    compilation_time=ctx.elapsed if hasattr(ctx, 'elapsed') else 0.0,
+                    compilation_time=ctx.elapsed,
                     optimization_metrics=self._get_optimization_metrics(),
                     metadata=self.get_compilation_info()
                 )
@@ -285,15 +343,22 @@ class TruthGPTCompilerCore(CompilerCore):
             "parallelization_enabled": float(self.config.enable_parallelization)
         }
 
-def create_compiler_core(config: CompilationConfig) -> CompilerCore:
-    """Create a compiler core instance"""
+def create_compiler_core(config: Union[CompilationConfig, dict]) -> CompilerCore:
+    """Create a compiler core instance.
+    
+    Args:
+        config: A CompilationConfig instance or a dict of configuration values.
+    
+    Returns:
+        A TruthGPTCompilerCore instance.
+    """
+    if isinstance(config, dict):
+        config = CompilationConfig(**config) if config else CompilationConfig()
     return TruthGPTCompilerCore(config)
 
-def compilation_context(config: CompilationConfig):
-    """Create a compilation context"""
+
+def compilation_context(config: Union[CompilationConfig, dict]):
+    """Create a compilation context."""
+    if isinstance(config, dict):
+        config = CompilationConfig(**config) if config else CompilationConfig()
     return CompilationContext(config)
-
-
-
-
-

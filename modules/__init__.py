@@ -94,7 +94,8 @@ def __getattr__(name: str):
     module_path = _LAZY_IMPORTS[name]
     try:
         import importlib
-        module = importlib.import_module(module_path, __package__)
+        module = importlib.import_module(module_path, package=__name__)
+
         
         # If the requested name is not a submodule but a class/function inside it
         if hasattr(module, name):

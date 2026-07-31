@@ -12,7 +12,11 @@ from typing import Dict, Any, List, Optional
 import torch
 from pydantic import BaseModel, Field, computed_field
 
-from .base import BaseDynamicAdapter
+try:
+    from optimization_core.adapters.base import BaseDynamicAdapter
+except ImportError:
+    from .base import BaseDynamicAdapter
+
 
 logger = logging.getLogger(__name__)
 

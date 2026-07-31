@@ -1,20 +1,51 @@
-from typing import Optional
+"""
+KV Cache Factories
+==================
+Factory functions for Key-Value Cache modules.
+"""
+from typing import Any, Optional
 import torch
-from .registry import Registry
-from modules.attention.ultra_efficient_kv_cache import PagedKVCache
 
-KV_CACHE = Registry()
+from .registry import Registry
+
+try:
+    from optimization_core.modules.attention.ultra_efficient_kv_cache import PagedKVCache
+except (ImportError, ModuleNotFoundError):
+    try:
+        from ..modules.attention.ultra_efficient_kv_cache import PagedKVCache
+    except (ImportError, ModuleNotFoundError):
+        from modules.attention.ultra_efficient_kv_cache import PagedKVCache
+
+KV_CACHE = Registry(name="KVCacheRegistry")
 
 
 @KV_CACHE.register("none")
-def build_none(*args, **kwargs):
+def build_none(*args: Any, **kwargs: Any) -> None:
+    """Disable KV cache (returns None)."""
     return None
 
 
 @KV_CACHE.register("paged")
-def build_paged(num_heads: int, head_dim: int, max_tokens: int, block_size: int = 128, dtype: Optional[torch.dtype] = None):
-    dtype = dtype or torch.bfloat16 if torch.cuda.is_available() else torch.float32
-    return PagedKVCache(num_heads=num_heads, head_dim=head_dim, max_tokens=max_tokens, block_size=block_size, dtype=dtype)
+def build_paged(
+    num_heads: int,
+    head_dim: int,
+    max_tokens: int,
+    block_size: int = 128,
+    dtype: Optional[torch.dtype] = None,
+) -> PagedKVCache:
+    """
+    Build PagedKVCache instance for memory-efficient inference.
+    """
+    if dtype is None:
+        dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
+    return PagedKVCache(
+        num_heads=num_heads,
+        head_dim=head_dim,
+        max_tokens=max_tokens,
+        block_size=block_size,
+        dtype=dtype,
+    )
+
 
 
 

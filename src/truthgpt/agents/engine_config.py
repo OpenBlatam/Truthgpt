@@ -16,6 +16,18 @@ def _normalize_engine_key(name: str) -> str:
 
 _PREFS_CACHE: Optional[Dict] = None
 
+def _find_user_prefs_file() -> Optional[Path]:
+    candidates = [
+        Path.cwd() / "user_preferences.json",
+        Path(__file__).resolve().parent.parent.parent.parent / "user_preferences.json",
+        Path(__file__).resolve().parent.parent.parent / "user_preferences.json",
+        Path(__file__).resolve().parent.parent / "user_preferences.json",
+    ]
+    for p in candidates:
+        if p.exists():
+            return p
+    return None
+
 def _load_api_keys_from_prefs() -> Dict[str, str]:
     """Load API keys from user_preferences.json as a fallback when env vars are not set."""
     global _PREFS_CACHE
@@ -23,11 +35,10 @@ def _load_api_keys_from_prefs() -> Dict[str, str]:
         return _PREFS_CACHE
     _PREFS_CACHE = {}
     try:
-        prefs_path = Path(__file__).resolve().parent.parent / "user_preferences.json"
-        if prefs_path.exists():
+        prefs_path = _find_user_prefs_file()
+        if prefs_path and prefs_path.exists():
             data = json.loads(prefs_path.read_text())
             raw_keys = data.get("api_keys", {})
-            # Map preference key names to environment variable names
             mapping = {
                 "openai": "OPENAI_API_KEY",
                 "deepseek": "DEEPSEEK_API_KEY",
@@ -39,7 +50,6 @@ def _load_api_keys_from_prefs() -> Dict[str, str]:
                 val = raw_keys.get(pref_key, "")
                 if val:
                     _PREFS_CACHE[env_key] = val
-                    # Also inject into os.environ so downstream code picks them up
                     if not os.environ.get(env_key):
                         os.environ[env_key] = val
     except Exception as e:
@@ -58,8 +68,8 @@ def _resolve_api_key(env_var: str, explicit_key: Optional[str] = None) -> Option
 
 def _get_user_prefs() -> Dict[str, Any]:
     try:
-        prefs_path = Path(__file__).resolve().parent.parent / "user_preferences.json"
-        if prefs_path.exists():
+        prefs_path = _find_user_prefs_file()
+        if prefs_path and prefs_path.exists():
             return json.loads(prefs_path.read_text())
     except Exception:
         pass

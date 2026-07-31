@@ -13,10 +13,15 @@ from typing import Any, Dict, List, Optional, Type
 
 from pydantic import BaseModel, Field
 
-from .tools.tools import (
-    BaseTool,
-)
-from .core_architectures.base_agent import BaseAgent
+try:
+    from .tools.tools import BaseTool
+except ImportError:
+    BaseTool = None
+
+try:
+    from .core_architectures.base_agent import BaseAgent
+except ImportError:
+    BaseAgent = None
 
 logger = logging.getLogger(__name__)
 

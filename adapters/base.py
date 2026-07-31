@@ -1,14 +1,8 @@
 """
-Base Dynamic Adapter Implementation — Pydantic-First Architecture.
+Base Dynamic Adapter Implementation — Pydantic-First & Protocol Architecture.
 
-This module provides the BaseDynamicAdapter class, which bridges traditional
-procedural adapters into the autonomous ToolRegistry ecosystem (BaseTool).
-This allows agents to dynamically discover and compose adapter operations
-(Input -> Process -> Output) without hardcoded sequences.
-
-The **ObjectStore** is a thread-safe, process-global registry that allows
-adapters to stash heavyweight Python objects (models, datasets, optimizers)
-and return lightweight string IDs to the AI agent.
+This module provides the BaseDynamicAdapter and BaseAdapter classes, bridging procedural
+adapters into the autonomous ToolRegistry ecosystem (BaseTool).
 """
 
 import logging
@@ -17,17 +11,45 @@ import time
 import threading
 import uuid
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Protocol, Generic, TypeVar, runtime_checkable
 
 from pydantic import BaseModel, Field, computed_field
 
+import sys
+
+_mod = sys.modules.get(__name__)
+if _mod:
+    sys.modules["adapters.base"] = _mod
+    sys.modules["optimization_core.adapters.base"] = _mod
+
 try:
     from optimization_core.agents.framework.tools.tools import BaseTool, ToolResult
-except (ImportError, ValueError, KeyError):
-    # Fallback for environments where optimization_core is the root
-    from optimization_core.agents.framework.tools.tools import BaseTool, ToolResult
+except Exception:
+    try:
+        from agents.framework.tools.tools import BaseTool, ToolResult
+    except Exception:
+        BaseTool, ToolResult = None, None
 
 logger = logging.getLogger(__name__)
+
+
+
+
+T_in = TypeVar("T_in")
+T_out = TypeVar("T_out")
+
+
+# ---------------------------------------------------------------------------
+# Protocols & Interfaces
+# ---------------------------------------------------------------------------
+
+@runtime_checkable
+class BaseAdapterProtocol(Protocol):
+    """Formal protocol for adapter components across optimization_core."""
+
+    def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process input parameters and produce adapted output."""
+        ...
 
 
 # ---------------------------------------------------------------------------
@@ -66,21 +88,7 @@ class AdapterRunResult(BaseModel):
 # ---------------------------------------------------------------------------
 
 class ObjectStore:
-    """
-    Thread-safe, in-memory object store for heavyweight Python objects.
-
-    Adapters ``store()`` raw objects (DataLoaders, torch.nn.Module, Optimizers)
-    and receive a lightweight string ID.  Other adapters can ``get()`` the
-    object by ID, enabling JSON-only agent communication while still passing
-    real Python references internally.
-
-    Usage::
-
-        store = ObjectStore.instance()
-        obj_id = store.put(my_dataloader, kind="dataset", meta={"rows": 50_000})
-        loader = store.get(obj_id)
-        store.delete(obj_id)
-    """
+    """Thread-safe, in-memory object store for heavyweight Python objects."""
 
     _singleton: Optional["ObjectStore"] = None
     _lock = threading.Lock()
@@ -99,8 +107,6 @@ class ObjectStore:
                     cls._singleton = cls()
         return cls._singleton
 
-    # -- Public API ---------------------------------------------------------
-
     def put(self, obj: Any, *, kind: str = "unknown", meta: Optional[Dict[str, Any]] = None) -> str:
         """Store *obj* and return a unique string ID."""
         obj_id = f"{kind}_{uuid.uuid4().hex[:12]}"
@@ -112,7 +118,7 @@ class ObjectStore:
         return obj_id
 
     def get(self, obj_id: str) -> Any:
-        """Retrieve the raw object by *obj_id*.  Raises ``KeyError`` if not found."""
+        """Retrieve the raw object by *obj_id*. Raises ``KeyError`` if not found."""
         with self._obj_lock:
             obj = self._objects.get(obj_id)
         if obj is None:
@@ -132,7 +138,7 @@ class ObjectStore:
         return self.get_entry(obj_id).meta
 
     def delete(self, obj_id: str) -> bool:
-        """Remove *obj_id* from the store.  Returns True if deleted."""
+        """Remove *obj_id* from the store. Returns True if deleted."""
         with self._obj_lock:
             removed_obj = self._objects.pop(obj_id, None)
             self._entries.pop(obj_id, None)
@@ -175,71 +181,140 @@ class ObjectStore:
 
 
 # ---------------------------------------------------------------------------
-# Base Dynamic Adapter
+# Base Dynamic Adapter & Lifecycle Class
 # ---------------------------------------------------------------------------
 
-class BaseDynamicAdapter(BaseTool):
-    """
-    Base class for all intelligence-driven adapters.
+class BaseAdapter(ABC, Generic[T_in, T_out]):
+    """Generic base class for typed adapters with lifecycle management."""
 
-    Inherits from BaseTool to be directly discoverable by the Agent Swarm.
-    Children must define ``name``, ``description``, and ``process()``.
-    """
+    def __init__(self, name: Optional[str] = None) -> None:
+        self.name = name or self.__class__.__name__
+        self._is_initialized = False
+
+    def initialize(self) -> None:
+        """Initialize adapter resources."""
+        self._is_initialized = True
+
+    def cleanup(self) -> None:
+        """Release adapter resources."""
+        self._is_initialized = False
+
+    def health_check(self) -> bool:
+        """Verify health state of adapter."""
+        return self._is_initialized
+
+    @abstractmethod
+    def adapt(self, input_data: T_in) -> T_out:
+        """Core adaptation logic."""
+        pass
+
+    async def adapt_async(self, input_data: T_in) -> T_out:
+        """Asynchronous adaptation execution wrapper."""
+        return self.adapt(input_data)
+
+    async def transform(self, input_data: T_in) -> T_out:
+        """Standardized async transform pipeline stage."""
+        if not self._is_initialized:
+            self.initialize()
+        return await self.adapt_async(input_data)
+
+    async def execute(self, input_data: T_in) -> T_out:
+        """Standardized async execution pipeline stage."""
+        return await self.transform(input_data)
+
+    def __enter__(self) -> "BaseAdapter[T_in, T_out]":
+        self.initialize()
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self.cleanup()
+
+    async def __aenter__(self) -> "BaseAdapter[T_in, T_out]":
+        self.initialize()
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self.cleanup()
+
+
+_BaseToolClass = BaseTool if BaseTool is not None else object
+
+
+class BaseDynamicAdapter(_BaseToolClass, BaseAdapter[Dict[str, Any], Dict[str, Any]]):  # type: ignore[misc]
+    """Base class for all intelligence-driven adapters discovering BaseTool."""
 
     @property
     def store(self) -> ObjectStore:
         """Convenience accessor to the global ObjectStore singleton."""
         return ObjectStore.instance()
 
+    def adapt(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        return self.process(input_data)
+
     @abstractmethod
     def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        The core logic of the adapter.
-        Input -> Process -> Output
-        """
+        """The core logic of the adapter."""
+        pass
 
-    async def run(self, tool_input: str) -> ToolResult:
-        """
-        Tool execution entry point.  Agents pass stringified JSON inputs.
-        Provides a Security & Validation layer before reaching core logic.
-        """
+    async def run(self, tool_input: str) -> Any:
+        """Tool execution entry point parsing stringified JSON input."""
         start = time.monotonic()
         try:
             input_data = json.loads(tool_input)
             input_keys = list(input_data.keys())
-            logger.info("Adapter '%s' executing with input keys: %s", self.name, input_keys)
+            name_attr = getattr(self, "name", self.__class__.__name__)
+            logger.info("Adapter '%s' executing with input keys: %s", name_attr, input_keys)
 
             output_data = self.process(input_data)
 
             elapsed_ms = round((time.monotonic() - start) * 1000, 2)
             result_str = json.dumps(output_data, indent=2, default=str)
             run_result = AdapterRunResult(
-                adapter_name=self.name,
+                adapter_name=name_attr,
                 status="success",
                 elapsed_ms=elapsed_ms,
                 input_keys=input_keys,
             )
-            return ToolResult(
-                output=result_str,
-                metadata=run_result.model_dump(),
-            )
+            if ToolResult is not None:
+                return ToolResult(
+                    output=result_str,
+                    metadata=run_result.model_dump(),
+                )
+            return output_data
         except json.JSONDecodeError as exc:
             elapsed_ms = round((time.monotonic() - start) * 1000, 2)
-            logger.error("Adapter '%s' failed to parse JSON input: %s", self.name, exc)
-            return ToolResult(
-                output=f"Error: Invalid JSON input provided to {self.name}. Details: {exc}",
-                metadata=AdapterRunResult(
-                    adapter_name=self.name, status="error", elapsed_ms=elapsed_ms,
-                ).model_dump(),
-            )
+            name_attr = getattr(self, "name", self.__class__.__name__)
+            logger.error("Adapter '%s' failed to parse JSON input: %s", name_attr, exc)
+            err_result = AdapterRunResult(
+                adapter_name=name_attr, status="error", elapsed_ms=elapsed_ms,
+            ).model_dump()
+            if ToolResult is not None:
+                return ToolResult(
+                    output=f"Error: Invalid JSON input provided to {name_attr}. Details: {exc}",
+                    metadata=err_result,
+                )
+            return {"error": str(exc), "metadata": err_result}
         except Exception as exc:
             elapsed_ms = round((time.monotonic() - start) * 1000, 2)
-            logger.exception("Adapter '%s' execution failed", self.name)
-            return ToolResult(
-                output=f"Error during {self.name} execution: {exc}",
-                metadata=AdapterRunResult(
-                    adapter_name=self.name, status="error", elapsed_ms=elapsed_ms,
-                ).model_dump(),
-            )
+            name_attr = getattr(self, "name", self.__class__.__name__)
+            logger.exception("Adapter '%s' execution failed", name_attr)
+            err_result = AdapterRunResult(
+                adapter_name=name_attr, status="error", elapsed_ms=elapsed_ms,
+            ).model_dump()
+            if ToolResult is not None:
+                return ToolResult(
+                    output=f"Error during {name_attr} execution: {exc}",
+                    metadata=err_result,
+                )
+            return {"error": str(exc), "metadata": err_result}
 
 
+__all__ = [
+    "BaseAdapterProtocol",
+    "ObjectEntry",
+    "StoreStats",
+    "AdapterRunResult",
+    "ObjectStore",
+    "BaseAdapter",
+    "BaseDynamicAdapter",
+]

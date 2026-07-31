@@ -3,7 +3,7 @@ Modular Routing System
 Specialized routing modules for different routing strategies and algorithms.
 """
 
-from .base_router import BaseRouter, RouterConfig, RoutingResult
+from .base_router import BaseRouter, RouterConfig, RoutingResult, RoutingStrategy, ExpertType
 
 try:
     from .attention_router import AttentionRouter, AttentionRouterConfig
@@ -55,6 +55,8 @@ __all__ = [
     'BaseRouter',
     'RouterConfig', 
     'RoutingResult',
+    'RoutingStrategy',
+    'ExpertType',
     'AttentionRouter',
     'AttentionRouterConfig',
     'HierarchicalRouter',

@@ -4,13 +4,23 @@ Unified Adapters System
 Centralized access to all adapter classes in optimization_core.
 """
 
-# Import core adapters
+import sys
+
+# Ensure dual registration in sys.modules for smooth resolution
+_mod = sys.modules.get(__name__)
+if _mod:
+    sys.modules["adapters"] = _mod
+    sys.modules["optimization_core.adapters"] = _mod
+
 from .base import BaseDynamicAdapter, ObjectStore, ObjectEntry
+
+
 from .training_adapter import TrainingAdapter
 from .optimizer_adapter import (
     OptimizerAdapter,
     PyTorchOptimizerAdapter,
 )
+
 
 from .data_adapter import (
     DataAdapter,
@@ -23,28 +33,10 @@ from .model_adapter import (
     HuggingFaceModelAdapter,
 )
 
-# Import edge adapters
-try:
-    from ..modules.edge.edge_inference_adapter import (
-        EdgeInferenceAdapter,
-    )
-except ImportError:
-    EdgeInferenceAdapter = None
-
-# Import TruthGPT adapters
-try:
-    from ..utils.truthgpt_adapters import (
-        TruthGPTAdapter,
-    )
-except ImportError:
-    TruthGPTAdapter = None
-
-try:
-    from ..utils.enterprise_truthgpt_adapter import (
-        EnterpriseTruthGPTAdapter,
-    )
-except ImportError:
-    EnterpriseTruthGPTAdapter = None
+# Dummy placeholders for late binding
+EdgeInferenceAdapter = None
+TruthGPTAdapter = None
+EnterpriseTruthGPTAdapter = None
 
 
 # Unified adapter factory
@@ -124,6 +116,34 @@ def create_adapter(
         raise ImportError(f"Adapter type '{adapter_type}' with subtype '{adapter_subtype}' is not available (module not found)")
     
     return adapter
+
+
+# Import edge adapters
+try:
+    from ..modules.edge.edge_inference_adapter import EdgeInferenceAdapter
+except (ImportError, ValueError):
+    try:
+        from modules.edge.edge_inference_adapter import EdgeInferenceAdapter
+    except (ImportError, ValueError):
+        EdgeInferenceAdapter = None
+
+# Import TruthGPT adapters
+try:
+    from ..utils.truthgpt_adapters import TruthGPTAdapter
+except (ImportError, ValueError):
+    try:
+        from utils.truthgpt_adapters import TruthGPTAdapter
+    except (ImportError, ValueError):
+        TruthGPTAdapter = None
+
+try:
+    from ..utils.enterprise_truthgpt_adapter import EnterpriseTruthGPTAdapter
+except (ImportError, ValueError):
+    try:
+        from utils.enterprise_truthgpt_adapter import EnterpriseTruthGPTAdapter
+    except (ImportError, ValueError):
+        EnterpriseTruthGPTAdapter = None
+
 
 
 # Registry of all available adapters

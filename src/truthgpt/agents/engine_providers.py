@@ -8,9 +8,9 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from loguru import logger
 
 from .ssl_context import httpx_verify_setting
-from .core.models import InferenceResult
-from .core.exceptions import InferenceError
-from .engines.engine_config import _resolve_api_key
+from .models import InferenceResult
+from .exceptions import InferenceError
+from .engine_config import _resolve_api_key
 
 @runtime_checkable
 class AsyncLLMEngine(Protocol):
@@ -69,6 +69,9 @@ class BaseProvider(ABC):
     @abstractmethod
     async def generate(self, prompt: str, **kwargs) -> str:
         pass
+
+    async def __call__(self, prompt: str, **kwargs) -> str:
+        return await self.generate(prompt, **kwargs)
 
     def _safe_fallback(self, thought: str, message: str, error: str = "provider_error") -> str:
         return json.dumps({

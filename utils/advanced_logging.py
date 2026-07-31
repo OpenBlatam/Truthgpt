@@ -9,7 +9,22 @@ from typing import Optional, Dict, Any, List
 from pathlib import Path
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 import json
+import os
 from datetime import datetime
+
+
+def is_main_process() -> bool:
+    """Check if current process rank is the main rank."""
+    return os.environ.get("RANK", "0") == "0"
+
+
+def log_info(message: str) -> None:
+    """Log an info message on the main process with UTC timestamp."""
+    if is_main_process():
+        now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{now}] {message}")
+        sys.stdout.flush()
+
 
 
 class JSONFormatter(logging.Formatter):

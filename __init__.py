@@ -17,13 +17,20 @@ from __future__ import annotations
 
 import sys
 import threading
-from typing import Any, Dict, List
+import importlib
+from typing import Dict, Any
+from pathlib import Path
+
+_parent_dir = str(Path(__file__).parent.parent.resolve())
+if _parent_dir not in sys.path:
+    sys.path.insert(0, _parent_dir)
+
+_curr_dir = str(Path(__file__).parent.resolve())
+if _curr_dir not in sys.path:
+    sys.path.insert(0, _curr_dir)
 
 __version__ = "1.0.0"
-
-import sys
-import importlib
-import importlib.util
+__path__ = [_curr_dir]
 
 class OptimizationCoreMetaFinder:
     """Meta path finder ensuring 'optimization_core.xyz' maps to 'xyz' in the workspace."""
@@ -31,9 +38,10 @@ class OptimizationCoreMetaFinder:
         if fullname.startswith("optimization_core."):
             real_name = fullname[len("optimization_core."):]
             try:
-                spec = importlib.util.find_spec(real_name)
-                if spec is not None:
-                    return spec
+                mod = importlib.import_module(real_name)
+                sys.modules[fullname] = mod
+                if hasattr(mod, '__spec__') and mod.__spec__ is not None:
+                    return mod.__spec__
             except Exception:
                 pass
         return None
@@ -78,6 +86,8 @@ def __getattr__(name: str) -> Any:
         - Subsequent accesses: Fast (cached)
         - Thread-safe: Uses RLock for concurrent access
     """
+    if name == "__version__":
+        return __version__
     if name.startswith('_'):
         raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
     
@@ -157,3 +167,17 @@ __all__ = [
     'ProductionOptimizer',
     'create_production_optimizer',
     'production_optimization_context',
+    'MemoryOptimizer',
+    'MemoryOptimizationConfig',
+    'create_memory_optimizer',
+    'FusedAttention',
+    'BatchOptimizer',
+    'ComputationalOptimizer',
+    'create_computational_optimizer',
+    'OptimizationRegistry',
+    'apply_optimizations',
+    'get_optimization_config',
+    'register_optimization',
+    'get_optimization_report',
+    '__version__',
+] + list(_ALL_LAZY_IMPORTS.keys())

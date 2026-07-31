@@ -7,10 +7,20 @@ import logging
 import time
 from typing import Dict, Any, Optional, List
 from pydantic import BaseModel, Field
-
 from .base import BaseDynamicAdapter
-from ..trainers.trainer import GenericTrainer
-from ..trainers.config import TrainerConfig
+
+
+try:
+    from ..trainers.trainer import GenericTrainer
+    from ..trainers.config import TrainerConfig
+except (ImportError, ValueError):
+    try:
+        from optimization_core.trainers.trainer import GenericTrainer
+        from optimization_core.trainers.config import TrainerConfig
+    except (ImportError, ValueError):
+        GenericTrainer, TrainerConfig = None, None
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -81,13 +91,21 @@ class TrainingAdapter(BaseDynamicAdapter):
             if not trainer_id:
                 raise ValueError("trainer_id is required for action='train'")
                 
-            trainer: GenericTrainer = self.store.get(trainer_id)
+            if not self.store:
+                raise RuntimeError("Adapter ObjectStore is not initialized for trainer lookup.")
+                
+            trainer: Optional[GenericTrainer] = self.store.get(trainer_id)
             if not trainer:
-                raise ValueError(f"Trainer {trainer_id} not found in ObjectStore")
+                raise ValueError(f"Trainer '{trainer_id}' not found in ObjectStore")
             
             start_time = time.monotonic()
-            trainer.train()
-            elapsed = (time.monotonic() - start_time) * 1000
+            try:
+                trainer.train()
+            except Exception as exc:
+                logger.error(f"Training failed for trainer '{trainer_id}': {exc}")
+                raise RuntimeError(f"Training execution error in trainer '{trainer_id}': {exc}") from exc
+                
+            elapsed = (time.monotonic() - start_time) * 1000.0
             
             return TrainingRunResult(
                 trainer_id=trainer_id,
@@ -96,5 +114,7 @@ class TrainingAdapter(BaseDynamicAdapter):
             ).model_dump()
 
         else:
-            raise ValueError(f"Unknown training action: '{action}'")
+            supported_actions = ("create", "train")
+            raise ValueError(f"Unknown training action '{action}'. Supported actions: {supported_actions}")
+
 

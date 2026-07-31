@@ -5,11 +5,8 @@ Pipeline management for compilation stages
 
 import logging
 import time
-from typing import Dict, List, Optional, Any, Union, Callable
+from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass
-from abc import ABC, abstractmethod
-import torch
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -92,8 +89,18 @@ class CompilationPipeline:
         
         self.execution_order = order
     
-    def execute(self, input_data: Any, **kwargs) -> PipelineResult:
-        """Execute the compilation pipeline"""
+    def execute(self, input_data: Any, fail_fast: bool = False, **kwargs) -> PipelineResult:
+        """Execute the compilation pipeline.
+
+        Args:
+            input_data: Input data for the first stage.
+            fail_fast: If True, stop execution on the first stage failure
+                       instead of continuing to subsequent stages.
+            **kwargs: Additional keyword arguments passed to each stage function.
+
+        Returns:
+            PipelineResult with success status, stage results, and timing.
+        """
         start_time = time.time()
         stage_results = {}
         errors = []
@@ -128,6 +135,9 @@ class CompilationPipeline:
                     logger.error(error_msg)
                     errors.append(error_msg)
                     
+                    if fail_fast:
+                        break
+
                     # Continue with next stage if possible
                     continue
             

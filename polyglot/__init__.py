@@ -102,6 +102,8 @@ from .utils import (
     benchmark_backends,
 )
 
+from .polyglot_bridge import SharedMemoryBuffer, PolyglotKernelDispatcher
+
 __all__ = [
     "RUST_AVAILABLE",
     "GO_AVAILABLE",
@@ -109,6 +111,8 @@ __all__ = [
     "JULIA_AVAILABLE",
     "get_available_backends",
     "get_backend_info",
+    "SharedMemoryBuffer",
+    "PolyglotKernelDispatcher",
     "KVCache",
     "attention",
     "Compressor",
@@ -126,4 +130,5 @@ __all__ = [
     "format_performance_stats",
     "benchmark_backends",
 ]
+
 

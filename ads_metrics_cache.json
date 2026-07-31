@@ -1,0 +1,30 @@
+[
+  {
+    "platform": "Meta Ads (Facebook / Instagram)",
+    "connected": false,
+    "benchmark_ctr": 4.8,
+    "benchmark_cpc": 1.45,
+    "source": "Benchmark SOTA (Configura META_ADS_TOKEN para sync real)"
+  },
+  {
+    "platform": "Google Ads (Search / Display / YouTube)",
+    "connected": false,
+    "benchmark_ctr": 6.2,
+    "benchmark_cpc": 2.1,
+    "source": "Benchmark SOTA (Configura GOOGLE_ADS_KEY para sync real)"
+  },
+  {
+    "platform": "TikTok Ads",
+    "connected": false,
+    "benchmark_ctr": 3.9,
+    "benchmark_cpc": 0.85,
+    "source": "Benchmark SOTA (Configura TIKTOK_ADS_TOKEN para sync real)"
+  },
+  {
+    "platform": "LinkedIn Ads (B2B)",
+    "connected": false,
+    "benchmark_ctr": 4.1,
+    "benchmark_cpc": 3.9,
+    "source": "Benchmark SOTA (Configura LINKEDIN_ADS_TOKEN para sync real)"
+  }
+]

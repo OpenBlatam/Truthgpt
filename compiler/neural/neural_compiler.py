@@ -143,6 +143,7 @@ class NeuralCompilationResult(CompilationResult):
     inference_time: float = 0.0
     model_size: int = 0
     parameter_count: int = 0
+    compilation_mode: Optional[Any] = None
 
     def __post_init__(self):
         if self.learning_curve is None:
@@ -265,15 +266,17 @@ class NeuralMemoryNetwork(nn.Module):
     
     def _compute_write_weights(self, encoded_input: torch.Tensor) -> torch.Tensor:
         """Compute write attention weights"""
-        write_scores = self.write_attention(encoded_input)
-        write_weights = torch.softmax(write_scores, dim=-1)
+        similarity = torch.matmul(encoded_input, self.memory.t())
+        write_weights = torch.softmax(similarity, dim=-1)
         return write_weights
     
     def _write_memory(self, write_weights: torch.Tensor, encoded_input: torch.Tensor):
         """Write to memory"""
         # Update memory based on write weights
         memory_updates = torch.matmul(write_weights.transpose(-2, -1), encoded_input)
-        self.memory.data = 0.9 * self.memory.data + 0.1 * memory_updates.mean(dim=0)
+        if memory_updates.dim() == 3:
+            memory_updates = memory_updates.squeeze(0)
+        self.memory.data = 0.9 * self.memory.data + 0.1 * memory_updates
 
 class QuantumNeuralLayer(nn.Module):
     """Quantum-inspired neural layer"""
@@ -482,6 +485,10 @@ class NeuralCompiler(CompilerCore):
             "value_network": None
         }
     
+    def optimize(self, model: Any, optimization_passes: List[str] = None) -> NeuralCompilationResult:
+        """Apply neural compilation optimizations"""
+        return self.compile(model)
+
     def compile(self, model: Any, input_spec: Optional[Dict] = None) -> NeuralCompilationResult:
         """Enhanced neural compilation with machine learning optimization"""
         try:
@@ -534,8 +541,15 @@ class NeuralCompiler(CompilerCore):
     def _extract_features(self, model: Any, input_spec: Optional[Dict] = None) -> torch.Tensor:
         """Extract features for neural processing"""
         try:
+            target_dim = self.config.hidden_dimensions[0] if self.config.hidden_dimensions else 512
             # Convert model to tensor representation
-            if hasattr(model, 'parameters'):
+            if isinstance(model, torch.Tensor):
+                features = model.flatten().float()
+                if features.numel() >= target_dim:
+                    features = features[:target_dim]
+                else:
+                    features = torch.nn.functional.pad(features, (0, target_dim - features.numel()))
+            elif hasattr(model, 'parameters'):
                 # Extract parameter features
                 param_features = []
                 for param in model.parameters():
@@ -543,11 +557,15 @@ class NeuralCompiler(CompilerCore):
                 
                 if param_features:
                     features = torch.cat(param_features)
+                    if features.numel() >= target_dim:
+                        features = features[:target_dim]
+                    else:
+                        features = torch.nn.functional.pad(features, (0, target_dim - features.numel()))
                 else:
-                    features = torch.randn(1000)  # Default features
+                    features = torch.randn(target_dim)  # Default features
             else:
                 # Create default features
-                features = torch.randn(1000)
+                features = torch.randn(target_dim)
             
             # Reshape for neural processing
             features = features.unsqueeze(0).unsqueeze(0)  # Add batch and sequence dimensions
@@ -556,7 +574,8 @@ class NeuralCompiler(CompilerCore):
             
         except Exception as e:
             logger.error(f"Feature extraction failed: {e}")
-            return torch.randn(1, 1, 1000)
+            feature_dim = self.config.hidden_dimensions[0] if self.config and self.config.hidden_dimensions else 512
+            return torch.randn(1, 1, feature_dim)
     
     def _supervised_compilation(self, model: Any, features: torch.Tensor) -> NeuralCompilationResult:
         """Supervised neural compilation"""
@@ -681,7 +700,7 @@ class NeuralCompiler(CompilerCore):
                 compiled_model=transferred_model,
                 transfer_efficiency=self._calculate_transfer_efficiency(),
                 domain_adaptation_score=self._calculate_domain_adaptation(),
-                compilation_mode="transfer_learning"
+                compilation_mode="transfer"
             )
             
             return result

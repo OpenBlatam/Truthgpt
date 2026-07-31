@@ -1,6 +1,10 @@
+"""Configuration loader utility for merging YAML files, environment variables, and CLI overrides."""
+
 from __future__ import annotations
 
-from typing import Any, Dict, List
+import os
+from typing import Any, Dict, List, Optional
+from pathlib import Path
 
 import yaml
 
@@ -16,7 +20,8 @@ def _set_in(dct: Dict[str, Any], keys: List[str], value: Any) -> None:
     cur[keys[-1]] = value
 
 
-def parse_overrides(kvs: List[str] | None) -> Dict[str, Any]:
+def parse_overrides(kvs: Optional[List[str]]) -> Dict[str, Any]:
+    """Parse dotted dot-notation overrides like 'training.learning_rate=0.001' into nested dicts."""
     result: Dict[str, Any] = {}
     if not kvs:
         return result
@@ -35,11 +40,12 @@ def _parse_scalar(v: str) -> Any:
         if "." in v:
             return float(v)
         return int(v)
-    except Exception:
+    except ValueError:
         return v
 
 
 def deep_merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
+    """Recursively merge dictionary b into dictionary a."""
     out = dict(a)
     for k, v in b.items():
         if isinstance(v, dict) and isinstance(out.get(k), dict):
@@ -49,13 +55,66 @@ def deep_merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-def load_config(path: str, overrides: List[str] | None = None) -> AppCfg:
-    base: Dict[str, Any] = yaml.safe_load(open(path, "r", encoding="utf-8"))
-    merged = deep_merge(base, parse_overrides(overrides))
-    # Validate and coerce
-    return AppCfg(**merged)
+def parse_env_overrides(prefix: str = "OPTIM_CORE_") -> Dict[str, Any]:
+    """Extract environment variable overrides matching a specified prefix."""
+    result: Dict[str, Any] = {}
+    for key, val in os.environ.items():
+        if key.startswith(prefix):
+            clean_key = key[len(prefix):].lower().replace("__", ".")
+            _set_in(result, clean_key.split("."), _parse_scalar(val))
+    return result
 
 
+def load_config(path: str | Path, overrides: Optional[List[str]] = None, use_env: bool = True) -> AppCfg:
+    """Load, merge, and validate AppCfg from a YAML file, environment variables, and CLI overrides."""
+    file_path = Path(path)
+    if not file_path.exists():
+        raise FileNotFoundError(f"Configuration file not found: {file_path}")
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        base: Dict[str, Any] = yaml.safe_load(f) or {}
+
+    merged = base
+    if use_env:
+        merged = deep_merge(merged, parse_env_overrides())
+    if overrides:
+        merged = deep_merge(merged, parse_overrides(overrides))
+
+    return AppCfg.from_dict(merged)
 
 
+def save_config(config: AppCfg, path: str | Path, format: str = "yaml") -> None:
+    """Save AppCfg object to a YAML or JSON file."""
+    file_path = Path(path)
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    dict_data = config.to_dict()
+
+    if format.lower() == "yaml":
+        with open(file_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(dict_data, f, default_flow_style=False, sort_keys=False)
+    elif format.lower() == "json":
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(config.to_json(indent=2))
+    else:
+        raise ValueError(f"Unsupported format '{format}'. Use 'yaml' or 'json'.")
+
+
+def get_preset_config(preset_name: str = "default") -> AppCfg:
+    """Retrieve a pre-configured AppCfg preset instance."""
+    presets_dir = Path(__file__).parent / "presets"
+    preset_file = presets_dir / f"{preset_name}.yaml"
+    if preset_file.exists():
+        return load_config(preset_file, use_env=False)
+    # Default fallback instance
+    return AppCfg()
+
+
+__all__ = [
+    "load_config",
+    "save_config",
+    "get_preset_config",
+    "deep_merge",
+    "parse_overrides",
+    "parse_env_overrides",
+]
 

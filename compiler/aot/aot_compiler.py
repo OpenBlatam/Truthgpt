@@ -255,27 +255,23 @@ class AOTCompiler(CompilerCore):
         return optimized_model
     
     def _apply_optimization_pass(self, model: Any, strategy: AOTOptimizationStrategy) -> Any:
-        """Apply a specific optimization pass"""
-        if strategy.name == "inlining":
-            return self._apply_inlining_optimization(model)
-        elif strategy.name == "vectorization":
-            return self._apply_vectorization_optimization(model)
-        elif strategy.name == "loop_unrolling":
-            return self._apply_loop_unrolling_optimization(model)
-        elif strategy.name == "dead_code_elimination":
-            return self._apply_dead_code_elimination(model)
-        elif strategy.name == "constant_folding":
-            return self._apply_constant_folding(model)
-        elif strategy.name == "cse":
-            return self._apply_cse_optimization(model)
-        elif strategy.name == "function_specialization":
-            return self._apply_function_specialization(model)
-        elif strategy.name == "memory_optimization":
-            return self._apply_memory_optimization(model)
-        elif strategy.name == "parallel_optimization":
-            return self._apply_parallel_optimization(model)
-        else:
-            return model
+        """Apply a specific optimization pass using strategy dispatch."""
+        dispatch = {
+            "inlining": self._apply_inlining_optimization,
+            "vectorization": self._apply_vectorization_optimization,
+            "loop_unrolling": self._apply_loop_unrolling_optimization,
+            "dead_code_elimination": self._apply_dead_code_elimination,
+            "constant_folding": self._apply_constant_folding,
+            "cse": self._apply_cse_optimization,
+            "function_specialization": self._apply_function_specialization,
+            "memory_optimization": self._apply_memory_optimization,
+            "parallel_optimization": self._apply_parallel_optimization,
+        }
+        handler = dispatch.get(strategy.name)
+        if handler is not None:
+            return handler(model)
+        logger.warning(f"Unknown AOT optimization pass: {strategy.name}")
+        return model
     
     def _apply_inlining_optimization(self, model: Any) -> Any:
         """Apply function inlining optimization"""
@@ -367,7 +363,15 @@ class AOTCompiler(CompilerCore):
         return model
     
     def _save_compilation_artifacts(self, compiled_binary: Any, original_model: Any) -> tuple:
-        """Save compilation artifacts to disk"""
+        """Save compilation artifacts to disk.
+
+        .. warning::
+
+           This method currently uses :mod:`pickle` for serialization.
+           Pickle is **not safe** for loading data from untrusted sources.
+           Consider migrating to ``safetensors`` or ``torch.save`` for
+           production deployments.
+        """
         import os
         import pickle
         
@@ -387,13 +391,16 @@ class AOTCompiler(CompilerCore):
         metadata_path = os.path.join(output_dir, "metadata.json")
         metadata = {
             "compiler_info": self.get_compilation_info(),
-            "config": self.config.__dict__,
+            "config": {
+                k: (v.value if isinstance(v, enum.Enum) else str(v) if isinstance(v, (enum.EnumMeta, type)) else v)
+                for k, v in self.config.__dict__.items()
+            },
             "timestamp": time.time()
         }
         
-        import json
+        from ..utils.compiler_utils import safe_json_dump
         with open(metadata_path, 'w') as f:
-            json.dump(metadata, f, indent=2)
+            safe_json_dump(metadata, f, indent=2)
         
         return binary_path, metadata_path
     
@@ -435,15 +442,8 @@ class AOTCompiler(CompilerCore):
         return 1.2  # 20% improvement
     
     def _get_cache_key(self, model: Any, input_spec: Optional[Dict] = None) -> str:
-        """Generate cache key for model"""
-        import hashlib
-        
-        model_str = str(model)
-        config_str = str(self.config.__dict__)
-        input_str = str(input_spec) if input_spec else ""
-        
-        combined = f"{model_str}_{config_str}_{input_str}"
-        return hashlib.md5(combined.encode()).hexdigest()
+        """Generate cache key for model — delegates to base class utility."""
+        return self.generate_cache_key(model, self.config, input_spec)
     
     def _get_optimization_metrics(self) -> Dict[str, float]:
         """Get optimization metrics"""

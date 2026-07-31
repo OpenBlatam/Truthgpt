@@ -3,17 +3,45 @@ Compiler Utilities for TruthGPT
 Utility functions and helper modules for compiler components
 """
 
+import enum
 import logging
 import time
 import os
 import json
 from typing import Dict, List, Optional, Any, Union, Tuple
-from dataclasses import dataclass
+from dataclasses import dataclass, is_dataclass, asdict
 from abc import ABC, abstractmethod
 import torch
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+
+class SafeJSONEncoder(json.JSONEncoder):
+    """Custom JSON encoder supporting Enums, dataclasses, objects with __dict__, and NumPy types."""
+
+    def default(self, obj: Any) -> Any:
+        if isinstance(obj, enum.Enum):
+            return obj.value
+        if is_dataclass(obj) and not isinstance(obj, type):
+            return asdict(obj)
+        if hasattr(obj, "__dict__"):
+            return {k: self.default(v) if isinstance(v, enum.Enum) else v for k, v in obj.__dict__.items()}
+        if isinstance(obj, (np.integer, int)):
+            return int(obj)
+        if isinstance(obj, (np.floating, float)):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super().default(obj)
+
+
+def safe_json_dump(obj: Any, fp: Any, **kwargs: Any) -> None:
+    """Safely dump objects including Enums, NumPy arrays/scalars, and dataclasses to JSON."""
+    kwargs.setdefault("cls", SafeJSONEncoder)
+    kwargs.setdefault("indent", 2)
+    json.dump(obj, fp, **kwargs)
+
 
 @dataclass
 class CompilationHelper:
@@ -64,7 +92,7 @@ class PerformanceAnalyzer:
                     _ = model(input_data)
                 elif callable(model):
                     _ = model(input_data)
-            except:
+            except Exception:
                 pass
         
         # Benchmark
@@ -318,7 +346,7 @@ class CompilerUtils:
         """Save compilation report to file"""
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         with open(filename, 'w') as f:
-            json.dump(report, f, indent=2)
+            safe_json_dump(report, f)
         logger.info(f"Compilation report saved to: {filename}")
     
     def load_compilation_report(self, filename: str) -> Dict[str, Any]:

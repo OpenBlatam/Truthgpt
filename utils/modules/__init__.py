@@ -2351,17 +2351,6 @@ __all__ = [
     'create_evolution_config', 'create_individual', 'create_consciousness_state',
     'create_self_evolution_engine', 'create_consciousness_simulator', 'create_self_evolution_manager',
     
-    
-    # Advanced AI Domain Modules
-from ..reinforcement_learning import (
-    RLAlgorithm, EnvironmentType, RLConfig, ExperienceReplay,
-    DQNNetwork, DuelingDQNNetwork, DQNAgent, PPOAgent,
-    MultiAgentEnvironment, RLTrainingManager,
-    create_rl_config, create_dqn_agent, create_ppo_agent,
-    create_rl_training_manager, example_reinforcement_learning
-)
-
-
     # Advanced AI Domain Modules
     'RLAlgorithm', 'EnvironmentType', 'RLConfig', 'ExperienceReplay',
     'DQNNetwork', 'DuelingDQNNetwork', 'DQNAgent', 'PPOAgent',

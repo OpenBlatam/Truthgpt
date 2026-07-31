@@ -5,13 +5,26 @@ Inference Engine Exceptions
 Custom exceptions for inference engines with detailed error information.
 """
 
-from optimization_core.core.exceptions import (
-    InferenceError,
-    ModelError,
-    ValidationError as CoreValidationError,
-    ResourceError,
-    ConfigurationError,
-)
+try:
+    from optimization_core.core.exceptions import (
+        InferenceError,
+        ModelError,
+        ValidationError as CoreValidationError,
+        ResourceError,
+        ConfigurationError,
+    )
+except ImportError:
+    class OptimizationCoreException(Exception):
+        def __init__(self, message: str, details: dict = None, **kwargs):
+            super().__init__(message)
+            self.details = details or {}
+
+    class InferenceError(OptimizationCoreException): pass
+    class ModelError(OptimizationCoreException): pass
+    class CoreValidationError(OptimizationCoreException): pass
+    class ResourceError(OptimizationCoreException): pass
+    class ConfigurationError(OptimizationCoreException): pass
+
 
 
 class InferenceEngineError(InferenceError):

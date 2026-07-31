@@ -13,14 +13,24 @@ Industrial-grade orchestration layer leveraging SOTA modules:
 import logging
 from typing import List, Dict, Any, Optional, Tuple
 
-from optimization_core.modules.api_cost import (
-    APICostOptimizer,
-    APICostConfig,
-    EarlyAbstention,
-    MoASynthesis,
-    PromptCompressor,
-    LLMLinguaCompressor
-)
+try:
+    from modules.api_cost import (
+        APICostOptimizer,
+        APICostConfig,
+        EarlyAbstention,
+        MoASynthesis,
+        PromptCompressor,
+        LLMLinguaCompressor
+    )
+except ImportError:
+    from optimization_core.modules.api_cost import (
+        APICostOptimizer,
+        APICostConfig,
+        EarlyAbstention,
+        MoASynthesis,
+        PromptCompressor,
+        LLMLinguaCompressor
+    )
 
 # Conditional import for Claude Code capabilities
 _has_claude = False

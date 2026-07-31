@@ -1,23 +1,25 @@
-"""
-Test Runner for TruthGPT Compiler
-Comprehensive test execution framework
-"""
-
-import unittest
+import os
+import sys
 import logging
 import time
 import json
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
-from abc import ABC, abstractmethod
-import torch
-import numpy as np
+
+# Ensure root directory is in sys.path when run directly
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+root_dir = os.path.dirname(parent_dir)
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
 
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class TestConfig:
     """Configuration for test execution"""
+    __test__ = False
     verbose: bool = False
     parallel: bool = False
     timeout: float = 300.0  # 5 minutes
@@ -26,9 +28,11 @@ class TestConfig:
     output_file: Optional[str] = None
     filter_tests: Optional[List[str]] = None
 
+
 @dataclass
 class TestResult:
     """Result of test execution"""
+    __test__ = False
     test_name: str
     success: bool
     execution_time: float
@@ -36,8 +40,10 @@ class TestResult:
     performance_metrics: Optional[Dict[str, float]] = None
     coverage_data: Optional[Dict[str, Any]] = None
 
+
 class TestSuite:
     """Test suite for compiler components"""
+    __test__ = False
     
     def __init__(self, name: str):
         self.name = name
@@ -48,6 +54,15 @@ class TestSuite:
     def add_test(self, test_method):
         """Add a test method to the suite"""
         self.tests.append(test_method)
+
+    def add_test_case(self, test_case_class):
+        """Add all test methods from a TestCase class"""
+        import unittest
+        loader = unittest.TestLoader()
+        suite = loader.loadTestsFromTestCase(test_case_class)
+        for test in suite:
+            test_method = getattr(test, test._testMethodName)
+            self.tests.append(test_method)
         
     def add_setup(self, setup_method):
         """Add a setup method"""
@@ -85,7 +100,7 @@ class TestSuite:
     
     def _run_single_test(self, test_method, config: TestConfig) -> TestResult:
         """Run a single test method"""
-        test_name = test_method.__name__
+        test_name = getattr(test_method, '__name__', str(test_method))
         start_time = time.time()
         
         try:
@@ -119,8 +134,10 @@ class TestSuite:
                 error_message=str(e)
             )
 
+
 class TestRunner:
     """Main test runner for compiler tests"""
+    __test__ = False
     
     def __init__(self, config: TestConfig):
         self.config = config
@@ -209,253 +226,98 @@ class TestRunner:
         
         logger.info(f"Test report saved to: {filename}")
 
-# Example test implementations
-class TestCompilerCore:
-    """Test cases for compiler core"""
-    
-    def test_compilation_config(self):
-        """Test compilation configuration"""
-        from ..core.compiler_core import CompilationConfig, CompilationTarget, OptimizationLevel
-        
-        config = CompilationConfig(
-            target=CompilationTarget.CPU,
-            optimization_level=OptimizationLevel.STANDARD
-        )
-        
-        assert config.target == CompilationTarget.CPU
-        assert config.optimization_level == OptimizationLevel.STANDARD
-        assert config.enable_quantization == False
-        assert config.enable_fusion == True
-    
-    def test_compilation_result(self):
-        """Test compilation result"""
-        from ..core.compiler_core import CompilationResult
-        
-        result = CompilationResult(success=True, compilation_time=1.0)
-        
-        assert result.success == True
-        assert result.compilation_time == 1.0
-        assert result.warnings == []
-        assert result.errors == []
-    
-    def test_compiler_core_creation(self):
-        """Test compiler core creation"""
-        from ..core.compiler_core import create_compiler_core, CompilationConfig, CompilationTarget
-        
-        config = CompilationConfig(target=CompilationTarget.CPU)
-        compiler = create_compiler_core(config)
-        
-        assert compiler is not None
-        assert compiler.config.target == CompilationTarget.CPU
-
-class TestAOTCompiler:
-    """Test cases for AOT compiler"""
-    
-    def test_aot_compilation_config(self):
-        """Test AOT compilation configuration"""
-        from ..aot.aot_compiler import AOTCompilationConfig, AOTTarget, AOTOptimizationLevel
-        
-        config = AOTCompilationConfig(
-            target=AOTTarget.NATIVE,
-            optimization_level=AOTOptimizationLevel.STANDARD
-        )
-        
-        assert config.target == AOTTarget.NATIVE
-        assert config.optimization_level == AOTOptimizationLevel.STANDARD
-        assert config.enable_inlining == True
-        assert config.enable_vectorization == True
-    
-    def test_aot_compiler_creation(self):
-        """Test AOT compiler creation"""
-        from ..aot.aot_compiler import create_aot_compiler, AOTCompilationConfig, AOTTarget
-        
-        config = AOTCompilationConfig(target=AOTTarget.NATIVE)
-        compiler = create_aot_compiler(config)
-        
-        assert compiler is not None
-        assert compiler.config.target == AOTTarget.NATIVE
-
-class TestJITCompiler:
-    """Test cases for JIT compiler"""
-    
-    def test_jit_compilation_config(self):
-        """Test JIT compilation configuration"""
-        from ..jit.jit_compiler import JITCompilationConfig, JITTarget, JITOptimizationLevel
-        
-        config = JITCompilationConfig(
-            target=JITTarget.NATIVE,
-            optimization_level=JITOptimizationLevel.ADAPTIVE
-        )
-        
-        assert config.target == JITTarget.NATIVE
-        assert config.optimization_level == JITOptimizationLevel.ADAPTIVE
-        assert config.enable_profiling == True
-        assert config.enable_hotspot_detection == True
-    
-    def test_jit_compiler_creation(self):
-        """Test JIT compiler creation"""
-        from ..jit.jit_compiler import create_jit_compiler, JITCompilationConfig, JITTarget
-        
-        config = JITCompilationConfig(target=JITTarget.NATIVE)
-        compiler = create_jit_compiler(config)
-        
-        assert compiler is not None
-        assert compiler.config.target == JITTarget.NATIVE
-
-class TestMLIRCompiler:
-    """Test cases for MLIR compiler"""
-    
-    def test_mlir_compilation_config(self):
-        """Test MLIR compilation configuration"""
-        from ..mlir.mlir_compiler import MLIRCompiler, CompilationConfig, CompilationTarget
-        
-        config = CompilationConfig(target=CompilationTarget.CPU)
-        compiler = MLIRCompiler(config)
-        
-        assert compiler is not None
-        assert compiler.config.target == CompilationTarget.CPU
-    
-    def test_mlir_compiler_creation(self):
-        """Test MLIR compiler creation"""
-        from ..mlir.mlir_compiler import create_mlir_compiler, CompilationConfig, CompilationTarget
-        
-        config = CompilationConfig(target=CompilationTarget.CPU)
-        compiler = create_mlir_compiler(config)
-        
-        assert compiler is not None
-        assert compiler.config.target == CompilationTarget.CPU
-
-class TestPluginSystem:
-    """Test cases for plugin system"""
-    
-    def test_plugin_config(self):
-        """Test plugin configuration"""
-        from ..plugin.plugin_system import PluginConfig
-        
-        config = PluginConfig(
-            name="test_plugin",
-            version="1.0.0",
-            description="Test plugin"
-        )
-        
-        assert config.name == "test_plugin"
-        assert config.version == "1.0.0"
-        assert config.description == "Test plugin"
-        assert config.enabled == True
-    
-    def test_plugin_manager_creation(self):
-        """Test plugin manager creation"""
-        from ..plugin.plugin_system import create_plugin_manager
-        
-        manager = create_plugin_manager()
-        
-        assert manager is not None
-        assert len(manager.get_active_plugins()) == 0
-
-class TestTF2TensorRT:
-    """Test cases for TensorFlow to TensorRT compiler"""
-    
-    def test_tensorrt_config(self):
-        """Test TensorRT configuration"""
-        from ..tf2tensorrt.tf2tensorrt_compiler import TensorRTConfig, TensorRTOptimizationLevel, TensorRTPrecision
-        
-        config = TensorRTConfig(
-            optimization_level=TensorRTOptimizationLevel.STANDARD,
-            precision=TensorRTPrecision.FP16
-        )
-        
-        assert config.optimization_level == TensorRTOptimizationLevel.STANDARD
-        assert config.precision == TensorRTPrecision.FP16
-        assert config.enable_fp16 == True
-    
-    def test_tensorrt_compiler_creation(self):
-        """Test TensorRT compiler creation"""
-        from ..tf2tensorrt.tf2tensorrt_compiler import create_tf2tensorrt_compiler, TensorRTConfig
-        
-        config = TensorRTConfig()
-        compiler = create_tf2tensorrt_compiler(config)
-        
-        assert compiler is not None
-        assert compiler.config.target == CompilationTarget.GPU
-
-class TestTF2XLA:
-    """Test cases for TensorFlow to XLA compiler"""
-    
-    def test_xla_config(self):
-        """Test XLA configuration"""
-        from ..tf2xla.tf2xla_compiler import XLAConfig, XLAOptimizationLevel, XLATarget
-        
-        config = XLAConfig(
-            target=XLATarget.CPU,
-            optimization_level=XLAOptimizationLevel.STANDARD
-        )
-        
-        assert config.target == XLATarget.CPU
-        assert config.optimization_level == XLAOptimizationLevel.STANDARD
-        assert config.enable_fusion == True
-    
-    def test_xla_compiler_creation(self):
-        """Test XLA compiler creation"""
-        from ..tf2xla.tf2xla_compiler import create_tf2xla_compiler, XLAConfig, XLATarget
-        
-        config = XLAConfig(target=XLATarget.CPU)
-        compiler = create_tf2xla_compiler(config)
-        
-        assert compiler is not None
-        assert compiler.config.target == XLATarget.CPU
 
 def create_test_runner(config: TestConfig) -> TestRunner:
     """Create a test runner instance"""
     return TestRunner(config)
 
+
 def run_all_tests(config: TestConfig = None) -> Dict[str, List[TestResult]]:
     """Run all compiler tests"""
+    try:
+        from .test_compiler_core import TestCompilerCore
+        from .test_aot_compiler import TestAOTCompiler
+        from .test_jit_compiler import TestJITCompiler
+        from .test_mlir_compiler import TestMLIRCompiler
+        from .test_plugin_system import TestPluginSystem
+        from .test_tf2tensorrt import TestTF2TensorRT
+        from .test_tf2xla import TestTF2XLA
+        from .test_runtime_compiler import TestRuntimeCompiler
+        from .test_distributed_compiler import TestDistributedCompiler
+        from .test_neural_compiler import TestNeuralCompiler
+        from .test_kernel_compiler import TestKernelCompiler
+    except ImportError:
+        from compiler.tests.test_compiler_core import TestCompilerCore
+        from compiler.tests.test_aot_compiler import TestAOTCompiler
+        from compiler.tests.test_jit_compiler import TestJITCompiler
+        from compiler.tests.test_mlir_compiler import TestMLIRCompiler
+        from compiler.tests.test_plugin_system import TestPluginSystem
+        from compiler.tests.test_tf2tensorrt import TestTF2TensorRT
+        from compiler.tests.test_tf2xla import TestTF2XLA
+        from compiler.tests.test_runtime_compiler import TestRuntimeCompiler
+        from compiler.tests.test_distributed_compiler import TestDistributedCompiler
+        from compiler.tests.test_neural_compiler import TestNeuralCompiler
+        from compiler.tests.test_kernel_compiler import TestKernelCompiler
+
     if config is None:
         config = TestConfig()
     
     runner = create_test_runner(config)
     
-    # Add test suites
+    # Add test suites using dynamic test case discovery
     core_suite = TestSuite("compiler_core")
-    core_suite.add_test(TestCompilerCore().test_compilation_config)
-    core_suite.add_test(TestCompilerCore().test_compilation_result)
-    core_suite.add_test(TestCompilerCore().test_compiler_core_creation)
+    core_suite.add_test_case(TestCompilerCore)
     runner.add_test_suite(core_suite)
     
     aot_suite = TestSuite("aot_compiler")
-    aot_suite.add_test(TestAOTCompiler().test_aot_compilation_config)
-    aot_suite.add_test(TestAOTCompiler().test_aot_compiler_creation)
+    aot_suite.add_test_case(TestAOTCompiler)
     runner.add_test_suite(aot_suite)
     
     jit_suite = TestSuite("jit_compiler")
-    jit_suite.add_test(TestJITCompiler().test_jit_compilation_config)
-    jit_suite.add_test(TestJITCompiler().test_jit_compiler_creation)
+    jit_suite.add_test_case(TestJITCompiler)
     runner.add_test_suite(jit_suite)
     
     mlir_suite = TestSuite("mlir_compiler")
-    mlir_suite.add_test(TestMLIRCompiler().test_mlir_compilation_config)
-    mlir_suite.add_test(TestMLIRCompiler().test_mlir_compiler_creation)
+    mlir_suite.add_test_case(TestMLIRCompiler)
     runner.add_test_suite(mlir_suite)
     
     plugin_suite = TestSuite("plugin_system")
-    plugin_suite.add_test(TestPluginSystem().test_plugin_config)
-    plugin_suite.add_test(TestPluginSystem().test_plugin_manager_creation)
+    plugin_suite.add_test_case(TestPluginSystem)
     runner.add_test_suite(plugin_suite)
     
     tensorrt_suite = TestSuite("tf2tensorrt")
-    tensorrt_suite.add_test(TestTF2TensorRT().test_tensorrt_config)
-    tensorrt_suite.add_test(TestTF2TensorRT().test_tensorrt_compiler_creation)
+    tensorrt_suite.add_test_case(TestTF2TensorRT)
     runner.add_test_suite(tensorrt_suite)
     
     xla_suite = TestSuite("tf2xla")
-    xla_suite.add_test(TestTF2XLA().test_xla_config)
-    xla_suite.add_test(TestTF2XLA().test_xla_compiler_creation)
+    xla_suite.add_test_case(TestTF2XLA)
     runner.add_test_suite(xla_suite)
+
+    runtime_suite = TestSuite("runtime_compiler")
+    runtime_suite.add_test_case(TestRuntimeCompiler)
+    runner.add_test_suite(runtime_suite)
+
+    distributed_suite = TestSuite("distributed_compiler")
+    distributed_suite.add_test_case(TestDistributedCompiler)
+    runner.add_test_suite(distributed_suite)
+
+    neural_suite = TestSuite("neural_compiler")
+    neural_suite.add_test_case(TestNeuralCompiler)
+    runner.add_test_suite(neural_suite)
+
+    kernel_suite = TestSuite("kernel_compiler")
+    kernel_suite.add_test_case(TestKernelCompiler)
+    runner.add_test_suite(kernel_suite)
     
     # Run all tests
     return runner.run_all_tests()
 
 
-
-
-
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    results = run_all_tests(TestConfig(verbose=True))
+    total_passed = sum(sum(1 for r in res if r.success) for res in results.values())
+    total_count = sum(len(res) for res in results.values())
+    print(f"\n==========================================")
+    print(f"Compiler Test Summary: {total_passed}/{total_count} tests passed")
+    print(f"==========================================\n")

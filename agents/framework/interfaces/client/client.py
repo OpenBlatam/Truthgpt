@@ -13,12 +13,20 @@ import time
 import inspect
 from typing import Any, AsyncIterator, Dict, Optional, Union
 
-from optimization_core.agents.orchestration.swarm.swarm_orchestrator import SwarmOrchestrator
-from optimization_core.agents.framework.architectures.react_agent import MultiUserReActAgent
-from optimization_core.agents.framework.models import AgentResponse, AgentConfig
-from optimization_core.agents.framework.registry import registry
-from optimization_core.agents.framework.engines.engine_providers import DummyAsyncLLM
-from optimization_core.agents.framework.exceptions import HandoffError, ConfigurationError
+try:
+    from optimization_core.agents.orchestration.swarm.swarm_orchestrator import SwarmOrchestrator
+    from optimization_core.agents.framework.architectures.react_agent import MultiUserReActAgent
+    from optimization_core.agents.framework.models import AgentResponse, AgentConfig
+    from optimization_core.agents.framework.registry import registry
+    from optimization_core.agents.framework.engines.engine_providers import DummyAsyncLLM
+    from optimization_core.agents.framework.exceptions import HandoffError, ConfigurationError
+except ImportError:
+    from agents.orchestration.swarm.swarm_orchestrator import SwarmOrchestrator
+    from agents.framework.architectures.react_agent import MultiUserReActAgent
+    from agents.framework.models import AgentResponse, AgentConfig
+    from agents.framework.registry import registry
+    from agents.framework.engines.engine_providers import DummyAsyncLLM
+    from agents.framework.exceptions import HandoffError, ConfigurationError
 
 logger = logging.getLogger(__name__)
 

@@ -30,7 +30,7 @@ class ModularSystemDemo:
     """
     Comprehensive demonstration of modular PiMoE system.
     """
-    
+
     def __init__(self):
         self.results = {}
         self.performance_metrics = {}
@@ -688,6 +688,8 @@ class ModularSystemDemo:
         
         print(f"\n💾 Results saved to modular_demo_results.json")
         print(f"🚀 Modular PiMoE system is ready for production!")
+
+ModularDemo = ModularSystemDemo
 
 def run_modular_demo():
     """Run complete modular system demonstration."""

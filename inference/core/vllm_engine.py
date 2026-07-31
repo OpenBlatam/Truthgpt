@@ -4,10 +4,16 @@ Refactored vLLM Engine with Polyglot Integration
 Integrates vLLM with Rust KV cache and C++ attention for maximum performance.
 Unified sync and async generations based on the BaseInferenceEngine architecture.
 """
+import sys
 import logging
 import asyncio
 from typing import List, Optional, Union, Dict, Any, AsyncIterator
 import time
+
+_mod = sys.modules.get(__name__)
+if _mod:
+    sys.modules["inference.core.vllm_engine"] = _mod
+    sys.modules["optimization_core.inference.core.vllm_engine"] = _mod
 
 from .base_engine import BaseInferenceEngine, GenerationConfig, InferenceResult
 from ..config.vllm_config import BackendMode, VLLMConfig
@@ -263,5 +269,6 @@ class VLLMEngine(BaseInferenceEngine):
         }
         return stats
 
-# Export Async wrapper as alias for backwards compatibility
+# Export Async wrapper & VLLMInferenceEngine as aliases for backwards compatibility
 AsyncVLLMEngine = VLLMEngine
+VLLMInferenceEngine = VLLMEngine

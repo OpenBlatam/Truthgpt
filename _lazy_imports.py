@@ -9,8 +9,15 @@ from typing import Dict
 
 # Main lazy imports - core optimization components
 _LAZY_IMPORTS: Dict[str, str] = {
+    # Configs Framework
+    'AppCfg': '.configs',
+    'ModelCfg': '.configs',
+    'TrainingCfg': '.configs',
+    'load_config': '.configs',
+
     # CUDA and Triton kernels - moved to utils.gpu
     'OptimizedLayerNorm': '.utils.gpu.cuda_kernels',
+
     'OptimizedRMSNorm': '.utils.gpu.cuda_kernels',
     'CUDAOptimizations': '.utils.gpu.cuda_kernels',
     'TritonLayerNorm': '.triton_optimizations',
@@ -22,6 +29,12 @@ _LAZY_IMPORTS: Dict[str, str] = {
     'ProductionOptimizer': '.optimizers',
     'create_production_optimizer': '.optimizers',
     'production_optimization_context': '.optimizers',
+    'UnifiedOptimizerFactory': '.optimizers.unified_optimizer_factory',
+    
+    # Adapters & Agents Framework
+    'create_adapter': '.adapters',
+    'adapters': '.adapters',
+    'AgentRegistry': '.agents.unified_agent_registry',
     
     # Memory Optimizations
     'MemoryOptimizer': '.utils.memory_optimizations',

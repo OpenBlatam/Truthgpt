@@ -222,6 +222,7 @@ class TestAdvancedPerformanceBenchmarks(unittest.TestCase):
                 self.baseline_model = MockModel(input_size=256, hidden_size=512, output_size=256)
                 self.optimized_model = MockModel(input_size=256, hidden_size=512, output_size=256)
                 self.optimizer = MockOptimizer(learning_rate=0.001)
+                self.profiler = PerformanceProfiler()
                 
             def run_baseline(self, data, target):
                 """Run baseline model"""

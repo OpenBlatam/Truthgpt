@@ -1,0 +1,14 @@
+{
+  "producto": "SaaS Test Refactor",
+  "archivos_generados": [
+    "01_script_video_tiktok_reels.txt",
+    "02_secuencia_whatsapp_sms.json",
+    "03_anuncios_y_landing_page.md",
+    "04_cold_email_outreach.txt",
+    "05_calendario_redes_sociales.json",
+    "MANIFEST_PRODUCCION.json",
+    "sync_to_gdrive_and_webhooks.py"
+  ],
+  "google_drive_status": "Ready for Google Drive API & Webhook dispatch",
+  "redes_sociales_status": "Formatted for Meta Ads, LinkedIn, TikTok, Klaviyo, WhatsApp"
+}

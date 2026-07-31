@@ -4,12 +4,14 @@ Advanced module management with dynamic loading and optimization
 """
 
 import sys
+import time
 import importlib
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
+
 
 class ModuleStatus(Enum):
     """Module status enum."""

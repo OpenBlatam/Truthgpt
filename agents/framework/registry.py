@@ -16,9 +16,20 @@ from typing import Any, Callable, Dict, List, Optional, Type, Set, Tuple
 
 from pydantic import BaseModel, Field
 
-from optimization_core.agents.framework.tools.tools import BaseTool
-from optimization_core.agents.framework.architectures.base_agent import BaseAgent
-from optimization_core.agents.framework.exceptions import RegistryError, PluginLoadError
+try:
+    from optimization_core.agents.framework.tools.tools import BaseTool
+except ImportError:
+    from agents.framework.tools.tools import BaseTool
+
+try:
+    from optimization_core.agents.framework.architectures.base_agent import BaseAgent
+except ImportError:
+    from agents.framework.architectures.base_agent import BaseAgent
+
+try:
+    from optimization_core.agents.framework.exceptions import RegistryError, PluginLoadError
+except ImportError:
+    from agents.framework.exceptions import RegistryError, PluginLoadError
 
 logger = logging.getLogger(__name__)
 

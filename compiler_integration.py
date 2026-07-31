@@ -11,12 +11,20 @@ from abc import ABC, abstractmethod
 import torch
 import numpy as np
 
-from .compiler import (
-    CompilerCore, CompilationConfig, CompilationResult, CompilationTarget, OptimizationLevel,
-    create_compiler_core, AOTCompiler, JITCompiler, MLIRCompiler, TF2TensorRTCompiler, TF2XLACompiler,
-    RuntimeCompiler, KernelCompiler, create_aot_compiler, create_jit_compiler, create_mlir_compiler,
-    create_tf2tensorrt_compiler, create_tf2xla_compiler, create_runtime_compiler, create_kernel_compiler
-)
+try:
+    from .compiler import (
+        CompilerCore, CompilationConfig, CompilationResult, CompilationTarget, OptimizationLevel,
+        create_compiler_core, AOTCompiler, JITCompiler, MLIRCompiler, TF2TensorRTCompiler, TF2XLACompiler,
+        RuntimeCompiler, KernelCompiler, create_aot_compiler, create_jit_compiler, create_mlir_compiler,
+        create_tf2tensorrt_compiler, create_tf2xla_compiler, create_runtime_compiler, create_kernel_compiler
+    )
+except ImportError:
+    from compiler import (
+        CompilerCore, CompilationConfig, CompilationResult, CompilationTarget, OptimizationLevel,
+        create_compiler_core, AOTCompiler, JITCompiler, MLIRCompiler, TF2TensorRTCompiler, TF2XLACompiler,
+        RuntimeCompiler, KernelCompiler, create_aot_compiler, create_jit_compiler, create_mlir_compiler,
+        create_tf2tensorrt_compiler, create_tf2xla_compiler, create_runtime_compiler, create_kernel_compiler
+    )
 
 logger = logging.getLogger(__name__)
 

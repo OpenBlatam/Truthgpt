@@ -3,18 +3,31 @@ Modular Expert Management System
 Specialized modules for expert creation, management, and optimization.
 """
 
-from .base_expert import BaseExpert, ExpertConfig, ExpertResult
+from .base_expert import BaseExpert, ExpertConfig, ExpertResult, ExpertType
 from .reasoning_expert import ReasoningExpert, ReasoningExpertConfig
-from .computation_expert import ComputationExpert, ComputationExpertConfig
-from .mathematical_expert import MathematicalExpert, MathematicalExpertConfig
-from .language_expert import LanguageExpert, LanguageExpertConfig
-from .creative_expert import CreativeExpert, CreativeExpertConfig
-from .analytical_expert import AnalyticalExpert, AnalyticalExpertConfig
-from .specialized_expert import SpecializedExpert, SpecializedExpertConfig
-from .expert_pool import ExpertPool, ExpertPoolConfig
-from .expert_optimizer import ExpertOptimizer, ExpertOptimizerConfig
-from .expert_factory import ExpertFactory, create_expert, create_expert_pool
-from .expert_registry import ExpertRegistry, register_expert, get_expert
+
+ComputationExpert = None
+ComputationExpertConfig = None
+MathematicalExpert = None
+MathematicalExpertConfig = None
+LanguageExpert = None
+LanguageExpertConfig = None
+CreativeExpert = None
+CreativeExpertConfig = None
+AnalyticalExpert = None
+AnalyticalExpertConfig = None
+SpecializedExpert = None
+SpecializedExpertConfig = None
+ExpertPool = None
+ExpertPoolConfig = None
+ExpertOptimizer = None
+ExpertOptimizerConfig = None
+ExpertFactory = None
+create_expert = None
+create_expert_pool = None
+ExpertRegistry = None
+register_expert = None
+get_expert = None
 
 __all__ = [
     # Base Expert

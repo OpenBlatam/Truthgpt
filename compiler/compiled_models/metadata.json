@@ -1,0 +1,34 @@
+{
+  "compiler_info": {
+    "compiler_type": "AOTCompiler",
+    "target": "native",
+    "optimization_level": 2,
+    "quantization_enabled": false,
+    "fusion_enabled": true
+  },
+  "config": {
+    "target": "native",
+    "optimization_level": 2,
+    "enable_quantization": false,
+    "enable_fusion": true,
+    "enable_parallelization": true,
+    "memory_limit": null,
+    "timeout": null,
+    "debug_mode": false,
+    "custom_flags": {},
+    "enable_inlining": true,
+    "enable_vectorization": true,
+    "enable_loop_unrolling": true,
+    "enable_dead_code_elimination": true,
+    "enable_constant_folding": true,
+    "enable_common_subexpression_elimination": true,
+    "enable_function_specialization": true,
+    "enable_memory_optimization": true,
+    "enable_parallel_optimization": true,
+    "output_format": "binary",
+    "output_path": null,
+    "debug_info": false,
+    "profiling_info": false
+  },
+  "timestamp": 1785438334.233509
+}

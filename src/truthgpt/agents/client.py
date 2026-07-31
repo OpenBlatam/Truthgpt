@@ -11,15 +11,21 @@ import time
 import inspect
 from typing import Any, AsyncIterator, Dict, Optional, Union
 
-from .multi_agent.swarm_orchestrator import SwarmOrchestrator
-from .tools.orchestrator import MultiUserReActAgent
-from .core.models import AgentResponse, AgentConfig
-from .core.registry import registry
+try:
+    from .multi_agent.swarm_orchestrator import SwarmOrchestrator
+except ImportError:
+    SwarmOrchestrator = None
+try:
+    from .tools.orchestrator import MultiUserReActAgent
+except ImportError:
+    MultiUserReActAgent = None
+from .models import AgentResponse, AgentConfig
+from .registry import registry
 # Import DummyAsyncLLM from where it is defined (engine_providers), not from the
 # heavy `engines` facade. Going through `engines` creates a latent import cycle:
 # agents/__init__ -> client -> engines -> (engines mid-import) -> client.
-from .engines.engine_providers import DummyAsyncLLM
-from .core.exceptions import HandoffError
+from .engine_providers import DummyAsyncLLM
+from .exceptions import HandoffError
 
 logger = logging.getLogger(__name__)
 

@@ -40,6 +40,9 @@ from .validation_rules import (
     create_validation_rules
 )
 
+from .schema import AppCfg, TrainingCfg, ModelCfg
+from .loader import load_config, parse_overrides, deep_merge
+
 __all__ = [
     # Config Manager
     'ConfigManager',
@@ -72,7 +75,15 @@ __all__ = [
     'OptimizationValidationRule',
     'ModelValidationRule',
     'TrainingValidationRule',
-    'create_validation_rules'
+    'create_validation_rules',
+
+    # Schema & Loader
+    'AppCfg',
+    'TrainingCfg',
+    'ModelCfg',
+    'load_config',
+    'parse_overrides',
+    'deep_merge'
 ]
 
 

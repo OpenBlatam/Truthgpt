@@ -10,13 +10,24 @@ from __future__ import annotations
 # Direct imports
 from .loader import (
     load_config,
+    save_config,
+    get_preset_config,
     parse_overrides,
+    parse_env_overrides,
     deep_merge,
 )
+from .unified_config import UnifiedConfigManager
 from .schema import (
-    AppCfg,
-    ModelCfg,
+    BaseOptimizationSchema,
+    QuantizationCfg,
+    KVCacheCfg,
+    CompilerCfg,
+    AgentOrchestratorCfg,
     TrainingCfg,
+    ModelCfg,
+    InferenceCfg,
+    OptimizationCfg,
+    AppCfg,
 )
 
 # Lazy imports for presets
@@ -57,12 +68,24 @@ def list_available_config_modules() -> list[str]:
 
 __all__ = [
     "load_config",
+    "save_config",
+    "get_preset_config",
     "parse_overrides",
+    "parse_env_overrides",
     "deep_merge",
-    "AppCfg",
-    "ModelCfg",
+    "BaseOptimizationSchema",
+    "QuantizationCfg",
+    "KVCacheCfg",
+    "CompilerCfg",
+    "AgentOrchestratorCfg",
     "TrainingCfg",
+    "ModelCfg",
+    "InferenceCfg",
+    "OptimizationCfg",
+    "AppCfg",
+    "UnifiedConfigManager",
     "presets",
     "list_available_config_modules",
 ]
+
 

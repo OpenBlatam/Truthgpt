@@ -9,21 +9,15 @@ from .aot_compiler import (
     create_aot_compiler, aot_compilation_context
 )
 
-try:
-    from .static_analysis import (
-        StaticAnalyzer, StaticAnalysisResult, CodeAnalyzer,
-        create_static_analyzer, static_analysis_context
-    )
-except ImportError:
-    pass
+from .static_analysis import (
+    StaticAnalyzer, StaticAnalysisResult, CodeAnalyzer,
+    create_static_analyzer, static_analysis_context
+)
 
-try:
-    from .code_generation import (
-        CodeGenerator, CodeGenConfig, CodeGenResult,
-        create_code_generator, code_generation_context
-    )
-except ImportError:
-    pass
+from .code_generation import (
+    CodeGenerator, CodeGenConfig, CodeGenResult,
+    create_code_generator, code_generation_context
+)
 
 __all__ = [
     'AOTCompiler',

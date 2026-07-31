@@ -17,8 +17,23 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
-from optimization_core.agents.framework.models import AgentResponse
-from optimization_core.core.framework.error_handler import ErrorHandler
+try:
+    from optimization_core.agents.framework.models import AgentResponse
+except ImportError:
+    try:
+        from agents.framework.models import AgentResponse
+    except ImportError:
+        AgentResponse = Any
+
+try:
+    from optimization_core.core.framework.error_handler import ErrorHandler
+except ImportError:
+    try:
+        from core.framework.error_handler import ErrorHandler
+    except ImportError:
+        ErrorHandler = None
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +86,7 @@ class BaseAgent(ABC):
     - Typed episodic memory via ``MemoryEntry``
     - Structured status reporting via ``AgentStatus``
     - Lifecycle hook callbacks (``on_start``, ``on_finish``, ``on_error``)
+    - Async observe/act/run pipeline methods
     - Async context manager interface
     - Abstract ``process()`` contract for all subclasses
     """
@@ -83,7 +99,7 @@ class BaseAgent(ABC):
         self._created_at: float = time.time()
         self._memory_lock = threading.Lock()
 
-    async def __aenter__(self) -> BaseAgent:
+    async def __aenter__(self) -> "BaseAgent":
         """Async context manager entry."""
         await self.on_start()
         return self
@@ -98,24 +114,44 @@ class BaseAgent(ABC):
     @abstractmethod
     async def process(
         self, query: str, context: Optional[Dict[str, Any]] = None
-    ) -> AgentResponse:
+    ) -> Any:
         """Process a query and return a structured AgentResponse."""
         pass
 
+    async def aobserve(self, environment_state: Dict[str, Any]) -> Dict[str, Any]:
+        """Async hook to perceive and parse environment state changes."""
+        logger.debug("Agent [%s] observing environment state: %s", self.name, list(environment_state.keys()))
+        return environment_state
+
+    async def aact(self, action_plan: Dict[str, Any]) -> Dict[str, Any]:
+        """Async hook to execute an action plan against tools or environment."""
+        action_name = action_plan.get("action", "unknown")
+        await self.on_action(action_name, action_plan)
+        return {"status": "executed", "action": action_name}
+
+    async def arun(self, query: str, context: Optional[Dict[str, Any]] = None) -> Any:
+        """Full pipeline execution: observe -> process -> act."""
+        obs = await self.aobserve(context or {})
+        res = await self.safe_process(query, context=obs)
+        if isinstance(res, dict) and "action" in res:
+            await self.aact(res)
+        return res
+
     def set_state(self, new_state: AgentLifecycleState) -> None:
         """Validate and update the agent's lifecycle state."""
-        from optimization_core.agents.framework.exceptions import AgentStateError
-        
-        # Valid state transition guards
+        try:
+            from optimization_core.agents.framework.exceptions import AgentStateError
+        except ImportError:
+            AgentStateError = ValueError
+
         invalid_transitions = {
             AgentLifecycleState.FAILED: {AgentLifecycleState.RUNNING},
         }
         if self.state in invalid_transitions and new_state in invalid_transitions[self.state]:
             raise AgentStateError(
-                f"Invalid lifecycle transition for agent '{self.name}': {self.state.value} -> {new_state.value}",
-                metadata={"agent": self.name, "from_state": self.state.value, "to_state": new_state.value}
+                f"Invalid lifecycle transition for agent '{self.name}': {self.state.value} -> {new_state.value}"
             )
-            
+
         logger.debug("Agent [%s] lifecycle transition: %s -> %s", self.name, self.state.value, new_state.value)
         self.state = new_state
 
@@ -140,25 +176,34 @@ class BaseAgent(ABC):
 
     # --- Execution Controls ---
 
-    def default_fallback(self) -> AgentResponse:
+    def default_fallback(self) -> Any:
         """Default fallback response when an unhandled error occurs during process()."""
-        return AgentResponse(
-            content=f"Error: Agent '{self.name}' encountered an unhandled exception during processing.",
-            action_type="error",
-            status_code=500,
-            metadata={"status": "failed", "agent_name": self.name, "recovery": "safe_process_fallback"}
-        )
+        if AgentResponse is not Any:
+            return AgentResponse(
+                content=f"Error: Agent '{self.name}' encountered an unhandled exception during processing.",
+                action_type="error",
+                status_code=500,
+                metadata={"status": "failed", "agent_name": self.name, "recovery": "safe_process_fallback"}
+            )
+        return {
+            "content": f"Error: Agent '{self.name}' encountered an unhandled exception during processing.",
+            "status_code": 500,
+            "metadata": {"status": "failed", "agent_name": self.name}
+        }
 
-    async def safe_process(self, query: str, context: Optional[Dict[str, Any]] = None) -> AgentResponse:
+    async def safe_process(self, query: str, context: Optional[Dict[str, Any]] = None) -> Any:
         """Executes process() safely with automated state management and fallback."""
         try:
             await self.on_start()
-            response = await ErrorHandler.async_safe_execute(
-                self.process,
-                self.default_fallback,
-                query,
-                context=context
-            )
+            if ErrorHandler is not None and hasattr(ErrorHandler, "async_safe_execute"):
+                response = await ErrorHandler.async_safe_execute(
+                    self.process,
+                    self.default_fallback,
+                    query,
+                    context=context
+                )
+            else:
+                response = await self.process(query, context=context)
             await self.on_finish()
             return response
         except Exception as e:
@@ -223,3 +268,9 @@ class BaseAgent(ABC):
         )
 
 
+__all__ = [
+    "AgentLifecycleState",
+    "MemoryEntry",
+    "AgentStatus",
+    "BaseAgent",
+]

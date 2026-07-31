@@ -12,10 +12,17 @@ import argparse
 import json
 from typing import Dict, Any, List
 
-# Add current directory to path
+# Add parent directory (optimization_core) and current directory to sys.path
 current_dir = Path(__file__).parent
-sys.path.append(str(current_dir))
-sys.path.append(str(current_dir.parent))
+sys.path.insert(0, str(current_dir.parent))
+sys.path.insert(0, str(current_dir))
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
+
 
 try:
     from tests.fixtures.test_utils import TestUtils, PerformanceProfiler, MemoryTracker
@@ -96,8 +103,20 @@ class TruthGPTTestRunner:
             self.memory_tracker.take_snapshot(f"before_{Path(test_file).stem}")
             
             # Run tests
+            import importlib
             loader = unittest.TestLoader()
-            suite = loader.loadTestsFromName(test_file.replace('.py', '').replace('/', '.'))
+            try:
+                rel_path = Path(test_file).resolve().relative_to(current_dir.parent.resolve())
+                mod_name = str(rel_path.with_suffix('')).replace('\\', '.').replace('/', '.')
+                mod = importlib.import_module(mod_name)
+                suite = loader.loadTestsFromModule(mod)
+
+            except Exception as ex:
+                loader = unittest.TestLoader()
+                suite = loader.discover(start_dir=str(Path(test_file).parent), pattern=Path(test_file).name)
+
+
+
             
             runner = unittest.TextTestRunner(
                 verbosity=2 if self.verbose else 1,

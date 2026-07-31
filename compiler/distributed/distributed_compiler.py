@@ -134,6 +134,7 @@ class DistributedCompilationConfig(CompilationConfig):
 @dataclass
 class DistributedCompilationResult(CompilationResult):
     """Enhanced distributed compilation result"""
+    compilation_mode: str = "default"
     # Distributed-specific metrics
     distributed_throughput: float = 0.0
     distributed_latency: float = 0.0
@@ -177,11 +178,13 @@ class DistributedCompilationResult(CompilationResult):
     distributed_availability: float = 0.0
     
     # Compilation metadata
+    compilation_mode: str = ""
     master_node: str = ""
     worker_nodes: List[str] = None
     compilation_topology: str = ""
     load_balancing_strategy: str = ""
     fault_tolerance_level: int = 0
+    compilation_mode: Optional[Any] = None
 
     def __post_init__(self):
         if self.worker_nodes is None:
@@ -675,6 +678,11 @@ class DistributedCompiler(CompilerCore):
         except Exception as e:
             logger.error(f"Failed to initialize network components: {e}")
     
+    def optimize(self, model: Any) -> Any:
+        """Optimize model for distributed execution"""
+        result = self.compile(model)
+        return result.compiled_model or model
+
     def compile(self, model: Any, input_spec: Optional[Dict] = None) -> DistributedCompilationResult:
         """Advanced distributed compilation with multi-node optimization"""
         try:
@@ -804,9 +812,9 @@ class DistributedCompiler(CompilerCore):
             
             result = DistributedCompilationResult(
                 success=True,
-                compiled_model=compiled_model,
-                compilation_mode="master_worker"
+                compiled_model=compiled_model
             )
+            result.compilation_mode = "master_worker"
             
             return result
             

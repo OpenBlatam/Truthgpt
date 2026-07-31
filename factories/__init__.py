@@ -1,8 +1,9 @@
-"""
-Unified Factory System
-======================
-Centralized access to all factory functions in optimization_core.
-"""
+import sys
+
+_mod = sys.modules.get(__name__)
+if _mod:
+    sys.modules["factories"] = _mod
+    sys.modules["optimization_core.factories"] = _mod
 
 # Import registry
 from .registry import Registry

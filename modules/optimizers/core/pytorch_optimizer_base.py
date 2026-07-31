@@ -14,12 +14,14 @@ from abc import ABC, abstractmethod
 
 class OptimizationConfig(BaseModel):
     """Base configuration for python optimizers"""
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
     
     enabled: bool = True
     verbose: bool = False
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     precision: str = "float32"
+    learning_rate: float = 0.001
+
 
 class PyTorchOptimizerBase(ABC):
     """

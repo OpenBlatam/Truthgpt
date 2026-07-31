@@ -18,6 +18,7 @@ class CircuitBreaker:
         self.recovery_time_seconds = recovery_time_seconds
         self.approvals_bypassed = 0
         self.consecutive_failures = 0
+        self.total_trips = 0
         self.state = "CLOSED"  # CLOSED (normal), OPEN (tripped), HALF_OPEN (probing)
         self.last_tripped: Optional[float] = None
         self._lock = threading.Lock()
@@ -42,6 +43,7 @@ class CircuitBreaker:
                     return True
                 else:
                     self.state = "OPEN"
+                    self.total_trips += 1
                     self.last_tripped = now
                     logger.warning(f"CircuitBreaker OPENED: Maximum auto-approvals ({self.failure_threshold}) reached.")
                     return False
@@ -66,6 +68,7 @@ class CircuitBreaker:
             self.consecutive_failures += 1
             if self.state == "HALF_OPEN" or self.consecutive_failures >= self.failure_threshold:
                 self.state = "OPEN"
+                self.total_trips += 1
                 self.last_tripped = time.time()
                 logger.warning(f"CircuitBreaker TRIPPED to OPEN state. Consecutive failures: {self.consecutive_failures}")
 
@@ -77,6 +80,20 @@ class CircuitBreaker:
             self.state = "CLOSED"
             self.last_tripped = None
             logger.info("CircuitBreaker RESET manually.")
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return serializable status dictionary for observability telemetry."""
+        with self._lock:
+            return {
+                "state": self.state,
+                "failure_threshold": self.failure_threshold,
+                "recovery_time_seconds": self.recovery_time_seconds,
+                "approvals_bypassed": self.approvals_bypassed,
+                "consecutive_failures": self.consecutive_failures,
+                "total_trips": self.total_trips,
+                "last_tripped": self.last_tripped,
+            }
+
 
 
 class AdaptiveTimeoutStrategy:
@@ -347,6 +364,15 @@ class SmartAgentScheduler:
             "circuit_breaker_bypassed": self.circuit_breaker.approvals_bypassed,
             "circuit_breaker_failures": self.circuit_breaker.consecutive_failures,
         }
+
+
+__all__ = [
+    "CircuitBreaker",
+    "AdaptiveTimeoutStrategy",
+    "AgentTask",
+    "SmartAgentScheduler",
+]
+
 
 
 

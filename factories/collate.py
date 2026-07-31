@@ -14,7 +14,8 @@ from .registry import Registry
 
 logger = logging.getLogger(__name__)
 
-COLLATE = Registry()
+COLLATE = Registry(name="CollatorRegistry")
+
 
 
 @COLLATE.register("lm")

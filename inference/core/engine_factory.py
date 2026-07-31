@@ -173,5 +173,7 @@ def list_available_engines() -> Dict[str, bool]:
         EngineType.ASYNC_VLLM: VLLM_AVAILABLE,
         EngineType.TENSORRT_LLM: TENSORRT_LLM_AVAILABLE,
         EngineType.ASYNC_TENSORRT_LLM: TENSORRT_LLM_AVAILABLE,
-        EngineType.NATIVE: True
+        EngineType.NATIVE: True,
+        EngineType.ASYNC_NATIVE: True,
+        EngineType.AUTO_FALLBACK: True,
     }

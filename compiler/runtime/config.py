@@ -10,6 +10,8 @@ from ..core.compiler_core import CompilationConfig, CompilationResult
 
 class RuntimeTarget(enum.Enum):
     """Runtime compilation targets"""
+    CPU = "cpu"
+    GPU = "gpu"
     INTERPRETER = "interpreter"
     BYTECODE = "bytecode"
     NATIVE = "native"

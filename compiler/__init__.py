@@ -7,78 +7,51 @@ TensorFlow-style architecture with comprehensive compiler support
 # Core compiler infrastructure
 from .core.compiler_core import (
     CompilerCore, CompilationTarget, OptimizationLevel, CompilationResult,
+    CompilationConfig, CompilationContext, CompilationError,
     create_compiler_core, compilation_context
 )
 
 # AOT (Ahead-of-Time) Compilation
-try:
-    from .aot.aot_compiler import (
-        AOTCompiler, AOTCompilationConfig, AOTOptimizationStrategy,
-        create_aot_compiler, aot_compilation_context
-    )
-except ImportError:
-    AOTCompiler = AOTCompilationConfig = AOTOptimizationStrategy = None
-    create_aot_compiler = aot_compilation_context = None
+from .aot.aot_compiler import (
+    AOTCompiler, AOTCompilationConfig, AOTOptimizationStrategy,
+    create_aot_compiler, aot_compilation_context
+)
 
 # JIT (Just-in-Time) Compilation
-try:
-    from .jit.jit_compiler import (
-        JITCompiler, JITCompilationConfig, JITOptimizationStrategy,
-        create_jit_compiler, jit_compilation_context
-    )
-except ImportError:
-    JITCompiler = JITCompilationConfig = JITOptimizationStrategy = None
-    create_jit_compiler = jit_compilation_context = None
+from .jit.jit_compiler import (
+    JITCompiler, JITCompilationConfig, JITOptimizationStrategy,
+    create_jit_compiler, jit_compilation_context
+)
 
 # MLIR Compilation Infrastructure
-try:
-    from .mlir.mlir_compiler import (
-        MLIRCompiler, MLIRDialect, MLIROptimizationPass, MLIRCompilationResult,
-        create_mlir_compiler, mlir_compilation_context
-    )
-except ImportError:
-    MLIRCompiler = MLIRDialect = MLIROptimizationPass = MLIRCompilationResult = None
-    create_mlir_compiler = mlir_compilation_context = None
+from .mlir.mlir_compiler import (
+    MLIRCompiler, MLIRDialect, MLIROptimizationPass, MLIRCompilationResult,
+    create_mlir_compiler, mlir_compilation_context
+)
 
 # Plugin System
-try:
-    from .plugin.plugin_system import (
-        CompilerPlugin, PluginManager, PluginRegistry, PluginInterface,
-        create_plugin_manager, plugin_compilation_context
-    )
-except ImportError:
-    CompilerPlugin = PluginManager = PluginRegistry = PluginInterface = None
-    create_plugin_manager = plugin_compilation_context = None
+from .plugin.plugin_system import (
+    CompilerPlugin, PluginManager, PluginRegistry, PluginInterface,
+    create_plugin_manager, plugin_compilation_context
+)
 
 # TensorFlow to TensorRT Compilation
-try:
-    from .tf2tensorrt.tf2tensorrt_compiler import (
-        TF2TensorRTCompiler, TensorRTConfig, TensorRTOptimizationLevel,
-        create_tf2tensorrt_compiler, tf2tensorrt_compilation_context
-    )
-except ImportError:
-    TF2TensorRTCompiler = TensorRTConfig = TensorRTOptimizationLevel = None
-    create_tf2tensorrt_compiler = tf2tensorrt_compilation_context = None
+from .tf2tensorrt.tf2tensorrt_compiler import (
+    TF2TensorRTCompiler, TensorRTConfig, TensorRTOptimizationLevel,
+    create_tf2tensorrt_compiler, tf2tensorrt_compilation_context
+)
 
 # TensorFlow to XLA Compilation
-try:
-    from .tf2xla.tf2xla_compiler import (
-        TF2XLACompiler, XLAConfig, XLAOptimizationLevel,
-        create_tf2xla_compiler, tf2xla_compilation_context
-    )
-except ImportError:
-    TF2XLACompiler = XLAConfig = XLAOptimizationLevel = None
-    create_tf2xla_compiler = tf2xla_compilation_context = None
+from .tf2xla.tf2xla_compiler import (
+    TF2XLACompiler, XLAConfig, XLAOptimizationLevel,
+    create_tf2xla_compiler, tf2xla_compilation_context
+)
 
 # Compiler Utilities
-try:
-    from .utils.compiler_utils import (
-        CompilerUtils, CodeGenerator, OptimizationAnalyzer,
-        create_compiler_utils, compiler_utils_context
-    )
-except ImportError:
-    CompilerUtils = CodeGenerator = OptimizationAnalyzer = None
-    create_compiler_utils = compiler_utils_context = None
+from .utils.compiler_utils import (
+    CompilerUtils, CodeGenerator, OptimizationAnalyzer,
+    create_compiler_utils, compiler_utils_context
+)
 
 # Runtime Compilation
 from .runtime.runtime_compiler import (
@@ -88,120 +61,25 @@ from .runtime.runtime_compiler import (
 )
 
 # Kernel Compilation
-try:
-    from .kernels.kernel_compiler import (
-        KernelCompiler, KernelOptimizationLevel, KernelCompilationResult,
-        KernelTarget, KernelConfig, KernelOptimizationPass,
-        create_kernel_compiler, kernel_compilation_context
-    )
-except ImportError:
-    KernelCompiler = KernelOptimizationLevel = KernelCompilationResult = None
-    KernelTarget = KernelConfig = KernelOptimizationPass = None
-    create_kernel_compiler = kernel_compilation_context = None
+from .kernels.kernel_compiler import (
+    KernelCompiler, KernelOptimizationLevel, KernelCompilationResult,
+    KernelTarget, KernelConfig, KernelOptimizationPass,
+    create_kernel_compiler, kernel_compilation_context
+)
 
-__all__ = [
-    # Core compiler infrastructure
-    'CompilerCore',
-    'CompilationTarget',
-    'OptimizationLevel',
-    'CompilationResult',
-    'create_compiler_core',
-    'compilation_context',
-    
-    # AOT Compilation
-    'AOTCompiler',
-    'AOTCompilationConfig',
-    'AOTOptimizationStrategy',
-    'create_aot_compiler',
-    'aot_compilation_context',
-    
-    # JIT Compilation
-    'JITCompiler',
-    'JITCompilationConfig',
-    'JITOptimizationStrategy',
-    'create_jit_compiler',
-    'jit_compilation_context',
-    
-    # MLIR Compilation
-    'MLIRCompiler',
-    'MLIRDialect',
-    'MLIROptimizationPass',
-    'MLIRCompilationResult',
-    'create_mlir_compiler',
-    'mlir_compilation_context',
-    
-    # Plugin System
-    'CompilerPlugin',
-    'PluginManager',
-    'PluginRegistry',
-    'PluginInterface',
-    'create_plugin_manager',
-    'plugin_compilation_context',
-    
-    # TensorFlow to TensorRT
-    'TF2TensorRTCompiler',
-    'TensorRTConfig',
-    'TensorRTOptimizationLevel',
-    'create_tf2tensorrt_compiler',
-    'tf2tensorrt_compilation_context',
-    
-    # TensorFlow to XLA
-    'TF2XLACompiler',
-    'XLAConfig',
-    'XLAOptimizationLevel',
-    'create_tf2xla_compiler',
-    'tf2xla_compilation_context',
-    
-    # Compiler Utilities
-    'CompilerUtils',
-    'CodeGenerator',
-    'OptimizationAnalyzer',
-    'create_compiler_utils',
-    'compiler_utils_context',
-    
-    # Runtime Compilation
-    'RuntimeCompiler',
-    'RuntimeCompilationConfig',
-    'RuntimeOptimizationStrategy',
-    'RuntimeCompilationResult',
-    'RuntimeTarget',
-    'RuntimeOptimizationLevel',
-    'create_runtime_compiler',
-    'runtime_compilation_context',
-    
-    # Kernel Compilation
-    'KernelCompiler',
-    'KernelOptimizationLevel',
-    'KernelCompilationResult',
-    'KernelTarget',
-    'KernelConfig',
-    'KernelOptimizationPass',
-    'create_kernel_compiler',
-    'kernel_compilation_context'
-]
+# Distributed Compilation
+from .distributed.distributed_compiler import (
+    DistributedCompiler,
+    DistributedCompilationConfig,
+    create_distributed_compiler,
+)
 
-# Import distributed and neural compilers
-try:
-    from .distributed.distributed_compiler import (
-        DistributedCompiler,
-        DistributedCompilationConfig,
-        create_distributed_compiler,
-    )
-except ImportError:
-    DistributedCompiler = None
-    DistributedCompilationConfig = None
-    create_distributed_compiler = None
-
-try:
-    from .neural.neural_compiler import (
-        NeuralCompiler,
-        NeuralCompilationConfig,
-        create_neural_compiler,
-    )
-except ImportError:
-    NeuralCompiler = None
-    NeuralCompilationConfig = None
-    create_neural_compiler = None
+# Neural Compilation
+from .neural.neural_compiler import (
+    NeuralCompiler,
+    NeuralCompilationConfig,
+    create_neural_compiler,
+)
 
 
 # Unified compiler factory
@@ -257,6 +135,9 @@ def create_compiler(compiler_type: str = "core", config: dict = None):
     if factory is None:
         raise ImportError(f"Compiler type '{compiler_type}' is not available (module not found)")
     
+    # Convert dict config to appropriate config object if needed
+    if isinstance(config, dict):
+        return factory(config)
     return factory(config)
 
 
@@ -362,13 +243,15 @@ def get_compiler_info(compiler_type: str) -> dict:
     }
 
 
-# Update __all__
 __all__ = [
     # Core compiler infrastructure
     'CompilerCore',
     'CompilationTarget',
     'OptimizationLevel',
     'CompilationResult',
+    'CompilationConfig',
+    'CompilationContext',
+    'CompilationError',
     'create_compiler_core',
     'compilation_context',
     

@@ -1,0 +1,22 @@
+{
+  "product": "SaaS Test Refactor",
+  "persona": "CEO / Founder B2B",
+  "calendar": [
+    {
+      "day": "Lunes (LinkedIn)",
+      "topic": "Mito vs Realidad de la industria",
+      "post": "El mayor mito sobre Tecnología e Inteligencia Artificial es creer que necesitas más personal. Con SaaS Test Refactor automatizas el proceso."
+    },
+    {
+      "day": "Miércoles (Twitter Thread)",
+      "topic": "5 Lecciones tácticas",
+      "post": "🧵 5 errores fatales que cometen los CEO / Founder B2B al intentar resolver no tiene tiempo para experimentar. necesita roi comprobado. (y cómo evitarlos con SaaS Test Refactor)."
+    },
+    {
+      "day": "Viernes (LinkedIn Case Study)",
+      "topic": "Estudio de caso real",
+      "post": "Cómo logramos que una empresa aumente sus conversiones un +150% usando SaaS Test Refactor. Desglose paso a paso."
+    }
+  ],
+  "predicted_engagement_rate": "8.4%"
+}

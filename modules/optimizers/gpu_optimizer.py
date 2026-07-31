@@ -26,7 +26,10 @@ logger = logging.getLogger(__name__)
 
 class GPUOptimizationConfig(BaseModel):
     """Configuration for GPU optimization."""
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
+    
+    device_id: int = 0
+
     
     memory_fraction: float = 0.9
     memory_pool_size: int = 1024 * 1024 * 1024  # 1GB

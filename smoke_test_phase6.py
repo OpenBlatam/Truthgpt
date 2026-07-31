@@ -75,11 +75,12 @@ def test_pydantic_models():
     enhanced_config = TruthGPTEnhancedConfig(model_name="test_model")
     assert enhanced_config.model_name == "test_model"
     
-    print("\n✅ All Phase 6 Pydantic models verified successfully!")
+    print("\n[SUCCESS] All Phase 6 Pydantic models verified successfully!")
 
 if __name__ == "__main__":
     try:
         test_pydantic_models()
     except Exception as e:
-        print(f"\n❌ Smoke test failed: {e}")
+        print(f"\n[FAILURE] Smoke test failed: {e}")
         sys.exit(1)
+

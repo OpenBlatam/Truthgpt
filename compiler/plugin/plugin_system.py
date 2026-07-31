@@ -179,6 +179,7 @@ class PluginRegistry:
         self.plugins = {}
         self.plugin_types = {}
         self.dependencies = {}
+        self.logger = logging.getLogger("PluginRegistry")
         
     def register_plugin(self, plugin_class: Type[CompilerPlugin], config: PluginConfig):
         """Register a plugin class"""
@@ -199,6 +200,10 @@ class PluginRegistry:
     
     def get_available_plugins(self) -> List[str]:
         """Get list of available plugins"""
+        return list(self.plugin_types.keys())
+
+    def get_registered_plugins(self) -> List[str]:
+        """Get list of registered plugins"""
         return list(self.plugin_types.keys())
     
     def get_plugin_dependencies(self, name: str) -> List[str]:
@@ -286,6 +291,10 @@ class PluginManager:
         """Get list of active plugins"""
         return list(self.active_plugins.keys())
     
+    def get_registered_plugins(self) -> List[str]:
+        """Get list of registered plugin names"""
+        return list(self.plugin_configs.keys())
+    
     def get_plugin_info(self, name: str) -> Optional[Dict[str, Any]]:
         """Get plugin information"""
         if name in self.active_plugins:
@@ -363,8 +372,11 @@ def create_plugin_manager() -> PluginManager:
     """Create a plugin manager instance"""
     return PluginManager()
 
-def plugin_compilation_context(plugin_manager: PluginManager):
+def plugin_compilation_context(plugin_manager: Optional[PluginManager] = None):
     """Create a plugin compilation context"""
+    if plugin_manager is None:
+        plugin_manager = create_plugin_manager()
+        
     class PluginCompilationContext:
         def __init__(self, pm: PluginManager):
             self.plugin_manager = pm

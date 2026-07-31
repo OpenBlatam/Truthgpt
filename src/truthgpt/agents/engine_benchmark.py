@@ -2,8 +2,11 @@ import time
 from typing import Dict, Any, Optional
 from loguru import logger
 
-from .engines.engine_config import _get_user_prefs, _normalize_engine_key
-from .ensemble.ensemble import ALL_ENSEMBLE_MODES
+from .engine_config import _get_user_prefs, _normalize_engine_key
+try:
+    from .ensemble import ALL_ENSEMBLE_MODES
+except ImportError:
+    ALL_ENSEMBLE_MODES = []
 
 try:
     from truthgpt.interface.cc_style import CC_AVAILABLE, cc_spinner, cc_result, _fmt_elapsed, _fmt_tokens

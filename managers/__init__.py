@@ -1,316 +1,127 @@
 """
 Unified Manager System
-=======================
+======================
 Centralized access to all manager classes in optimization_core.
 """
 
-# Import all manager modules
 try:
-    from ..config.config_manager import (
-        ConfigurationManager,
-        ConfigManager,
-    )
-except ImportError:
-    ConfigurationManager = None
-    ConfigManager = None
+    from config.config_manager import ConfigManager
+    ConfigurationManager = ConfigManager
+except Exception:
+    try:
+        from optimization_core.config.config_manager import ConfigManager
+        ConfigurationManager = ConfigManager
+    except Exception:
+        ConfigManager = None
+        ConfigurationManager = None
 
 try:
-    from ..data.dataset_manager import (
-        DatasetManager,
-    )
-except ImportError:
+    from training.checkpoint_manager import CheckpointManager
+except Exception:
+    try:
+        from optimization_core.training.checkpoint_manager import CheckpointManager
+    except Exception:
+        CheckpointManager = None
+
+TrainersCheckpointManager = CheckpointManager
+TrainingCheckpointManager = CheckpointManager
+CheckpointManagerAlias = CheckpointManager
+
+try:
+    from training.ema_manager import EMAManager
+except Exception:
+    try:
+        from optimization_core.training.ema_manager import EMAManager
+    except Exception:
+        EMAManager = None
+
+TrainersEMAManager = EMAManager
+TrainingEMAManager = EMAManager
+EMAManagerAlias = EMAManager
+
+try:
+    from data.dataset_manager import DatasetManager
+except Exception:
     DatasetManager = None
 
 try:
-    from ..trainers.checkpoint_manager import (
-        CheckpointManager as TrainersCheckpointManager,
-    )
-except ImportError:
-    TrainersCheckpointManager = None
-
-try:
-    from ..trainers.model_manager import (
-        ModelManager as TrainersModelManager,
-    )
-except ImportError:
+    from trainers.model_manager import ModelManager as TrainersModelManager
+except Exception:
     TrainersModelManager = None
 
 try:
-    from ..trainers.ema_manager import (
-        EMAManager as TrainersEMAManager,
-    )
-except ImportError:
-    TrainersEMAManager = None
-
-try:
-    from ..trainers.data_manager import (
-        DataManager as TrainersDataManager,
-    )
-except ImportError:
+    from trainers.data_manager import DataManager as TrainersDataManager
+except Exception:
     TrainersDataManager = None
 
 try:
-    from ..trainers.optimizer_manager import (
-        OptimizerManager as TrainersOptimizerManager,
-    )
-except ImportError:
+    from trainers.optimizer_manager import OptimizerManager as TrainersOptimizerManager
+except Exception:
     TrainersOptimizerManager = None
 
 try:
-    from ..inference.cache_manager import (
-        CacheManager as InferenceCacheManager,
-    )
-except ImportError:
+    from inference.cache_manager import CacheManager as InferenceCacheManager
+except Exception:
     InferenceCacheManager = None
 
 try:
-    from ..models.diffusion_manager import (
-        DiffusionManager,
-    )
-except ImportError:
+    from models.diffusion_manager import DiffusionManager
+except Exception:
     DiffusionManager = None
 
 try:
-    from ..training.ema_manager import (
-        EMAManager as TrainingEMAManager,
-    )
-except ImportError:
-    TrainingEMAManager = None
-
-try:
-    from ..training.checkpoint_manager import (
-        CheckpointManager as TrainingCheckpointManager,
-    )
-except ImportError:
-    TrainingCheckpointManager = None
-
-try:
-    from ..models.model_manager import (
-        ModelManager as ModelsModelManager,
-    )
-except ImportError:
+    from models.model_manager import ModelManager as ModelsModelManager
+except Exception:
     ModelsModelManager = None
 
 try:
-    from ..modules.memory.advanced_memory_manager import (
+    from modules.memory.advanced_memory_manager import (
         AdvancedMemoryManager,
         create_advanced_memory_manager,
     )
-except ImportError:
+except Exception:
     AdvancedMemoryManager = None
     create_advanced_memory_manager = None
 
 try:
-    from ..modules.module_manager import (
-        ModuleManager,
-    )
-except ImportError:
+    from modules.module_manager import ModuleManager
+except Exception:
     ModuleManager = None
 
-try:
-    from ..modules.feed_forward.refactored_config_manager import (
-        ConfigurationManager as FeedForwardConfigManager,
-    )
-except ImportError:
-    FeedForwardConfigManager = None
 
-try:
-    from ..commit_tracker.version_manager import (
-        VersionManager,
-    )
-except ImportError:
-    VersionManager = None
-
-
-# Unified manager factory
 def create_manager(manager_type: str = "config", config: dict = None):
     """
     Unified factory function to create managers.
-    
-    Args:
-        manager_type: Type of manager to create. Options:
-            - "config" - ConfigurationManager
-            - "dataset" - DatasetManager
-            - "checkpoint" - CheckpointManager (trainers)
-            - "model" - ModelManager (trainers)
-            - "ema" - EMAManager (trainers)
-            - "data" - DataManager (trainers)
-            - "optimizer" - OptimizerManager (trainers)
-            - "cache" - CacheManager (inference)
-            - "diffusion" - DiffusionManager
-            - "memory" - AdvancedMemoryManager
-            - "module" - ModuleManager
-            - "version" - VersionManager
-        config: Optional configuration dictionary
-    
-    Returns:
-        The requested manager instance
     """
     if config is None:
         config = {}
-    
+
     manager_type = manager_type.lower()
-    
-    factory_map = {
-        "config": lambda cfg: ConfigurationManager(cfg) if ConfigurationManager else None,
-        "dataset": lambda cfg: DatasetManager(cfg) if DatasetManager else None,
-        "checkpoint": lambda cfg: TrainersCheckpointManager(cfg) if TrainersCheckpointManager else None,
-        "model": lambda cfg: TrainersModelManager(cfg) if TrainersModelManager else None,
-        "ema": lambda cfg: TrainersEMAManager(cfg) if TrainersEMAManager else None,
-        "data": lambda cfg: TrainersDataManager(cfg) if TrainersDataManager else None,
-        "optimizer": lambda cfg: TrainersOptimizerManager(cfg) if TrainersOptimizerManager else None,
-        "cache": lambda cfg: InferenceCacheManager(cfg) if InferenceCacheManager else None,
-        "diffusion": lambda cfg: DiffusionManager(cfg) if DiffusionManager else None,
-        "memory": lambda cfg: create_advanced_memory_manager(cfg) if create_advanced_memory_manager else None,
-        "module": lambda cfg: ModuleManager(cfg) if ModuleManager else None,
-        "version": lambda cfg: VersionManager(cfg) if VersionManager else None,
-    }
-    
-    if manager_type not in factory_map:
-        available = ", ".join(factory_map.keys())
-        raise ValueError(
-            f"Unknown manager type: '{manager_type}'. "
-            f"Available types: {available}"
-        )
-    
-    factory = factory_map[manager_type]
-    manager = factory(config)
-    
-    if manager is None:
-        raise ImportError(f"Manager type '{manager_type}' is not available (module not found)")
-    
-    return manager
-
-
-# Registry of all available managers
-MANAGER_REGISTRY = {
-    "config": {
-        "class": ConfigurationManager,
-        "module": "config.config_manager",
-        "description": "Configuration manager",
-    },
-    "dataset": {
-        "class": DatasetManager,
-        "module": "data.dataset_manager",
-        "description": "Dataset manager",
-    },
-    "checkpoint": {
-        "class": TrainersCheckpointManager,
-        "module": "trainers.checkpoint_manager",
-        "description": "Checkpoint manager for trainers",
-    },
-    "model": {
-        "class": TrainersModelManager,
-        "module": "trainers.model_manager",
-        "description": "Model manager for trainers",
-    },
-    "ema": {
-        "class": TrainersEMAManager,
-        "module": "trainers.ema_manager",
-        "description": "EMA manager for trainers",
-    },
-    "data": {
-        "class": TrainersDataManager,
-        "module": "trainers.data_manager",
-        "description": "Data manager for trainers",
-    },
-    "optimizer": {
-        "class": TrainersOptimizerManager,
-        "module": "trainers.optimizer_manager",
-        "description": "Optimizer manager for trainers",
-    },
-    "cache": {
-        "class": InferenceCacheManager,
-        "module": "inference.cache_manager",
-        "description": "Cache manager for inference",
-    },
-    "diffusion": {
-        "class": DiffusionManager,
-        "module": "models.diffusion_manager",
-        "description": "Diffusion model manager",
-    },
-    "memory": {
-        "class": AdvancedMemoryManager,
-        "module": "modules.memory.advanced_memory_manager",
-        "description": "Advanced memory manager",
-    },
-    "module": {
-        "class": ModuleManager,
-        "module": "modules.module_manager",
-        "description": "Module manager",
-    },
-    "version": {
-        "class": VersionManager,
-        "module": "commit_tracker.version_manager",
-        "description": "Version manager",
-    },
-}
-
-
-def list_available_managers() -> list:
-    """List all available manager types."""
-    return [k for k, v in MANAGER_REGISTRY.items() if v["class"] is not None]
-
-
-def get_manager_info(manager_type: str) -> dict:
-    """
-    Get information about a specific manager.
-    
-    Args:
-        manager_type: Type of manager
-    
-    Returns:
-        Dictionary with manager information
-    """
-    if manager_type not in MANAGER_REGISTRY:
-        raise ValueError(f"Unknown manager type: {manager_type}")
-    
-    registry_entry = MANAGER_REGISTRY[manager_type]
-    
-    if registry_entry["class"] is None:
-        raise ImportError(f"Manager type '{manager_type}' is not available (module not found)")
-    
-    return {
-        "type": manager_type,
-        "class": registry_entry["class"].__name__,
-        "module": registry_entry["module"],
-        "description": registry_entry["description"],
-    }
+    if manager_type in ("config", "configuration"):
+        return ConfigManager(config) if ConfigManager else None
+    elif manager_type == "checkpoint":
+        out_dir = config.get("output_dir", "./checkpoints")
+        return CheckpointManager(output_dir=out_dir) if CheckpointManager else None
+    elif manager_type == "ema":
+        decay = config.get("decay", 0.999)
+        return EMAManager(decay=decay) if EMAManager else None
+    elif manager_type == "dataset":
+        return DatasetManager(config) if DatasetManager else None
+    elif manager_type == "cache":
+        return InferenceCacheManager(config) if InferenceCacheManager else None
+    else:
+        raise ValueError(f"Unknown manager_type: '{manager_type}'")
 
 
 __all__ = [
-    # Configuration managers
     "ConfigurationManager",
     "ConfigManager",
-    "FeedForwardConfigManager",
-    # Dataset managers
-    "DatasetManager",
-    # Trainer managers
+    "CheckpointManager",
     "TrainersCheckpointManager",
-    "TrainersModelManager",
-    "TrainersEMAManager",
-    "TrainersDataManager",
-    "TrainersOptimizerManager",
-    # Inference managers
-    "InferenceCacheManager",
-    # Model managers
-    "DiffusionManager",
-    "ModelsModelManager",
-    # Training managers
-    "TrainingEMAManager",
     "TrainingCheckpointManager",
-    # Memory managers
-    "AdvancedMemoryManager",
-    "create_advanced_memory_manager",
-    # Module managers
-    "ModuleManager",
-    # Version managers
-    "VersionManager",
-    # Unified factory
+    "EMAManager",
+    "TrainersEMAManager",
+    "TrainingEMAManager",
+    "DatasetManager",
     "create_manager",
-    # Registry
-    "MANAGER_REGISTRY",
-    "list_available_managers",
-    "get_manager_info",
 ]
-

@@ -306,21 +306,20 @@ class JITCompiler(CompilerCore):
         return optimized_model
     
     def _apply_optimization_pass(self, model: Any, strategy: JITOptimizationStrategy, profile: ExecutionProfile) -> Any:
-        """Apply a specific JIT optimization pass"""
-        if strategy.name == "inlining":
-            return self._apply_dynamic_inlining(model, profile)
-        elif strategy.name == "vectorization":
-            return self._apply_dynamic_vectorization(model, profile)
-        elif strategy.name == "loop_optimization":
-            return self._apply_dynamic_loop_optimization(model, profile)
-        elif strategy.name == "memory_optimization":
-            return self._apply_dynamic_memory_optimization(model, profile)
-        elif strategy.name == "parallel_optimization":
-            return self._apply_dynamic_parallel_optimization(model, profile)
-        elif strategy.name == "speculative_optimization":
-            return self._apply_speculative_optimization(model, profile)
-        else:
-            return model
+        """Apply a specific JIT optimization pass using strategy dispatch."""
+        dispatch = {
+            "inlining": self._apply_dynamic_inlining,
+            "vectorization": self._apply_dynamic_vectorization,
+            "loop_optimization": self._apply_dynamic_loop_optimization,
+            "memory_optimization": self._apply_dynamic_memory_optimization,
+            "parallel_optimization": self._apply_dynamic_parallel_optimization,
+            "speculative_optimization": self._apply_speculative_optimization,
+        }
+        handler = dispatch.get(strategy.name)
+        if handler is not None:
+            return handler(model, profile)
+        logger.warning(f"Unknown JIT optimization pass: {strategy.name}")
+        return model
     
     def _apply_dynamic_inlining(self, model: Any, profile: ExecutionProfile) -> Any:
         """Apply dynamic function inlining"""
@@ -418,15 +417,8 @@ class JITCompiler(CompilerCore):
         }
     
     def _get_cache_key(self, model: Any, input_spec: Optional[Dict] = None) -> str:
-        """Generate cache key for model"""
-        import hashlib
-        
-        model_str = str(model)
-        config_str = str(self.config.__dict__)
-        input_str = str(input_spec) if input_spec else ""
-        
-        combined = f"{model_str}_{config_str}_{input_str}"
-        return hashlib.md5(combined.encode()).hexdigest()
+        """Generate cache key for model — delegates to base class utility."""
+        return self.generate_cache_key(model, self.config, input_spec)
     
     def profile_execution(self, model: Any, execution_time: float):
         """Profile model execution for hotspot detection"""
