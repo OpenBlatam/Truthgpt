@@ -4,7 +4,7 @@ OpenCL Kernel Compilation for TruthGPT Kernel Compiler
 
 import time
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Type
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -54,8 +54,13 @@ class OpenCLKernelContext:
     def __enter__(self):
         return self.compiler
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        pass
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[Any],
+    ) -> Optional[bool]:
+        return None
 
 def opencl_kernel_context(compiler: Optional[OpenCLKernelCompiler] = None):
     """Create OpenCL kernel compilation context manager"""

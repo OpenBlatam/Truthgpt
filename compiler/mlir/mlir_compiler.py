@@ -140,9 +140,11 @@ class MLIRPassManager:
 class MLIRCompiler(CompilerCore):
     """MLIR Compiler for TruthGPT models"""
     
-    def __init__(self, config: CompilationConfig):
-        super().__init__(config)
-        self.config = config
+    def __init__(self, config: Union[CompilationConfig, dict, None] = None):
+        from ..core.compiler_core import resolve_config
+        resolved_config = resolve_config(config, CompilationConfig)
+        super().__init__(resolved_config)
+        self.config = resolved_config
         self.pass_manager = MLIRPassManager()
         self.dialect_registry = self._initialize_dialect_registry()
         self.optimization_passes = self._initialize_optimization_passes()
@@ -366,6 +368,7 @@ class MLIRCompiler(CompilerCore):
             )
             
         except Exception as e:
+            logger.error(f"MLIR optimization failed: {str(e)}")
             return MLIRCompilationResult(
                 success=False,
                 errors=[str(e)]
@@ -517,16 +520,19 @@ module {{
         return [name for name, pass_config in self.optimization_passes.items() 
                 if pass_config.dialect == dialect]
 
-def create_mlir_compiler(config: CompilationConfig) -> MLIRCompiler:
+def create_mlir_compiler(config: Optional[Union[CompilationConfig, dict]] = None) -> MLIRCompiler:
     """Create an MLIR compiler instance"""
+    if config is None:
+        config = CompilationConfig()
+    elif isinstance(config, dict):
+        config = CompilationConfig(**config)
     return MLIRCompiler(config)
 
-def mlir_compilation_context(config: CompilationConfig):
+def mlir_compilation_context(config: Optional[Union[CompilationConfig, dict]] = None):
     """Create an MLIR compilation context"""
     from ..core.compiler_core import CompilationContext
+    if config is None:
+        config = CompilationConfig()
+    elif isinstance(config, dict):
+        config = CompilationConfig(**config)
     return CompilationContext(config)
-
-
-
-
-

@@ -4,11 +4,14 @@ Advanced compilation and optimization system for TruthGPT models
 TensorFlow-style architecture with comprehensive compiler support
 """
 
+from typing import Dict, List, Optional, Any, Union, Callable
+
 # Core compiler infrastructure
 from .core.compiler_core import (
     CompilerCore, CompilationTarget, OptimizationLevel, CompilationResult,
-    CompilationConfig, CompilationContext, CompilationError,
-    create_compiler_core, compilation_context
+    CompilationConfig, CompilationContext, CompilationError, CompilerConfigError,
+    ModelValidationError, CompilationTargetError, OptimizationError, PluginError,
+    create_compiler_core, compilation_context, coerce_enum, coerce_enum_field
 )
 
 # AOT (Ahead-of-Time) Compilation
@@ -83,9 +86,11 @@ from .neural.neural_compiler import (
 
 
 # Unified compiler factory
-def create_compiler(compiler_type: str = "core", config: dict = None):
-    """
-    Unified factory function to create compilers.
+def create_compiler(
+    compiler_type: str = "core",
+    config: Optional[Union[Dict[str, Any], Any]] = None,
+) -> Any:
+    """Unified factory function to create compilers.
     
     Args:
         compiler_type: Type of compiler to create. Options:
@@ -100,7 +105,7 @@ def create_compiler(compiler_type: str = "core", config: dict = None):
             - "tf2tensorrt" - TF2TensorRTCompiler
             - "tf2xla" - TF2XLACompiler
             - "plugin" - PluginManager
-        config: Optional configuration dictionary
+        config: Optional configuration dictionary or object
     
     Returns:
         The requested compiler instance
@@ -135,10 +140,8 @@ def create_compiler(compiler_type: str = "core", config: dict = None):
     if factory is None:
         raise ImportError(f"Compiler type '{compiler_type}' is not available (module not found)")
     
-    # Convert dict config to appropriate config object if needed
-    if isinstance(config, dict):
-        return factory(config)
     return factory(config)
+
 
 
 # Registry of all available compilers
@@ -212,12 +215,12 @@ COMPILER_REGISTRY = {
 }
 
 
-def list_available_compilers() -> list:
+def list_available_compilers() -> List[str]:
     """List all available compiler types."""
     return [k for k, v in COMPILER_REGISTRY.items() if v["factory"] is not None]
 
 
-def get_compiler_info(compiler_type: str) -> dict:
+def get_compiler_info(compiler_type: str) -> Dict[str, Any]:
     """
     Get information about a specific compiler.
     
@@ -252,8 +255,15 @@ __all__ = [
     'CompilationConfig',
     'CompilationContext',
     'CompilationError',
+    'CompilerConfigError',
+    'ModelValidationError',
+    'CompilationTargetError',
+    'OptimizationError',
+    'PluginError',
     'create_compiler_core',
     'compilation_context',
+    'coerce_enum',
+    'coerce_enum_field',
     
     # AOT Compilation
     'AOTCompiler',

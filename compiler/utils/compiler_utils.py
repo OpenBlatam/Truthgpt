@@ -18,22 +18,33 @@ logger = logging.getLogger(__name__)
 
 
 class SafeJSONEncoder(json.JSONEncoder):
-    """Custom JSON encoder supporting Enums, dataclasses, objects with __dict__, and NumPy types."""
+    """Custom JSON encoder supporting Enums, dataclasses, PyTorch types, NumPy types, and general objects."""
 
     def default(self, obj: Any) -> Any:
-        if isinstance(obj, enum.Enum):
-            return obj.value
-        if is_dataclass(obj) and not isinstance(obj, type):
-            return asdict(obj)
-        if hasattr(obj, "__dict__"):
-            return {k: self.default(v) if isinstance(v, enum.Enum) else v for k, v in obj.__dict__.items()}
-        if isinstance(obj, (np.integer, int)):
-            return int(obj)
-        if isinstance(obj, (np.floating, float)):
-            return float(obj)
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        return super().default(obj)
+        try:
+            if isinstance(obj, enum.Enum):
+                return obj.value
+            if is_dataclass(obj) and not isinstance(obj, type):
+                return asdict(obj)
+            if isinstance(obj, (set, tuple)):
+                return list(obj)
+            if hasattr(obj, "tolist") and callable(getattr(obj, "tolist")):
+                return obj.tolist()
+            if hasattr(obj, "item") and callable(getattr(obj, "item")):
+                return obj.item()
+            if isinstance(obj, (np.integer, int)):
+                return int(obj)
+            if isinstance(obj, (np.floating, float)):
+                return float(obj)
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            if isinstance(obj, os.PathLike):
+                return str(obj)
+            if hasattr(obj, "__dict__"):
+                return {k: str(v) if isinstance(v, type) else v for k, v in obj.__dict__.items()}
+            return super().default(obj)
+        except Exception:
+            return str(obj)
 
 
 def safe_json_dump(obj: Any, fp: Any, **kwargs: Any) -> None:
@@ -92,7 +103,7 @@ class PerformanceAnalyzer:
                     _ = model(input_data)
                 elif callable(model):
                     _ = model(input_data)
-            except Exception:
+            except (AttributeError, RuntimeError, TypeError, ValueError):
                 pass
         
         # Benchmark
@@ -104,7 +115,7 @@ class PerformanceAnalyzer:
                     _ = model(input_data)
                 elif callable(model):
                     _ = model(input_data)
-            except:
+            except (AttributeError, RuntimeError, TypeError, ValueError):
                 pass
             times.append(time.time() - start_time)
         
@@ -128,7 +139,7 @@ class PerformanceAnalyzer:
                 "vms_mb": memory_info.vms / (1024 * 1024),
                 "percent": process.memory_percent()
             }
-        except ImportError:
+        except (ImportError, AttributeError, RuntimeError, OSError):
             return {"rss_mb": 0, "vms_mb": 0, "percent": 0}
 
 @dataclass
@@ -145,7 +156,7 @@ class MemoryAnalyzer:
                     "cached_mb": torch.cuda.memory_reserved() / (1024 * 1024),
                     "total_mb": torch.cuda.get_device_properties(0).total_memory / (1024 * 1024)
                 }
-        except:
+        except (AttributeError, RuntimeError, TypeError):
             pass
         return {"allocated_mb": 0, "cached_mb": 0, "total_mb": 0}
     
@@ -155,7 +166,7 @@ class MemoryAnalyzer:
         try:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-        except:
+        except (AttributeError, RuntimeError):
             pass
 
 class CodeGenerator:
@@ -319,11 +330,11 @@ class CompilerUtils:
         
         return system_info
     
-    def benchmark_compilation(self, compiler_func: callable, *args, **kwargs) -> Dict[str, float]:
+    def benchmark_compilation(self, compiler_func: Callable[..., Any], *args: Any, **kwargs: Any) -> Dict[str, Any]:
         """Benchmark compilation function"""
         start_time = time.time()
         start_memory = self.memory_analyzer.get_gpu_memory_info()
-        
+
         try:
             result = compiler_func(*args, **kwargs)
             success = True
@@ -331,51 +342,49 @@ class CompilerUtils:
             result = None
             success = False
             logger.error(f"Compilation benchmark failed: {str(e)}")
-        
+
         end_time = time.time()
         end_memory = self.memory_analyzer.get_gpu_memory_info()
-        
+
         return {
             "compilation_time": end_time - start_time,
             "success": success,
             "memory_used": end_memory["allocated_mb"] - start_memory["allocated_mb"],
             "result": result
         }
-    
-    def save_compilation_report(self, report: Dict[str, Any], filename: str):
+
+    def save_compilation_report(self, report: Dict[str, Any], filename: str) -> None:
         """Save compilation report to file"""
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        with open(filename, 'w') as f:
+        dirname = os.path.dirname(filename)
+        if dirname:
+            os.makedirs(dirname, exist_ok=True)
+        with open(filename, "w") as f:
             safe_json_dump(report, f)
         logger.info(f"Compilation report saved to: {filename}")
-    
+
     def load_compilation_report(self, filename: str) -> Dict[str, Any]:
         """Load compilation report from file"""
-        with open(filename, 'r') as f:
+        with open(filename) as f:
             report = json.load(f)
         logger.info(f"Compilation report loaded from: {filename}")
         return report
 
-def create_compiler_utils() -> CompilerUtils:
+
+def create_compiler_utils(config: Optional[Any] = None) -> CompilerUtils:
     """Create a compiler utils instance"""
     return CompilerUtils()
 
-def compiler_utils_context():
+
+def compiler_utils_context() -> Any:
     """Create a compiler utils context"""
     class CompilerUtilsContext:
         def __init__(self):
             self.utils = create_compiler_utils()
-            
+
         def __enter__(self):
             return self.utils
-            
+
         def __exit__(self, exc_type, exc_val, exc_tb):
-            # Cleanup if needed
             pass
-    
+
     return CompilerUtilsContext()
-
-
-
-
-

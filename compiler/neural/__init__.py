@@ -8,6 +8,9 @@ from .neural_compiler import (
     NeuralCompilationMode, NeuralOptimizationStrategy, NeuralCompilationTarget,
     create_neural_compiler, neural_compilation_context
 )
+from .architecture_search import NeuralAttentionMechanism, NeuralMemoryNetwork, QuantumNeuralLayer
+from .rl_optimizer import RLOptimizer
+from .meta_learning import MetaLearningEngine
 
 __all__ = [
     'NeuralCompiler',
@@ -16,6 +19,11 @@ __all__ = [
     'NeuralCompilationMode',
     'NeuralOptimizationStrategy',
     'NeuralCompilationTarget',
+    'NeuralAttentionMechanism',
+    'NeuralMemoryNetwork',
+    'QuantumNeuralLayer',
+    'RLOptimizer',
+    'MetaLearningEngine',
     'create_neural_compiler',
     'neural_compilation_context'
 ]

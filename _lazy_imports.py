@@ -150,8 +150,9 @@ _LAZY_IMPORTS: Dict[str, str] = {
     'ReinforcementLearner': '.modules.learning.reinforcement_learning',
     'BayesianOptimizer': '.modules.learning.bayesian_optimization',
     'CausalInference': '.modules.learning.causal_inference',
+    'CausalInferenceSystem': '.learning.causal_inference',
     'HyperparameterOptimizer': '.modules.learning.hyperparameter_optimization',
-    'EvolutionaryOptimizer': '.modules.learning.evolutionary_computing',
+    'EvolutionaryOptimizer': '.core.advanced_optimizations',
     'NASOptimizer': '.modules.learning.nas',
     
     # Optimization cores - consolidated imports

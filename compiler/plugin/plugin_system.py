@@ -14,6 +14,8 @@ from abc import ABC, abstractmethod
 import torch
 import numpy as np
 
+from ..core.compiler_core import PluginError
+
 logger = logging.getLogger(__name__)
 
 class PluginStatus(enum.Enum):
@@ -368,7 +370,7 @@ class AnalysisPlugin(CompilerPlugin):
         self.logger.info("Cleaning up analysis plugin")
         return PluginResult(success=True)
 
-def create_plugin_manager() -> PluginManager:
+def create_plugin_manager(config: Optional[Any] = None) -> PluginManager:
     """Create a plugin manager instance"""
     return PluginManager()
 
@@ -386,13 +388,13 @@ def plugin_compilation_context(plugin_manager: Optional[PluginManager] = None):
             self.plugin_manager.load_all_plugins()
             return self
             
-        def __exit__(self, exc_type, exc_val, exc_tb):
+        def __exit__(
+            self,
+            exc_type: Optional[Type[BaseException]],
+            exc_val: Optional[BaseException],
+            exc_tb: Optional[Any],
+        ) -> Optional[bool]:
             # Plugin cleanup is handled by individual plugins
-            pass
+            return None
     
     return PluginCompilationContext(plugin_manager)
-
-
-
-
-

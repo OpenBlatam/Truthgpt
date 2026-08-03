@@ -5,7 +5,7 @@ Base classes and interfaces for all compiler components
 
 from .compiler_core import (
     CompilerCore, CompilationTarget, OptimizationLevel, CompilationResult,
-    CompilationConfig, CompilationContext, CompilationError,
+    CompilationConfig, CompilationContext, CompilationError, CompilerConfigError, ModelValidationError,
     create_compiler_core, compilation_context
 )
 
@@ -27,6 +27,8 @@ __all__ = [
     'CompilationConfig',
     'CompilationContext',
     'CompilationError',
+    'CompilerConfigError',
+    'ModelValidationError',
     'create_compiler_core',
     'compilation_context',
     'CompilationPipeline',
@@ -40,6 +42,7 @@ __all__ = [
     'create_optimization_engine',
     'optimization_context'
 ]
+
 
 
 

@@ -8,6 +8,9 @@ from .distributed_compiler import (
     DistributedCompilationMode, LoadBalancingStrategy, DistributedCompilationTarget,
     create_distributed_compiler, distributed_compilation_context
 )
+from .node_communicator import WorkerNode
+from .load_balancer import LoadBalancer
+from .fault_tolerance import FaultToleranceManager
 
 __all__ = [
     'DistributedCompiler',
@@ -16,6 +19,9 @@ __all__ = [
     'DistributedCompilationMode',
     'LoadBalancingStrategy',
     'DistributedCompilationTarget',
+    'WorkerNode',
+    'LoadBalancer',
+    'FaultToleranceManager',
     'create_distributed_compiler',
     'distributed_compilation_context'
 ]

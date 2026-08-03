@@ -105,7 +105,11 @@ def __getattr__(name: str) -> Any:
         module_path = _ALL_LAZY_IMPORTS[name]
         
         try:
-            module = __import__(module_path.lstrip('.'), fromlist=[name], level=1)
+            rel_path = module_path.lstrip('.')
+            try:
+                module = importlib.import_module(rel_path)
+            except ModuleNotFoundError:
+                module = importlib.import_module(f"optimization_core.{rel_path}")
             obj = getattr(module, name)
             _import_cache[name] = obj
             return obj

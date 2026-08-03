@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 import torch
 import numpy as np
 
-from ..core.compiler_core import CompilerCore, CompilationConfig, CompilationResult, CompilationTarget, OptimizationLevel
+from ..core.compiler_core import CompilerCore, CompilationConfig, CompilationResult, CompilationTarget, OptimizationLevel, coerce_enum
 
 logger = logging.getLogger(__name__)
 
@@ -60,12 +60,15 @@ class TensorRTConfig(CompilationConfig):
     plugin_libraries: List[str] = None
 
     def __post_init__(self):
+        super().__post_init__()
         if self.optimization_profiles is None:
             self.optimization_profiles = []
         if self.custom_layers is None:
             self.custom_layers = []
         if self.plugin_libraries is None:
             self.plugin_libraries = []
+        self.optimization_level = coerce_enum(self.optimization_level, TensorRTOptimizationLevel)
+        self.precision = coerce_enum(self.precision, TensorRTPrecision)
 
 @dataclass
 class TensorRTCompilationResult(CompilationResult):
@@ -91,9 +94,11 @@ class TensorRTCompilationResult(CompilationResult):
 class TF2TensorRTCompiler(CompilerCore):
     """TensorFlow to TensorRT Compiler for TruthGPT"""
     
-    def __init__(self, config: TensorRTConfig):
-        super().__init__(config)
-        self.config = config
+    def __init__(self, config: Union[TensorRTConfig, dict, None] = None):
+        from ..core.compiler_core import resolve_config
+        resolved_config = resolve_config(config, TensorRTConfig)
+        super().__init__(resolved_config)
+        self.config = resolved_config
         self.tensorrt_engine = None
         self.optimization_strategies = self._initialize_optimization_strategies()
         
@@ -381,14 +386,23 @@ class TF2TensorRTCompiler(CompilerCore):
             "int8_enabled": self.config.enable_int8
         }
 
-def create_tf2tensorrt_compiler(config: TensorRTConfig) -> TF2TensorRTCompiler:
+def create_tf2tensorrt_compiler(config: Optional[Union[TensorRTConfig, dict]] = None) -> TF2TensorRTCompiler:
     """Create a TensorFlow to TensorRT compiler instance"""
+    if config is None:
+        config = TensorRTConfig()
+    elif isinstance(config, dict):
+        config = TensorRTConfig(**config)
     return TF2TensorRTCompiler(config)
 
-def tf2tensorrt_compilation_context(config: TensorRTConfig):
+def tf2tensorrt_compilation_context(config: Optional[Union[TensorRTConfig, dict]] = None):
     """Create a TensorFlow to TensorRT compilation context"""
     from ..core.compiler_core import CompilationContext
+    if config is None:
+        config = TensorRTConfig()
+    elif isinstance(config, dict):
+        config = TensorRTConfig(**config)
     return CompilationContext(config)
+
 
 
 

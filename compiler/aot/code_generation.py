@@ -2,9 +2,11 @@
 Code Generation for TruthGPT AOT Compiler
 """
 
+import os
+import tempfile
 import time
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Type
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -37,9 +39,10 @@ class CodeGenerator:
         """Generate compiled static artifact for model"""
         start = time.time()
         self.logger.info(f"Generating AOT code for target: {self.config.target}")
+        default_binary_path = os.path.join(tempfile.gettempdir(), "compiled_model.so")
         return CodeGenResult(
             success=True,
-            binary_path="/tmp/compiled_model.so",
+            binary_path=default_binary_path,
             generated_code="// AOT generated C++ code",
             compilation_time=time.time() - start
         )
@@ -56,8 +59,13 @@ class CodeGenerationContext:
     def __enter__(self):
         return self.generator
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        pass
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[Any],
+    ) -> Optional[bool]:
+        return None
 
 def code_generation_context(generator: Optional[CodeGenerator] = None):
     """Create code generation context manager"""

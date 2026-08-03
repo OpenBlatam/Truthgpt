@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 import torch
 import numpy as np
 
-from ..core.compiler_core import CompilerCore, CompilationConfig, CompilationResult, CompilationTarget, OptimizationLevel
+from ..core.compiler_core import CompilerCore, CompilationConfig, CompilationResult, CompilationTarget, OptimizationLevel, coerce_enum
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +54,11 @@ class AOTCompilationConfig(CompilationConfig):
     debug_info: bool = False
     profiling_info: bool = False
 
+    def __post_init__(self):
+        super().__post_init__()
+        self.target = coerce_enum(self.target, AOTTarget)
+        self.optimization_level = coerce_enum(self.optimization_level, AOTOptimizationLevel)
+
 @dataclass
 class AOTOptimizationStrategy:
     """Strategy for AOT optimizations"""
@@ -82,9 +87,11 @@ class AOTCompilationResult(CompilationResult):
 class AOTCompiler(CompilerCore):
     """AOT Compiler for TruthGPT models"""
     
-    def __init__(self, config: AOTCompilationConfig):
-        super().__init__(config)
-        self.config = config
+    def __init__(self, config: Union[AOTCompilationConfig, dict, None] = None):
+        from ..core.compiler_core import resolve_config
+        resolved_config = resolve_config(config, AOTCompilationConfig)
+        super().__init__(resolved_config)
+        self.config = resolved_config
         self.optimization_strategies = self._initialize_optimization_strategies()
         self.compilation_cache = {}
         
@@ -457,16 +464,20 @@ class AOTCompiler(CompilerCore):
             "optimization_ratio": enabled_count / total_count if total_count > 0 else 0.0
         }
 
-def create_aot_compiler(config: AOTCompilationConfig) -> AOTCompiler:
+def create_aot_compiler(config: Union[AOTCompilationConfig, dict, None] = None) -> AOTCompiler:
     """Create an AOT compiler instance"""
+    if config is None:
+        config = AOTCompilationConfig()
+    elif isinstance(config, dict):
+        config = AOTCompilationConfig(**config)
     return AOTCompiler(config)
 
-def aot_compilation_context(config: AOTCompilationConfig):
+def aot_compilation_context(config: Union[AOTCompilationConfig, dict, None] = None):
     """Create an AOT compilation context"""
     from ..core.compiler_core import CompilationContext
+    if config is None:
+        config = AOTCompilationConfig()
+    elif isinstance(config, dict):
+        config = AOTCompilationConfig(**config)
     return CompilationContext(config)
-
-
-
-
 

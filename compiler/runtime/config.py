@@ -6,7 +6,7 @@ import enum
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 
-from ..core.compiler_core import CompilationConfig, CompilationResult
+from ..core.compiler_core import CompilationConfig, CompilationResult, coerce_enum
 
 class RuntimeTarget(enum.Enum):
     """Runtime compilation targets"""
@@ -113,6 +113,12 @@ class RuntimeCompilationConfig(CompilationConfig):
     
     # Custom parameters
     custom_parameters: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.target = coerce_enum(self.target, RuntimeTarget)
+        self.optimization_level = coerce_enum(self.optimization_level, RuntimeOptimizationLevel)
+        self.compilation_mode = coerce_enum(self.compilation_mode, CompilationMode)
 
 @dataclass
 class RuntimeCompilationResult(CompilationResult):

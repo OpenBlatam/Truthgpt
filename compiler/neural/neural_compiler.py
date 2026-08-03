@@ -24,7 +24,10 @@ import gc
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 import queue
 
-from ..core.compiler_core import CompilerCore, CompilationConfig, CompilationResult, CompilationTarget, OptimizationLevel
+from ..core.compiler_core import CompilerCore, CompilationConfig, CompilationResult, CompilationTarget, OptimizationLevel, coerce_enum
+from .architecture_search import NeuralAttentionMechanism, NeuralMemoryNetwork, QuantumNeuralLayer
+from .rl_optimizer import RLOptimizer
+from .meta_learning import MetaLearningEngine
 
 logger = logging.getLogger(__name__)
 
@@ -109,8 +112,11 @@ class NeuralCompilationConfig(CompilationConfig):
     target_domain: str = "specific"
     transfer_ratio: float = 0.8
     
-    # Custom parameters
-    custom_parameters: Dict[str, Any] = field(default_factory=dict)
+    def __post_init__(self):
+        super().__post_init__()
+        self.compilation_mode = coerce_enum(self.compilation_mode, NeuralCompilationMode)
+        self.optimization_strategy = coerce_enum(self.optimization_strategy, NeuralOptimizationStrategy)
+        self.target_metric = coerce_enum(self.target_metric, NeuralCompilationTarget)
 
 @dataclass
 class NeuralCompilationResult(CompilationResult):
@@ -155,172 +161,17 @@ class NeuralCompilationResult(CompilationResult):
         if self.reward_history is None:
             self.reward_history = []
 
-class NeuralAttentionMechanism(nn.Module):
-    """Advanced attention mechanism for neural compilation"""
-    
-    def __init__(self, input_dim: int, hidden_dim: int, num_heads: int = 8):
-        super().__init__()
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.num_heads = num_heads
-        
-        self.query_projection = nn.Linear(input_dim, hidden_dim)
-        self.key_projection = nn.Linear(input_dim, hidden_dim)
-        self.value_projection = nn.Linear(input_dim, hidden_dim)
-        self.output_projection = nn.Linear(hidden_dim, input_dim)
-        
-        self.layer_norm = nn.LayerNorm(input_dim)
-        self.dropout = nn.Dropout(0.1)
-        
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        batch_size, seq_len, _ = x.shape
-        
-        # Project inputs
-        queries = self.query_projection(x)
-        keys = self.key_projection(x)
-        values = self.value_projection(x)
-        
-        # Multi-head attention
-        attention_output = self._multi_head_attention(queries, keys, values)
-        
-        # Residual connection and layer norm
-        output = self.layer_norm(x + self.dropout(attention_output))
-        
-        return output
-    
-    def _multi_head_attention(self, queries: torch.Tensor, keys: torch.Tensor, values: torch.Tensor) -> torch.Tensor:
-        """Multi-head attention computation"""
-        batch_size, seq_len, hidden_dim = queries.shape
-        head_dim = hidden_dim // self.num_heads
-        
-        # Reshape for multi-head attention
-        queries = queries.view(batch_size, seq_len, self.num_heads, head_dim).transpose(1, 2)
-        keys = keys.view(batch_size, seq_len, self.num_heads, head_dim).transpose(1, 2)
-        values = values.view(batch_size, seq_len, self.num_heads, head_dim).transpose(1, 2)
-        
-        # Compute attention scores
-        attention_scores = torch.matmul(queries, keys.transpose(-2, -1)) / np.sqrt(head_dim)
-        attention_weights = torch.softmax(attention_scores, dim=-1)
-        
-        # Apply attention to values
-        attention_output = torch.matmul(attention_weights, values)
-        
-        # Reshape back
-        attention_output = attention_output.transpose(1, 2).contiguous().view(
-            batch_size, seq_len, hidden_dim
-        )
-        
-        return self.output_projection(attention_output)
-
-class NeuralMemoryNetwork(nn.Module):
-    """Memory network for neural compilation"""
-    
-    def __init__(self, input_dim: int, memory_size: int, memory_dim: int):
-        super().__init__()
-        self.input_dim = input_dim
-        self.memory_size = memory_size
-        self.memory_dim = memory_dim
-        
-        # Memory components
-        self.input_encoder = nn.Linear(input_dim, memory_dim)
-        self.memory_encoder = nn.Linear(memory_dim, memory_dim)
-        self.output_decoder = nn.Linear(memory_dim, input_dim)
-        
-        # Memory operations
-        self.read_attention = nn.Linear(memory_dim, 1)
-        self.write_attention = nn.Linear(memory_dim, 1)
-        
-        # Initialize memory
-        self.memory = nn.Parameter(torch.randn(memory_size, memory_dim))
-        
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        batch_size, seq_len, _ = x.shape
-        
-        # Encode input
-        encoded_input = self.input_encoder(x)
-        
-        # Memory operations
-        read_weights = self._compute_read_weights(encoded_input)
-        memory_output = self._read_memory(read_weights)
-        
-        # Write to memory
-        write_weights = self._compute_write_weights(encoded_input)
-        self._write_memory(write_weights, encoded_input)
-        
-        # Decode output
-        output = self.output_decoder(memory_output)
-        
-        return output
-    
-    def _compute_read_weights(self, encoded_input: torch.Tensor) -> torch.Tensor:
-        """Compute read attention weights"""
-        # Compute similarity between input and memory
-        similarity = torch.matmul(encoded_input, self.memory.t())
-        read_weights = torch.softmax(similarity, dim=-1)
-        return read_weights
-    
-    def _read_memory(self, read_weights: torch.Tensor) -> torch.Tensor:
-        """Read from memory using attention weights"""
-        memory_output = torch.matmul(read_weights, self.memory)
-        return memory_output
-    
-    def _compute_write_weights(self, encoded_input: torch.Tensor) -> torch.Tensor:
-        """Compute write attention weights"""
-        similarity = torch.matmul(encoded_input, self.memory.t())
-        write_weights = torch.softmax(similarity, dim=-1)
-        return write_weights
-    
-    def _write_memory(self, write_weights: torch.Tensor, encoded_input: torch.Tensor):
-        """Write to memory"""
-        # Update memory based on write weights
-        memory_updates = torch.matmul(write_weights.transpose(-2, -1), encoded_input)
-        if memory_updates.dim() == 3:
-            memory_updates = memory_updates.squeeze(0)
-        self.memory.data = 0.9 * self.memory.data + 0.1 * memory_updates
-
-class QuantumNeuralLayer(nn.Module):
-    """Quantum-inspired neural layer"""
-    
-    def __init__(self, input_dim: int, output_dim: int, quantum_depth: int = 10):
-        super().__init__()
-        self.input_dim = input_dim
-        self.output_dim = output_dim
-        self.quantum_depth = quantum_depth
-        
-        # Quantum-inspired parameters
-        self.quantum_weights = nn.Parameter(torch.randn(quantum_depth, input_dim, output_dim))
-        self.quantum_phases = nn.Parameter(torch.randn(quantum_depth, input_dim))
-        self.entanglement_matrix = nn.Parameter(torch.randn(input_dim, input_dim))
-        
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        batch_size, seq_len, input_dim = x.shape
-        
-        # Quantum-inspired computation
-        quantum_output = torch.zeros(batch_size, seq_len, self.output_dim)
-        
-        for depth in range(self.quantum_depth):
-            # Apply quantum gates (simplified)
-            quantum_gate = torch.exp(1j * self.quantum_phases[depth])
-            quantum_state = x * quantum_gate.real
-            
-            # Apply entanglement
-            entangled_state = torch.matmul(quantum_state, self.entanglement_matrix)
-            
-            # Apply quantum weights
-            quantum_layer = torch.matmul(entangled_state, self.quantum_weights[depth])
-            quantum_output += quantum_layer
-        
-        # Normalize quantum output
-        quantum_output = quantum_output / self.quantum_depth
-        
-        return quantum_output
+# NeuralAttentionMechanism, NeuralMemoryNetwork, QuantumNeuralLayer are imported from
+# .architecture_search module for modularity.
 
 class NeuralCompiler(CompilerCore):
     """Advanced Neural Compiler for TruthGPT with machine learning optimization"""
     
-    def __init__(self, config: NeuralCompilationConfig):
-        super().__init__(config)
-        self.config = config
+    def __init__(self, config: Union[NeuralCompilationConfig, dict, None] = None):
+        from ..core.compiler_core import resolve_config
+        resolved_config = resolve_config(config, NeuralCompilationConfig)
+        super().__init__(resolved_config)
+        self.config = resolved_config
         
         # Neural components
         self.neural_model = None
@@ -776,7 +627,8 @@ class NeuralCompiler(CompilerCore):
                 return sum(p.numel() for p in model.parameters())
             else:
                 return 1000  # Default size
-        except:
+        except Exception as exc:
+            logger.debug("Error calculating model size: %s", exc)
             return 1000
     
     def _count_parameters(self, model: Any) -> int:
@@ -825,12 +677,21 @@ class NeuralCompiler(CompilerCore):
         """Apply basic neural transformations"""
         return model
 
-def create_neural_compiler(config: NeuralCompilationConfig) -> NeuralCompiler:
+def create_neural_compiler(config: Optional[Union[NeuralCompilationConfig, dict]] = None) -> NeuralCompiler:
     """Create a neural compiler instance"""
+    if config is None:
+        config = NeuralCompilationConfig()
+    elif isinstance(config, dict):
+        config = NeuralCompilationConfig(**config)
     return NeuralCompiler(config)
 
-def neural_compilation_context(config: NeuralCompilationConfig):
+def neural_compilation_context(config: Optional[Union[NeuralCompilationConfig, dict]] = None):
     """Create a neural compilation context"""
+    if config is None:
+        config = NeuralCompilationConfig()
+    elif isinstance(config, dict):
+        config = NeuralCompilationConfig(**config)
+        
     class NeuralCompilationContext:
         def __init__(self, cfg: NeuralCompilationConfig):
             self.config = cfg
@@ -847,7 +708,3 @@ def neural_compilation_context(config: NeuralCompilationConfig):
             logger.info("Neural compilation context ended")
     
     return NeuralCompilationContext(config)
-
-
-
-

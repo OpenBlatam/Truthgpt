@@ -32,7 +32,7 @@ import asyncio
 import aiohttp
 import websockets
 
-from ..core.compiler_core import CompilerCore, CompilationConfig, CompilationResult, CompilationTarget, OptimizationLevel
+from ..core.compiler_core import CompilerCore, CompilationConfig, CompilationResult, CompilationTarget, OptimizationLevel, coerce_enum
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +131,12 @@ class DistributedCompilationConfig(CompilationConfig):
     # Custom parameters
     custom_parameters: Dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self):
+        super().__post_init__()
+        self.compilation_mode = coerce_enum(self.compilation_mode, DistributedCompilationMode)
+        self.load_balancing_strategy = coerce_enum(self.load_balancing_strategy, LoadBalancingStrategy)
+        self.target_metric = coerce_enum(self.target_metric, DistributedCompilationTarget)
+
 @dataclass
 class DistributedCompilationResult(CompilationResult):
     """Enhanced distributed compilation result"""
@@ -183,8 +189,8 @@ class DistributedCompilationResult(CompilationResult):
     worker_nodes: List[str] = None
     compilation_topology: str = ""
     load_balancing_strategy: str = ""
+    target_metric: str = ""
     fault_tolerance_level: int = 0
-    compilation_mode: Optional[Any] = None
 
     def __post_init__(self):
         if self.worker_nodes is None:
@@ -1228,12 +1234,17 @@ class DistributedCompiler(CompilerCore):
         except Exception as e:
             logger.error(f"Distributed compiler cleanup failed: {e}")
 
-def create_distributed_compiler(config: DistributedCompilationConfig) -> DistributedCompiler:
+def create_distributed_compiler(config: Optional[Union[DistributedCompilationConfig, dict]] = None) -> DistributedCompiler:
     """Create a distributed compiler instance"""
-    return DistributedCompiler(config)
+    from ..core.compiler_core import resolve_config
+    resolved_config = resolve_config(config, DistributedCompilationConfig)
+    return DistributedCompiler(resolved_config)
 
-def distributed_compilation_context(config: DistributedCompilationConfig):
+def distributed_compilation_context(config: Optional[Union[DistributedCompilationConfig, dict]] = None):
     """Create a distributed compilation context"""
+    from ..core.compiler_core import resolve_config
+    resolved_config = resolve_config(config, DistributedCompilationConfig)
+        
     class DistributedCompilationContext:
         def __init__(self, cfg: DistributedCompilationConfig):
             self.config = cfg
@@ -1249,7 +1260,7 @@ def distributed_compilation_context(config: DistributedCompilationConfig):
                 self.compiler.cleanup()
             logger.info("Distributed compilation context ended")
     
-    return DistributedCompilationContext(config)
+    return DistributedCompilationContext(resolved_config)
 
 
 

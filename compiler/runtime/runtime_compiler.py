@@ -8,13 +8,13 @@ import logging
 import time
 import queue
 import hashlib
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 import numpy as np
 import psutil
 import gc
 
-from ..core.compiler_core import CompilerCore, CompilationContext
+from ..core.compiler_core import CompilerCore, CompilationContext, resolve_config
 
 # Import configurations & enums
 from .config import (
@@ -46,9 +46,10 @@ class RuntimeCompiler(CompilerCore):
     Refactored orchestrator composing specialized subsystems.
     """
 
-    def __init__(self, config: RuntimeCompilationConfig):
-        super().__init__(config)
-        self.config = config
+    def __init__(self, config: Union[RuntimeCompilationConfig, dict, None] = None):
+        resolved_config = resolve_config(config, RuntimeCompilationConfig)
+        super().__init__(resolved_config)
+        self.config = resolved_config
         self.execution_profiles: Dict[int, Dict[str, Any]] = {}
         self.compilation_cache: Dict[str, Any] = {}
 
@@ -373,11 +374,8 @@ class RuntimeCompiler(CompilerCore):
         }
 
     def _get_cache_key(self, model: Any, input_spec: Optional[Dict] = None) -> str:
-        model_str = str(model)
-        config_str = str(self.config.__dict__)
-        input_str = str(input_spec) if input_spec else ""
-        combined = f"{model_str}_{config_str}_{input_str}"
-        return hashlib.md5(combined.encode()).hexdigest()
+        """Generate cache key for model — delegates to base class utility."""
+        return self.generate_cache_key(model, self.config, input_spec)
 
     def profile_execution(self, model: Any, execution_time: float):
         model_id = id(model)
@@ -409,8 +407,15 @@ class RuntimeCompiler(CompilerCore):
     def cleanup(self):
         try:
             self.performance_monitor.stop_monitoring()
-            self.thread_pool.shutdown(wait=True)
-            self.process_pool.shutdown(wait=True)
+            try:
+                self.thread_pool.shutdown(wait=True, cancel_futures=True)
+            except TypeError:
+                self.thread_pool.shutdown(wait=True)
+
+            try:
+                self.process_pool.shutdown(wait=True, cancel_futures=True)
+            except TypeError:
+                self.process_pool.shutdown(wait=True)
 
             self.compilation_cache.clear()
             self.execution_profiles.clear()
@@ -469,11 +474,21 @@ class RuntimeCompiler(CompilerCore):
             return {}
 
 
-def create_runtime_compiler(config: RuntimeCompilationConfig) -> RuntimeCompiler:
+def create_runtime_compiler(config: Optional[Union[RuntimeCompilationConfig, dict]] = None) -> RuntimeCompiler:
     """Create a runtime compiler instance"""
+    if config is None:
+        config = RuntimeCompilationConfig()
+    elif isinstance(config, dict):
+        config = RuntimeCompilationConfig(**config)
     return RuntimeCompiler(config)
 
 
-def runtime_compilation_context(config: RuntimeCompilationConfig):
+def runtime_compilation_context(config: Optional[Union[RuntimeCompilationConfig, dict]] = None):
     """Create a runtime compilation context"""
+    from ..core.compiler_core import CompilationContext
+    if config is None:
+        config = RuntimeCompilationConfig()
+    elif isinstance(config, dict):
+        config = RuntimeCompilationConfig(**config)
     return CompilationContext(config)
+

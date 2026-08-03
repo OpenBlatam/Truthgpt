@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 import torch
 import numpy as np
 
-from ..core.compiler_core import CompilerCore, CompilationConfig, CompilationResult, CompilationTarget, OptimizationLevel
+from ..core.compiler_core import CompilerCore, CompilationConfig, CompilationResult, CompilationTarget, OptimizationLevel, coerce_enum
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ class KernelTarget(enum.Enum):
     METAL = "metal"
     VULKAN = "vulkan"
     ROCM = "rocm"
-    CPU = "cpu"
+    CPU_VECTOR = "cpu_vector"
 
 class KernelOptimizationLevel(enum.Enum):
     """Kernel optimization levels"""
@@ -60,8 +60,11 @@ class KernelConfig(CompilationConfig):
     optimization_passes: List[KernelOptimizationPass] = None
 
     def __post_init__(self):
+        super().__post_init__()
         if self.optimization_passes is None:
             self.optimization_passes = []
+        self.target = coerce_enum(self.target, KernelTarget)
+        self.optimization_level = coerce_enum(self.optimization_level, KernelOptimizationLevel)
 
 @dataclass
 class KernelCompilationResult(CompilationResult):
@@ -81,9 +84,11 @@ class KernelCompilationResult(CompilationResult):
 class KernelCompiler(CompilerCore):
     """Generic kernel compiler for TruthGPT"""
     
-    def __init__(self, config: KernelConfig):
-        super().__init__(config)
-        self.config = config
+    def __init__(self, config: Union[KernelConfig, dict, None] = None):
+        from ..core.compiler_core import resolve_config
+        resolved_config = resolve_config(config, KernelConfig)
+        super().__init__(resolved_config)
+        self.config = resolved_config
         self.optimization_strategies = self._initialize_optimization_strategies()
         
     def _initialize_optimization_strategies(self) -> Dict[str, Dict[str, Any]]:
@@ -486,16 +491,19 @@ void truthgpt_kernel({self._get_kernel_parameters(input_spec)}) {{
             return str(input_spec["size"])
         return "1024"
 
-def create_kernel_compiler(config: KernelConfig) -> KernelCompiler:
+def create_kernel_compiler(config: Optional[Union[KernelConfig, dict]] = None) -> KernelCompiler:
     """Create a kernel compiler instance"""
+    if config is None:
+        config = KernelConfig()
+    elif isinstance(config, dict):
+        config = KernelConfig(**config)
     return KernelCompiler(config)
 
-def kernel_compilation_context(config: KernelConfig):
+def kernel_compilation_context(config: Optional[Union[KernelConfig, dict]] = None):
     """Create a kernel compilation context"""
     from ..core.compiler_core import CompilationContext
+    if config is None:
+        config = KernelConfig()
+    elif isinstance(config, dict):
+        config = KernelConfig(**config)
     return CompilationContext(config)
-
-
-
-
-

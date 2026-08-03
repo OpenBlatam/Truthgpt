@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 import torch
 import numpy as np
 
-from ..core.compiler_core import CompilerCore, CompilationConfig, CompilationResult, CompilationTarget, OptimizationLevel
+from ..core.compiler_core import CompilerCore, CompilationConfig, CompilationResult, CompilationTarget, OptimizationLevel, coerce_enum
 
 logger = logging.getLogger(__name__)
 
@@ -65,10 +65,13 @@ class XLAConfig(CompilationConfig):
     custom_flags: Dict[str, Any] = None
 
     def __post_init__(self):
+        super().__post_init__()
         if self.optimization_passes is None:
             self.optimization_passes = []
         if self.custom_flags is None:
             self.custom_flags = {}
+        self.target = coerce_enum(self.target, XLATarget)
+        self.optimization_level = coerce_enum(self.optimization_level, XLAOptimizationLevel)
 
 @dataclass
 class XLACompilationResult(CompilationResult):
@@ -96,9 +99,11 @@ class XLACompilationResult(CompilationResult):
 class TF2XLACompiler(CompilerCore):
     """TensorFlow to XLA Compiler for TruthGPT"""
     
-    def __init__(self, config: XLAConfig):
-        super().__init__(config)
-        self.config = config
+    def __init__(self, config: Union[XLAConfig, dict, None] = None):
+        from ..core.compiler_core import resolve_config
+        resolved_config = resolve_config(config, XLAConfig)
+        super().__init__(resolved_config)
+        self.config = resolved_config
         self.xla_computation = None
         self.optimization_strategies = self._initialize_optimization_strategies()
         self.autotuning_cache = {}
@@ -435,14 +440,8 @@ ENTRY main {{
         return autotuning_results
     
     def _get_autotuning_cache_key(self, computation: Any) -> str:
-        """Generate cache key for autotuning"""
-        import hashlib
-        
-        computation_str = str(computation)
-        config_str = str(self.config.__dict__)
-        
-        combined = f"{computation_str}_{config_str}"
-        return hashlib.md5(combined.encode()).hexdigest()
+        """Generate cache key for autotuning — delegates to base class utility."""
+        return self.generate_cache_key(computation, self.config)
     
     def _generate_performance_metrics(self, computation: Any) -> Dict[str, float]:
         """Generate performance metrics"""
@@ -510,14 +509,23 @@ ENTRY main {{
             "max_autotuning_iterations": self.config.max_autotuning_iterations
         }
 
-def create_tf2xla_compiler(config: XLAConfig) -> TF2XLACompiler:
+def create_tf2xla_compiler(config: Optional[Union[XLAConfig, dict]] = None) -> TF2XLACompiler:
     """Create a TensorFlow to XLA compiler instance"""
+    if config is None:
+        config = XLAConfig()
+    elif isinstance(config, dict):
+        config = XLAConfig(**config)
     return TF2XLACompiler(config)
 
-def tf2xla_compilation_context(config: XLAConfig):
+def tf2xla_compilation_context(config: Optional[Union[XLAConfig, dict]] = None):
     """Create a TensorFlow to XLA compilation context"""
     from ..core.compiler_core import CompilationContext
+    if config is None:
+        config = XLAConfig()
+    elif isinstance(config, dict):
+        config = XLAConfig(**config)
     return CompilationContext(config)
+
 
 
 

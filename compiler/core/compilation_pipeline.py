@@ -6,7 +6,7 @@ Pipeline management for compilation stages
 import logging
 import time
 from typing import Dict, List, Optional, Any, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
@@ -18,40 +18,26 @@ class PipelineStage:
     enabled: bool = True
     priority: int = 0
     timeout: Optional[float] = None
-    dependencies: List[str] = None
-    parameters: Dict[str, Any] = None
-
-    def __post_init__(self):
-        if self.dependencies is None:
-            self.dependencies = []
-        if self.parameters is None:
-            self.parameters = {}
+    dependencies: List[str] = field(default_factory=list)
+    parameters: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
 class PipelineResult:
     """Result of pipeline execution"""
     success: bool
-    stage_results: Dict[str, Any] = None
+    stage_results: Dict[str, Any] = field(default_factory=dict)
     total_time: float = 0.0
-    errors: List[str] = None
-    warnings: List[str] = None
-
-    def __post_init__(self):
-        if self.stage_results is None:
-            self.stage_results = {}
-        if self.errors is None:
-            self.errors = []
-        if self.warnings is None:
-            self.warnings = []
+    errors: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
 
 class CompilationPipeline:
     """Manages compilation pipeline stages"""
     
     def __init__(self, name: str):
-        self.name = name
-        self.stages = {}
-        self.stage_dependencies = {}
-        self.execution_order = []
+        self.name: str = name
+        self.stages: Dict[str, Dict[str, Any]] = {}
+        self.stage_dependencies: Dict[str, List[str]] = {}
+        self.execution_order: List[str] = []
         
     def add_stage(self, stage: PipelineStage, stage_func: Callable):
         """Add a stage to the pipeline"""
@@ -205,8 +191,3 @@ def pipeline_context(pipeline: CompilationPipeline):
             logger.info(f"Pipeline {self.pipeline.name} completed")
     
     return PipelineContext(pipeline)
-
-
-
-
-

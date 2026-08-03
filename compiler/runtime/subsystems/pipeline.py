@@ -4,7 +4,7 @@ Compilation Pipeline and Streaming Subsystem for Runtime Compiler
 
 import time
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Callable
 from dataclasses import dataclass, field
 
 from ..config import RuntimeCompilationResult
@@ -45,11 +45,11 @@ class PipelineEngine:
         self,
         model: Any,
         profile: Dict[str, Any],
-        optimization_fn: callable,
-        code_gen_fn: callable,
-        get_applied_opt_fn: callable,
-        get_metrics_fn: callable,
-        get_info_fn: callable
+        optimization_fn: Callable,
+        code_gen_fn: Callable,
+        get_applied_opt_fn: Callable,
+        get_metrics_fn: Callable,
+        get_info_fn: Callable
     ) -> RuntimeCompilationResult:
         """Execute multi-stage pipeline compilation"""
         if not self.pipeline:
@@ -87,8 +87,8 @@ class PipelineEngine:
         model: Any,
         stage: str,
         profile: Dict[str, Any],
-        optimization_fn: callable,
-        code_gen_fn: callable
+        optimization_fn: Callable,
+        code_gen_fn: Callable
     ) -> Any:
         if stage == "preprocessing":
             return model
@@ -104,7 +104,7 @@ class PipelineEngine:
             logger.warning(f"Unknown pipeline stage: {stage}")
             return model
 
-    def process_streaming(self, compilation_task: Dict[str, Any], streaming_opt_fn: callable) -> RuntimeCompilationResult:
+    def process_streaming(self, compilation_task: Dict[str, Any], streaming_opt_fn: Callable) -> RuntimeCompilationResult:
         """Process a streaming compilation task"""
         try:
             model = compilation_task["model"]

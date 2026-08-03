@@ -14,7 +14,7 @@ import torch
 import numpy as np
 from collections import defaultdict, deque
 
-from ..core.compiler_core import CompilerCore, CompilationConfig, CompilationResult, CompilationTarget, OptimizationLevel
+from ..core.compiler_core import CompilerCore, CompilationConfig, CompilationResult, CompilationTarget, OptimizationLevel, coerce_enum
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,11 @@ class JITCompilationConfig(CompilationConfig):
     enable_speculation: bool = True
     enable_deoptimization: bool = True
     profiling_sample_rate: float = 0.01  # 1% sampling rate
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.target = coerce_enum(self.target, JITTarget)
+        self.optimization_level = coerce_enum(self.optimization_level, JITOptimizationLevel)
 
 @dataclass
 class JITOptimizationStrategy:
@@ -110,9 +115,11 @@ class ExecutionProfile:
 class JITCompiler(CompilerCore):
     """JIT Compiler for TruthGPT models"""
     
-    def __init__(self, config: JITCompilationConfig):
-        super().__init__(config)
-        self.config = config
+    def __init__(self, config: Union[JITCompilationConfig, dict, None] = None):
+        from ..core.compiler_core import resolve_config
+        resolved_config = resolve_config(config, JITCompilationConfig)
+        super().__init__(resolved_config)
+        self.config = resolved_config
         self.execution_profiles = defaultdict(ExecutionProfile)
         self.compilation_cache = {}
         self.optimization_strategies = self._initialize_optimization_strategies()
@@ -260,6 +267,7 @@ class JITCompiler(CompilerCore):
                 )
                 
         except Exception as e:
+            logger.error(f"JIT optimization failed: {str(e)}")
             return JITCompilationResult(
                 success=False,
                 errors=[str(e)]
@@ -452,16 +460,19 @@ class JITCompiler(CompilerCore):
             "profiling_samples": len(self.profiling_data)
         }
 
-def create_jit_compiler(config: JITCompilationConfig) -> JITCompiler:
+def create_jit_compiler(config: Optional[Union[JITCompilationConfig, dict]] = None) -> JITCompiler:
     """Create a JIT compiler instance"""
+    if config is None:
+        config = JITCompilationConfig()
+    elif isinstance(config, dict):
+        config = JITCompilationConfig(**config)
     return JITCompiler(config)
 
-def jit_compilation_context(config: JITCompilationConfig):
+def jit_compilation_context(config: Optional[Union[JITCompilationConfig, dict]] = None):
     """Create a JIT compilation context"""
     from ..core.compiler_core import CompilationContext
+    if config is None:
+        config = JITCompilationConfig()
+    elif isinstance(config, dict):
+        config = JITCompilationConfig(**config)
     return CompilationContext(config)
-
-
-
-
-

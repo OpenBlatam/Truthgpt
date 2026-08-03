@@ -3,7 +3,7 @@ Static Analysis for TruthGPT AOT Compiler
 """
 
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Type
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -50,8 +50,13 @@ class StaticAnalysisContext:
     def __enter__(self):
         return self.analyzer
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        pass
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[Any],
+    ) -> Optional[bool]:
+        return None
 
 def static_analysis_context(analyzer: Optional[StaticAnalyzer] = None):
     """Create static analysis context manager"""

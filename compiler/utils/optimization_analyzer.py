@@ -3,10 +3,10 @@ Optimization Analyzer module for TruthGPT Compiler Utilities
 Compiler pass metrics and graph optimization analysis
 """
 
-import logging
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass
 from contextlib import contextmanager
+from dataclasses import dataclass
+import logging
+from typing import Any, List
 
 logger = logging.getLogger(__name__)
 

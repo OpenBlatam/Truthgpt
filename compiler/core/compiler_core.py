@@ -7,8 +7,8 @@ import enum
 import hashlib
 import logging
 import time
-from typing import Dict, List, Optional, Any, Union, Callable
-from dataclasses import dataclass
+from typing import Dict, List, Optional, Any, Union, Callable, Type
+from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
 
 try:
@@ -37,6 +37,41 @@ class OptimizationLevel(enum.Enum):
     EXTREME = 4
     QUANTUM = 5
 
+def coerce_enum(val: Any, enum_cls: type) -> Any:
+    """Coerce a value (string, int, or enum instance) to an enum instance of enum_cls.
+    
+    If coercion fails or value is None, returns the original value.
+    """
+    if val is None or isinstance(val, enum_cls):
+        return val
+    if isinstance(val, str):
+        val_clean = val.strip()
+        # Try lookup by name uppercase
+        try:
+            return enum_cls[val_clean.upper()]
+        except (KeyError, AttributeError):
+            pass
+        # Try lookup by value lowercased
+        try:
+            return enum_cls(val_clean.lower())
+        except (ValueError, TypeError):
+            pass
+        # Try direct value match
+        try:
+            return enum_cls(val_clean)
+        except (ValueError, TypeError):
+            pass
+    elif isinstance(val, int):
+        try:
+            return enum_cls(val)
+        except (ValueError, TypeError):
+            pass
+    return val
+
+
+coerce_enum_field = coerce_enum
+
+
 @dataclass
 class CompilationConfig:
     """Configuration for compilation process"""
@@ -48,11 +83,20 @@ class CompilationConfig:
     memory_limit: Optional[int] = None
     timeout: Optional[float] = None
     debug_mode: bool = False
-    custom_flags: Dict[str, Any] = None
+    custom_flags: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
-        if self.custom_flags is None:
-            self.custom_flags = {}
+        if type(self) is CompilationConfig:
+            self.target = coerce_enum(self.target, CompilationTarget)
+            self.optimization_level = coerce_enum(self.optimization_level, OptimizationLevel)
+
+def resolve_config(config: Any, config_cls: type) -> Any:
+    """Helper to resolve a config argument (None, dict, or instance) to a config dataclass instance."""
+    if config is None:
+        return config_cls()
+    if isinstance(config, dict):
+        return config_cls(**config)
+    return config
 
 @dataclass
 class CompilationResult:
@@ -77,8 +121,41 @@ class CompilationResult:
             self.metadata = {}
 
 class CompilationError(Exception):
-    """Exception raised during compilation"""
+    """Base exception raised during compilation"""
     pass
+
+class CompilerConfigError(CompilationError):
+    """Exception raised for invalid compiler configurations"""
+    pass
+
+class ModelValidationError(CompilationError):
+    """Exception raised when model validation fails"""
+    pass
+
+class CompilationTargetError(CompilationError):
+    """Exception raised for invalid or unsupported compilation targets"""
+    pass
+
+class CompilationTimeoutError(CompilationError):
+    """Exception raised when compilation times out"""
+    pass
+
+class OptimizationError(CompilationError):
+    """Exception raised during optimization pass failures"""
+    pass
+
+class PluginError(CompilationError):
+    """Exception raised for compiler plugin errors"""
+    pass
+
+class KernelCompilationError(CompilationError):
+    """Exception raised for kernel compilation errors"""
+    pass
+
+class DistributedCompilationError(CompilationError):
+    """Exception raised during distributed compilation errors"""
+    pass
+
 
 class CompilationContext:
     """Context manager for compilation process.
@@ -253,6 +330,7 @@ class TruthGPTCompilerCore(CompilerCore):
             )
             
         except Exception as e:
+            self.logger.error(f"Optimization failed: {str(e)}")
             return CompilationResult(
                 success=False,
                 errors=[str(e)]
@@ -343,22 +421,63 @@ class TruthGPTCompilerCore(CompilerCore):
             "parallelization_enabled": float(self.config.enable_parallelization)
         }
 
-def create_compiler_core(config: Union[CompilationConfig, dict]) -> CompilerCore:
+def create_compiler_core(config: Optional[Union[CompilationConfig, dict]] = None) -> CompilerCore:
     """Create a compiler core instance.
     
     Args:
-        config: A CompilationConfig instance or a dict of configuration values.
+        config: An optional CompilationConfig instance or a dict of configuration values.
     
     Returns:
         A TruthGPTCompilerCore instance.
     """
-    if isinstance(config, dict):
-        config = CompilationConfig(**config) if config else CompilationConfig()
+    if config is None:
+        config = CompilationConfig()
+    elif isinstance(config, dict):
+        config = CompilationConfig(**config)
     return TruthGPTCompilerCore(config)
 
 
-def compilation_context(config: Union[CompilationConfig, dict]):
+def compilation_context(config: Optional[Union[CompilationConfig, dict]] = None) -> CompilationContext:
     """Create a compilation context."""
-    if isinstance(config, dict):
-        config = CompilationConfig(**config) if config else CompilationConfig()
+    if config is None:
+        config = CompilationConfig()
+    elif isinstance(config, dict):
+        config = CompilationConfig(**config)
     return CompilationContext(config)
+
+
+def make_factory(config_cls: Type, compiler_cls: Type) -> Callable:
+    """Generate a standard ``create_*`` factory function for a compiler.
+
+    Eliminates the repeated None/dict/instance resolution pattern found in
+    every ``create_*_compiler`` function throughout the package.
+
+    Args:
+        config_cls: The dataclass configuration type (e.g. ``AOTCompilationConfig``).
+        compiler_cls: The compiler class to instantiate (e.g. ``AOTCompiler``).
+
+    Returns:
+        A factory function with signature ``(config) -> compiler_cls``.
+    """
+    def factory(config=None):
+        resolved = resolve_config(config, config_cls)
+        return compiler_cls(resolved)
+    factory.__doc__ = f"Create a {compiler_cls.__name__} instance."
+    return factory
+
+
+def make_context_factory(config_cls: Type) -> Callable:
+    """Generate a standard ``*_compilation_context`` factory function.
+
+    Args:
+        config_cls: The dataclass configuration type.
+
+    Returns:
+        A factory function with signature ``(config) -> CompilationContext``.
+    """
+    def context_factory(config=None):
+        resolved = resolve_config(config, config_cls)
+        return CompilationContext(resolved)
+    context_factory.__doc__ = f"Create a CompilationContext for {config_cls.__name__}."
+    return context_factory
+
