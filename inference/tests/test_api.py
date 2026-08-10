@@ -14,12 +14,24 @@ os.environ["TRUTHGPT_API_TOKEN"] = "test-token"
 os.environ["TRUTHGPT_CONFIG"] = "configs/llm_default.yaml"
 os.environ["ENABLE_METRICS"] = "true"
 
+import sys
+from pathlib import Path
+
+# Add root directory to sys.path
+root_dir = str(Path(__file__).resolve().parents[3])
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
 try:
     from optimization_core.inference.api import app
     APP_AVAILABLE = True
 except ImportError as e:
-    print(f"ImportError: {e}")
-    APP_AVAILABLE = False
+    try:
+        from api import app
+        APP_AVAILABLE = True
+    except ImportError:
+        print(f"ImportError: {e}")
+        APP_AVAILABLE = False
 
 pytestmark = pytest.mark.skipif(not APP_AVAILABLE, reason="API module not available")
 
@@ -101,29 +113,50 @@ class TestInferenceEndpoints:
     
     def test_infer_endpoint_valid_request(self, client, auth_headers):
         """Test inference with valid request"""
-        # Skip if model not available
-        pytest.skip("Requires model to be loaded")
+        from optimization_core.inference.api.dependencies import state
+        from optimization_core.inference.core.base_engine import BaseInferenceEngine, InferenceResult
         
-        response = client.post(
-            "/v1/infer",
-            headers=auth_headers,
-            json={
-                "model": "gpt-4o",
-                "prompt": "Hello, world!",
-                "params": {
-                    "max_new_tokens": 10,
-                    "temperature": 0.7
+        class MockTestEngine(BaseInferenceEngine):
+            def _initialize_engine(self, **kwargs):
+                return self
+            def generate(self, prompts, **kwargs):
+                if isinstance(prompts, list):
+                    return [InferenceResult(text=f"Echo: {p}", model_name="mock") for p in prompts]
+                return InferenceResult(text=f"Echo: {prompts}", model_name="mock")
+            def get_stats(self):
+                return {"mock": True}
+        
+        original_model = state.model
+        mock_engine = MockTestEngine(model="gpt2")
+        state.model = mock_engine
+        if state.batch_processor:
+            original_batch_engine = state.batch_processor.engine
+            state.batch_processor.engine = mock_engine
+        try:
+            response = client.post(
+                "/v1/infer",
+                headers=auth_headers,
+                json={
+                    "model": "gpt-4o",
+                    "prompt": "Hello, world!",
+                    "params": {
+                        "max_new_tokens": 10,
+                        "temperature": 0.7
+                    }
                 }
-            }
-        )
-        
-        if response.status_code == 200:
+            )
+            
+            assert response.status_code == 200, f"Got status {response.status_code}: {response.json()}"
             data = response.json()
             assert "id" in data
             assert "model" in data
             assert "output" in data
             assert "latency_ms" in data
             assert "usage" in data
+        finally:
+            state.model = original_model
+            if state.batch_processor:
+                state.batch_processor.engine = original_batch_engine
 
 
 class TestRateLimiting:
@@ -243,7 +276,8 @@ class TestConcurrency:
     @pytest.mark.asyncio
     async def test_concurrent_requests(self, auth_headers):
         """Test handling of concurrent requests"""
-        async with httpx.AsyncClient(base_url="http://localhost:8080", timeout=10.0) as client:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver", timeout=10.0) as client:
             tasks = []
             for _ in range(5):
                 tasks.append(
@@ -252,7 +286,6 @@ class TestConcurrency:
             
             responses = await asyncio.gather(*tasks, return_exceptions=True)
             
-            # All should either succeed or fail gracefully
             for response in responses:
                 if isinstance(response, httpx.Response):
                     assert response.status_code in [200, 503]

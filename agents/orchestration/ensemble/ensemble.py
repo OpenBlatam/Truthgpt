@@ -115,7 +115,30 @@ async def run_ensemble(
         runs.append(item)
         # Don't record a failed engine (empty text) as a benchmark run — it would
         # skew latency/token stats with a non-result.
-        if record_run and item[2]:
-            record_run(item[0], item[1], item[3], item[4])
-
     return merge_ensemble_responses(mode, runs)
+
+
+class AgentEnsemble:
+    """Ensemble orchestrator for multi-engine consensus, race, and parallel execution."""
+
+    def __init__(self, mode: str = "consensus") -> None:
+        self.mode = mode
+
+    async def run(
+        self,
+        active: List[Dict[str, str]],
+        prompt: str,
+        run_engine: Callable,
+        **kwargs: Any,
+    ) -> str:
+        return await run_ensemble(self.mode, active, prompt, run_engine, **kwargs)
+
+
+__all__ = [
+    "run_ensemble",
+    "merge_ensemble_responses",
+    "AgentEnsemble",
+    "ALL_ENSEMBLE_MODES",
+    "MULTI_ENGINE_MODES",
+]
+

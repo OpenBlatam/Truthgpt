@@ -15,6 +15,12 @@ except ImportError:
     POLYGLOT_AVAILABLE = False
 
 
+try:
+    from optimization_core.inference.monitoring.metrics import metrics_collector
+except Exception:
+    metrics_collector = None
+
+
 class PolyglotCacheManager:
     """Manages the Rust KV cache and Python fallback memory for polyglot engine integration."""
 
@@ -46,9 +52,13 @@ class PolyglotCacheManager:
                     val = self._fallback_cache.get(prompt)
                     if val is None:
                         self.misses += len(prompts)
+                        if metrics_collector:
+                            metrics_collector.increment("inference_cache_misses_total", value=len(prompts))
                         return None
                     results.append(val)
                 self.hits += len(prompts)
+                if metrics_collector:
+                    metrics_collector.increment("inference_cache_hits_total", value=len(prompts))
                 return results
 
             results = []
@@ -59,9 +69,13 @@ class PolyglotCacheManager:
                     results.append(cached.decode('utf-8'))
                 else:
                     self.misses += len(prompts)
+                    if metrics_collector:
+                        metrics_collector.increment("inference_cache_misses_total", value=len(prompts))
                     return None
 
             self.hits += len(prompts)
+            if metrics_collector:
+                metrics_collector.increment("inference_cache_hits_total", value=len(prompts))
             return results
 
     def update_cache(self, prompts: List[str], results: List[str]) -> None:

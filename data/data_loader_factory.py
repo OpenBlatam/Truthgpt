@@ -6,7 +6,15 @@ from typing import List, Dict, Any, Optional
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from factories.collate import COLLATE
+try:
+    from factories.collate import COLLATE
+except ImportError:
+    try:
+        from optimization_core.factories.collate import COLLATE
+    except ImportError:
+        COLLATE = None
+
+from .collators import LMCollator
 
 logger = logging.getLogger(__name__)
 
@@ -43,16 +51,26 @@ class DataLoaderFactory:
         Returns:
             Configured DataLoader
         """
+        if batch_sampler is not None:
+            return DataLoader(
+                dataset,
+                batch_sampler=batch_sampler,
+                collate_fn=collate_fn,
+                num_workers=num_workers,
+                prefetch_factor=prefetch_factor if num_workers > 0 else None,
+                persistent_workers=persistent_workers if num_workers > 0 else False,
+                pin_memory=pin_memory,
+            )
+        
         return DataLoader(
             dataset,
-            batch_size=None if batch_sampler else batch_size,
-            shuffle=shuffle and batch_sampler is None,
+            batch_size=batch_size,
+            shuffle=shuffle,
             collate_fn=collate_fn,
             num_workers=num_workers,
             prefetch_factor=prefetch_factor if num_workers > 0 else None,
             persistent_workers=persistent_workers if num_workers > 0 else False,
             pin_memory=pin_memory,
-            batch_sampler=batch_sampler,
         )
     
     @staticmethod
@@ -87,7 +105,7 @@ class DataLoaderFactory:
             Configured training DataLoader
         """
         # Create collate function
-        collate_fn = COLLATE.build(collate_type)(tokenizer, max_length)
+        collate_fn = DataLoaderFactory._get_collate_fn(collate_type, tokenizer, max_length)
         
         # Create batch sampler if using length bucketing
         batch_sampler = None
@@ -107,6 +125,16 @@ class DataLoaderFactory:
             batch_sampler=batch_sampler,
         )
     
+    @staticmethod
+    def _get_collate_fn(collate_type: str, tokenizer: Any, max_length: int) -> Any:
+        """Helper to safely build collator function with fallback."""
+        if COLLATE is not None:
+            try:
+                return COLLATE.build(collate_type)(tokenizer, max_length)
+            except Exception as e:
+                logger.warning(f"Could not build '{collate_type}' from COLLATE registry: {e}. Falling back to LMCollator.")
+        return LMCollator(tokenizer, max_length=max_length)
+
     @staticmethod
     def create_val_loader(
         texts: List[str],
@@ -134,7 +162,7 @@ class DataLoaderFactory:
         Returns:
             Configured validation DataLoader
         """
-        collate_fn = COLLATE.build(collate_type)(tokenizer, max_length)
+        collate_fn = DataLoaderFactory._get_collate_fn(collate_type, tokenizer, max_length)
         
         return DataLoaderFactory.create_loader(
             dataset=list(texts),

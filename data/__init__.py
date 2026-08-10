@@ -5,20 +5,32 @@ This module provides organized access to data components:
 - Dataset management
 - Data loader factories
 - Data collators
+- Data processor factory & Polars processor
+- Dataset builder registry
 - Text processing
 """
 
 from __future__ import annotations
 
+import logging
+from typing import Any, Dict, List, Optional
+
 # Direct imports for backward compatibility
 from .dataset_manager import DatasetManager
 from .data_loader_factory import DataLoaderFactory
 from .collators import LMCollator
+from .processor_factory import create_data_processor, ProcessorType, list_available_processors
+from .polars_processor import PolarsProcessor
+from .registry import register_dataset, build_dataset
+
+logger = logging.getLogger(__name__)
 
 # Lazy imports for additional components
 _LAZY_IMPORTS = {
     'text_hf': '.text_hf',
     'registry': '.registry',
+    'processor_factory': '.processor_factory',
+    'polars_processor': '.polars_processor',
 }
 
 _import_cache = {}
@@ -47,16 +59,18 @@ def __getattr__(name: str):
         ) from e
 
 
-def create_data_component(component_type: str = "dataset_manager", config: dict = None):
+def create_data_component(component_type: str = "dataset_manager", config: Optional[dict] = None) -> Any:
     """
     Unified factory function to create data components.
     
     Args:
-        component_type: Type of component. Options: "dataset_manager", "data_loader_factory", "collator"
+        component_type: Type of component. Options: 
+            "dataset_manager", "data_loader_factory", "collator", 
+            "processor_factory", "polars_processor"
         config: Optional configuration dictionary
     
     Returns:
-        The requested component instance
+        The requested component instance or function
     """
     if config is None:
         config = {}
@@ -67,6 +81,8 @@ def create_data_component(component_type: str = "dataset_manager", config: dict 
         "dataset_manager": lambda cfg: DatasetManager(**cfg),
         "data_loader_factory": lambda cfg: DataLoaderFactory(**cfg),
         "collator": lambda cfg: LMCollator(**cfg),
+        "processor_factory": lambda cfg: create_data_processor(**cfg),
+        "polars_processor": lambda cfg: PolarsProcessor(**cfg),
     }
     
     if component_type not in factory_map:
@@ -93,23 +109,39 @@ DATA_COMPONENT_REGISTRY = {
         "class": LMCollator,
         "module": "data.collators",
     },
+    "processor_factory": {
+        "function": create_data_processor,
+        "module": "data.processor_factory",
+    },
+    "polars_processor": {
+        "class": PolarsProcessor,
+        "module": "data.polars_processor",
+    },
+    "registry": {
+        "function": build_dataset,
+        "module": "data.registry",
+    },
 }
 
 
-def list_available_data_components() -> list[str]:
+def list_available_data_components() -> List[str]:
     """List all available data component types."""
     return list(DATA_COMPONENT_REGISTRY.keys())
 
 
-def get_data_component_info(component_type: str) -> dict[str, any]:
+def get_data_component_info(component_type: str) -> Dict[str, Any]:
     """Get information about a data component."""
     if component_type not in DATA_COMPONENT_REGISTRY:
         raise ValueError(f"Unknown data component: {component_type}")
     
+    entry = DATA_COMPONENT_REGISTRY[component_type]
+    target = entry.get("class") or entry.get("function")
+    target_name = target.__name__ if target else component_type
+    
     return {
         'name': component_type,
-        'class': DATA_COMPONENT_REGISTRY[component_type]['class'].__name__,
-        'module': DATA_COMPONENT_REGISTRY[component_type]['module'],
+        'target': target_name,
+        'module': entry['module'],
     }
 
 
@@ -117,10 +149,14 @@ __all__ = [
     "DatasetManager",
     "DataLoaderFactory",
     "LMCollator",
+    "PolarsProcessor",
+    "ProcessorType",
+    "create_data_processor",
+    "list_available_processors",
+    "register_dataset",
+    "build_dataset",
     "create_data_component",
     "list_available_data_components",
     "get_data_component_info",
     "DATA_COMPONENT_REGISTRY",
 ]
-
-

@@ -5,8 +5,9 @@ Provides a unified factory for creating inference engines with automatic
 selection based on availability and robust fallback mechanisms.
 """
 import logging
-from typing import Optional, Union, Dict, Any
+from typing import Optional, Union, Dict, Any, List
 from pathlib import Path
+import threading
 from optimization_core.modules.base.core_system.core.factory_base import CallableFactory, FactoryError
 
 from .base_engine import BaseInferenceEngine
@@ -30,26 +31,75 @@ class EngineType:
 
 
 class FallbackEngineProxy(BaseInferenceEngine):
-    """Proxy engine that attempts generation across multiple engines if one fails."""
+    """Proxy engine that attempts generation across multiple engines if one fails with failure counters and stats."""
     
-    def __init__(self, engines: list[BaseInferenceEngine]):
+    def __init__(self, engines: List[BaseInferenceEngine]):
         if not engines:
             raise ValueError("FallbackEngineProxy requires at least one engine.")
         # Store primary model path from first engine
         super().__init__(model=engines[0].model_path)
         self.engines = engines
         self._initialized = True
+        self._lock = threading.Lock()
+        self._engine_failures = {id(e): 0 for e in engines}
+
+    def _reset_failure(self, engine: BaseInferenceEngine):
+        with self._lock:
+            self._engine_failures[id(engine)] = 0
+
+    def _record_failure(self, engine: BaseInferenceEngine) -> int:
+        with self._lock:
+            self._engine_failures[id(engine)] = self._engine_failures.get(id(engine), 0) + 1
+            return self._engine_failures[id(engine)]
         
     def _initialize_engine(self, **kwargs) -> Any:
         pass
+
+    async def initialize(self, **kwargs) -> Any:
+        for engine in self.engines:
+            if hasattr(engine, "initialize"):
+                await engine.initialize(**kwargs)
+        self._set_initialized(True)
+        return self
+
+    async def shutdown(self) -> None:
+        for engine in self.engines:
+            if hasattr(engine, "shutdown"):
+                await engine.shutdown()
+        self._set_initialized(False)
+
+    def __enter__(self):
+        for engine in self.engines:
+            if hasattr(engine, "__enter__"):
+                engine.__enter__()
+        self._set_initialized(True)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        for engine in self.engines:
+            if hasattr(engine, "__exit__"):
+                engine.__exit__(exc_type, exc_val, exc_tb)
+        self._set_initialized(False)
+
+    async def check_health(self) -> bool:
+        states = []
+        for engine in self.engines:
+            if hasattr(engine, "check_health"):
+                states.append(await engine.check_health())
+            else:
+                states.append(getattr(engine, "is_initialized", True))
+        return any(states)
         
     def generate(self, prompts, **kwargs):
         last_err = None
         for engine in self.engines:
             try:
-                return engine.generate(prompts, **kwargs)
+                res = engine.generate(prompts, **kwargs)
+                self._reset_failure(engine)
+                return res
             except Exception as e:
-                logger.warning(f"Engine {engine.__class__.__name__} failed: {e}. Falling back...")
+                fails = self._record_failure(engine)
+                logger.warning(f"Engine {engine.__class__.__name__} failed ({fails} fails): {e}. Falling back...")
                 last_err = e
         raise RuntimeError(f"All fallback engines failed. Last error: {last_err}")
         
@@ -57,14 +107,97 @@ class FallbackEngineProxy(BaseInferenceEngine):
         last_err = None
         for engine in self.engines:
             try:
-                return await engine.generate_async(prompt, **kwargs)
+                if hasattr(engine, "generate_async"):
+                    res = await engine.generate_async(prompt, **kwargs)
+                elif hasattr(engine, "async_generate"):
+                    res = await engine.async_generate(prompt, **kwargs)
+                elif hasattr(engine, "generate"):
+                    import asyncio
+                    loop = asyncio.get_running_loop()
+                    res = await loop.run_in_executor(None, lambda: engine.generate(prompt, **kwargs))
+                else:
+                    continue
+                self._reset_failure(engine)
+                return res
             except Exception as e:
-                logger.warning(f"Engine {engine.__class__.__name__} async failed: {e}. Falling back...")
+                fails = self._record_failure(engine)
+                logger.warning(f"Engine {engine.__class__.__name__} async failed ({fails} fails): {e}. Falling back...")
                 last_err = e
         raise RuntimeError(f"All fallback engines failed. Last error: {last_err}")
-        
+
+    async def generate_stream(self, prompt, **kwargs):
+        last_err = None
+        for engine in self.engines:
+            if hasattr(engine, "generate_stream"):
+                try:
+                    async for chunk in engine.generate_stream(prompt, **kwargs):
+                        yield chunk
+                    self._reset_failure(engine)
+                    return
+                except Exception as e:
+                    fails = self._record_failure(engine)
+                    logger.warning(f"Engine {engine.__class__.__name__} streaming failed: {e}. Falling back...")
+                    last_err = e
+            elif hasattr(engine, "generate_async"):
+                try:
+                    res = await engine.generate_async(prompt, **kwargs)
+                    yield getattr(res, "text", str(res))
+                    self._reset_failure(engine)
+                    return
+                except Exception as e:
+                    fails = self._record_failure(engine)
+                    logger.warning(f"Engine {engine.__class__.__name__} async fallback failed: {e}. Falling back...")
+                    last_err = e
+            elif hasattr(engine, "generate"):
+                try:
+                    res = engine.generate(prompt, **kwargs)
+                    yield getattr(res, "text", str(res))
+                    self._reset_failure(engine)
+                    return
+                except Exception as e:
+                    fails = self._record_failure(engine)
+                    logger.warning(f"Engine {engine.__class__.__name__} sync fallback failed: {e}. Falling back...")
+                    last_err = e
+        raise RuntimeError(f"All fallback engines failed for streaming. Last error: {last_err}")
+
+    async def generate_batch(self, prompts: list[str], **kwargs) -> list[str]:
+        last_err = None
+        for engine in self.engines:
+            if hasattr(engine, "generate_batch"):
+                try:
+                    res = await engine.generate_batch(prompts, **kwargs)
+                    self._reset_failure(engine)
+                    return res
+                except Exception as e:
+                    fails = self._record_failure(engine)
+                    logger.warning(f"Engine {engine.__class__.__name__} generate_batch failed: {e}. Falling back...")
+                    last_err = e
+            elif hasattr(engine, "generate"):
+                try:
+                    import asyncio
+                    loop = asyncio.get_running_loop()
+                    def _sync_batch():
+                        res = engine.generate(prompts, **kwargs)
+                        if isinstance(res, list):
+                            return [r.text if hasattr(r, "text") else str(r) for r in res]
+                        return [res.text if hasattr(res, "text") else str(res)]
+                    res = await loop.run_in_executor(None, _sync_batch)
+                    self._reset_failure(engine)
+                    return res
+                except Exception as e:
+                    fails = self._record_failure(engine)
+                    logger.warning(f"Engine {engine.__class__.__name__} generate sync fallback failed: {e}. Falling back...")
+                    last_err = e
+        raise RuntimeError(f"All fallback engines failed for generate_batch. Last error: {last_err}")
+
     def get_stats(self) -> Dict[str, Any]:
-        return {"type": "fallback_proxy", "engines_count": len(self.engines)}
+        with self._lock:
+            failures = {e.__class__.__name__: self._engine_failures.get(id(e), 0) for e in self.engines}
+        return {
+            "type": "fallback_proxy",
+            "engines_count": len(self.engines),
+            "engine_failures": failures,
+        }
 
 
 class InferenceEngineFactory(CallableFactory):

@@ -188,7 +188,7 @@ class PolarsProcessor:
                     )
                     for p in validated_paths
                 ]
-                df = pl.concat(dfs) if not self.lazy else pl.concat(dfs)
+                df = pl.concat(dfs)
             
             return df
         except Exception as e:
@@ -243,7 +243,7 @@ class PolarsProcessor:
                 )
                 for p in path
             ]
-            df = pl.concat(dfs) if not self.lazy else pl.concat(dfs)
+            df = pl.concat(dfs)
         
         return df
     
@@ -274,7 +274,7 @@ class PolarsProcessor:
             df = read_fn(str(path[0]), **kwargs)
         else:
             dfs = [read_fn(str(p), **kwargs) for p in path]
-            df = pl.concat(dfs) if not self.lazy else pl.concat(dfs)
+            df = pl.concat(dfs)
         
         return df
     
@@ -522,12 +522,7 @@ class PolarsProcessor:
             
             # Validate required columns
             required_cols = required_cols or ["tokens", "loss", category_col]
-            if isinstance(df, pl.LazyFrame):
-                schema = df.schema
-            else:
-                schema = df.schema
-            
-            validate_dataframe_schema(schema, required_cols, "Input DataFrame")
+            validate_dataframe_schema(df, required_cols, "Input DataFrame")
             
             # Build lazy evaluation pipeline
             if isinstance(df, pl.LazyFrame):

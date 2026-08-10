@@ -2,8 +2,11 @@
 Dataset management module for loading and preprocessing datasets.
 """
 import logging
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
+from pathlib import Path
 from datasets import load_dataset, Dataset
+
+from .utils.validators import validate_file_path, validate_positive_number
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +78,7 @@ class DatasetManager:
     
     @staticmethod
     def load_jsonl_dataset(
-        path: str,
+        path: Union[str, Path],
         text_field: str = "text",
         train_split: float = 0.9,
     ) -> Tuple[List[str], List[str]]:
@@ -92,13 +95,19 @@ class DatasetManager:
         """
         import json
         
+        file_path = validate_file_path(path, must_exist=True)
+        validate_positive_number(train_split, "train_split", min_value=0.0, max_value=1.0)
+        
         try:
-            logger.info(f"Loading JSONL dataset from {path}")
+            logger.info(f"Loading JSONL dataset from {file_path}")
             
             texts = []
-            with open(path, "r", encoding="utf-8") as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 for line in f:
-                    data = json.loads(line.strip())
+                    line_str = line.strip()
+                    if not line_str:
+                        continue
+                    data = json.loads(line_str)
                     if text_field in data:
                         texts.append(data[text_field])
             
@@ -119,7 +128,7 @@ class DatasetManager:
     
     @staticmethod
     def load_text_file(
-        path: str,
+        path: Union[str, Path],
         train_split: float = 0.9,
         chunk_size: Optional[int] = None,
     ) -> Tuple[List[str], List[str]]:
@@ -134,10 +143,15 @@ class DatasetManager:
         Returns:
             Tuple of (train_texts, val_texts)
         """
+        file_path = validate_file_path(path, must_exist=True)
+        validate_positive_number(train_split, "train_split", min_value=0.0, max_value=1.0)
+        if chunk_size is not None:
+            validate_positive_number(chunk_size, "chunk_size", min_value=1)
+
         try:
-            logger.info(f"Loading text file from {path}")
+            logger.info(f"Loading text file from {file_path}")
             
-            with open(path, "r", encoding="utf-8") as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
             
             if chunk_size:
@@ -151,7 +165,7 @@ class DatasetManager:
                 texts = [p.strip() for p in content.split("\n\n") if p.strip()]
             
             # Split train/val
-            split_idx = int(len(texts) * train_split)
+            split_idx = int(round(len(texts) * train_split)) if len(texts) > 1 else len(texts)
             train_texts = texts[:split_idx]
             val_texts = texts[split_idx:]
             
@@ -181,13 +195,15 @@ class DatasetManager:
         Returns:
             Tuple of (train_texts, val_texts)
         """
-        if source == "hf":
+        source_lower = source.lower()
+        if source_lower == "hf":
             return cls.load_hf_dataset(**kwargs)
-        elif source == "jsonl":
+        elif source_lower in ("jsonl", "ndjson"):
             return cls.load_jsonl_dataset(**kwargs)
-        elif source == "text":
+        elif source_lower == "text":
             return cls.load_text_file(**kwargs)
         else:
-            raise ValueError(f"Unsupported dataset source: {source}")
+            raise ValueError(f"Unsupported dataset source: '{source}'")
+
 
 

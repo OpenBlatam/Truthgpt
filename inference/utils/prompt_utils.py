@@ -149,6 +149,20 @@ def truncate_prompts(
     return prompts[:max_batch_size]
 
 
+# Compatibility aliases
+format_prompt = normalize_prompts
+truncate_prompt = truncate_prompts
+
+__all__ = [
+    "normalize_prompts",
+    "handle_single_prompt",
+    "extract_generated_text",
+    "truncate_prompts",
+    "format_prompt",
+    "truncate_prompt",
+]
+
+
 
 
 

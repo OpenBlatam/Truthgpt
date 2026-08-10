@@ -11,41 +11,22 @@ from collections import defaultdict
 from contextlib import contextmanager
 
 
-from optimization_core.core.metrics_base import BaseMetrics, calculate_rate
-
-
-@dataclass
-class InferenceMetrics(BaseMetrics):
-    """Metrics for inference operations."""
-    total_tokens_generated: int = 0
-    cache_hits: int = 0
-    cache_misses: int = 0
-    
-    @property
-    def cache_hit_rate(self) -> float:
-        """Calculate cache hit rate."""
-        return calculate_rate(self.cache_hits, self.cache_hits + self.cache_misses)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert metrics to dictionary."""
-        result = super().to_dict()
-        result.update({
-            "total_tokens_generated": self.total_tokens_generated,
-            "cache_hits": self.cache_hits,
-            "cache_misses": self.cache_misses,
-            "cache_hit_rate": self.cache_hit_rate,
-        })
-        return result
-    
-    def reset(self) -> None:
-        """Reset all metrics."""
-        super().reset()
-        self.total_tokens_generated = 0
-        self.cache_hits = 0
-        self.cache_misses = 0
-
-
-from optimization_core.core.metrics_base import MetricsCollectorBase
+try:
+    from core.metrics_base import BaseMetrics, calculate_rate, MetricsCollectorBase
+except (ImportError, ValueError):
+    try:
+        from optimization_core.core.metrics_base import BaseMetrics, calculate_rate, MetricsCollectorBase
+    except (ImportError, ValueError):
+        class BaseMetrics:
+            def to_dict(self) -> Dict[str, Any]:
+                return {}
+            def reset(self) -> None:
+                pass
+        def calculate_rate(numerator: float, denominator: float) -> float:
+            return (numerator / denominator) if denominator > 0 else 0.0
+        class MetricsCollectorBase:
+            def __init__(self, max_samples: int = 10000):
+                self.max_samples = max_samples
 
 
 class MetricsCollector(MetricsCollectorBase):
@@ -189,5 +170,15 @@ def log_metrics(metrics: MetricsCollector, logger: Optional[logging.Logger] = No
         logger.info("Error Counts:")
         for error_type, count in summary['error_counts'].items():
             logger.info(f"  {error_type}: {count}")
+
+
+def get_logger(name: str = "inference") -> logging.Logger:
+    """Get a logger instance for inference."""
+    return logging.getLogger(name)
+
+
+def set_log_level(level: int = logging.INFO, logger_name: str = "inference") -> None:
+    """Set the log level for a logger."""
+    logging.getLogger(logger_name).setLevel(level)
 
 

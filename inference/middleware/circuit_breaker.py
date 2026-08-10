@@ -10,6 +10,12 @@ from dataclasses import dataclass, field
 from threading import Lock
 from collections import defaultdict
 
+try:
+    from ..exceptions import CircuitBreakerOpenError
+except (ImportError, ValueError):
+    from optimization_core.inference.exceptions import CircuitBreakerOpenError
+
+
 
 class CircuitState(Enum):
     """Circuit breaker states"""

@@ -1,10 +1,14 @@
 """
 Inference Middleware Components
 
-This module contains middleware components: circuit breaker, rate limiter, and cache management.
+This module contains middleware components: circuit breaker, rate limiter, cache management, and interceptors.
 """
 
 from __future__ import annotations
+import importlib
+import logging
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     'CircuitBreaker',
@@ -16,6 +20,13 @@ __all__ = [
     'CacheManager',
     'InMemoryCache',
     'RedisCache',
+    'CacheInterceptor',
+    'EngineCacheMiddleware',
+    'engine_cache',
+    'TelemetryMiddleware',
+    'TelemetryState',
+    'telemetry_state',
+    'get_metrics_text',
 ]
 
 _LAZY_IMPORTS = {
@@ -28,6 +39,13 @@ _LAZY_IMPORTS = {
     'CacheManager': '.cache_manager',
     'InMemoryCache': '.cache',
     'RedisCache': '.cache',
+    'CacheInterceptor': '.cache_interceptor',
+    'EngineCacheMiddleware': '.engine_cache',
+    'engine_cache': '.engine_cache',
+    'TelemetryMiddleware': '.telemetry',
+    'TelemetryState': '.telemetry',
+    'telemetry_state': '.telemetry',
+    'get_metrics_text': '.telemetry',
 }
 
 _import_cache = {}
@@ -46,7 +64,7 @@ def __getattr__(name: str):
     
     module_path = _LAZY_IMPORTS[name]
     try:
-        module = __import__(module_path, fromlist=[name], level=1)
+        module = importlib.import_module(module_path, package=__name__)
         obj = getattr(module, name)
         _import_cache[name] = obj
         return obj
@@ -72,4 +90,3 @@ def get_middleware_component_info(component_name: str) -> dict[str, any]:
         'module': _LAZY_IMPORTS[component_name],
         'available': component_name in _import_cache or True,
     }
-

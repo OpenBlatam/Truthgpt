@@ -9,12 +9,63 @@ import logging
 from typing import List, Optional, Dict, Any, Callable
 from functools import wraps
 
-from optimization_core.core.helpers import (
-    ensure_initialized as core_ensure_initialized,
-    timing_context,
-    handle_errors,
-    batch_items,
-)
+import sys
+from pathlib import Path
+
+try:
+    from core.helpers import (
+        ensure_initialized as core_ensure_initialized,
+        timing_context,
+        handle_errors,
+        batch_items,
+    )
+except ImportError:
+    try:
+        from optimization_core.core.helpers import (
+            ensure_initialized as core_ensure_initialized,
+            timing_context,
+            handle_errors,
+            batch_items,
+        )
+    except ImportError:
+        def core_ensure_initialized(attr_name='_initialized', error_message=None):
+            def decorator(func):
+                @wraps(func)
+                def wrapper(self, *args, **kwargs):
+                    if not getattr(self, attr_name, False):
+                        raise RuntimeError(error_message or f"{self.__class__.__name__} is not initialized.")
+                    return func(self, *args, **kwargs)
+                return wrapper
+            return decorator
+
+        from contextlib import contextmanager
+        import time as _time
+
+        @contextmanager
+        def timing_context(operation_name, logger_instance=None):
+            log = logger_instance or logging.getLogger(__name__)
+            start = _time.perf_counter()
+            try:
+                yield
+            finally:
+                elapsed = _time.perf_counter() - start
+                log.debug(f"{operation_name} took {elapsed:.3f}s")
+
+        def handle_errors(error_type=Exception, default_return=None, log_error=True, reraise=True):
+            def decorator(func):
+                @wraps(func)
+                def wrapper(*args, **kwargs):
+                    try:
+                        return func(*args, **kwargs)
+                    except error_type as e:
+                        if reraise:
+                            raise
+                        return default_return
+                return wrapper
+            return decorator
+
+        def batch_items(items, batch_size):
+            return [items[i:i + batch_size] for i in range(0, len(items), batch_size)]
 
 from ..exceptions import (
     InferenceEngineError,

@@ -264,6 +264,48 @@ def performance_monitor(operation_name: str):
             logger.info(f"{operation_name}: {elapsed:.3f}s")
 
 
+# Backward & cross-module compatibility aliases
+time_execution = log_execution_time
+log_exceptions = handle_errors
+retry_on_exception = retry_on_failure
+
+# Re-export from advanced_decorators for seamless cross-module imports
+from ..decorators.advanced_decorators import (
+    retry,
+    timeout,
+    async_timeout,
+    with_metrics,
+    cached,
+    rate_limit,
+    circuit_breaker,
+    validate_input,
+    log_execution,
+    production_ready,
+)
+
+__all__ = [
+    "validate_inputs",
+    "handle_errors",
+    "log_execution_time",
+    "retry_on_failure",
+    "cache_result",
+    "performance_monitor",
+    "time_execution",
+    "log_exceptions",
+    "retry_on_exception",
+    "retry",
+    "timeout",
+    "async_timeout",
+    "with_metrics",
+    "cached",
+    "rate_limit",
+    "circuit_breaker",
+    "validate_input",
+    "log_execution",
+    "production_ready",
+]
+
+
 
 
 

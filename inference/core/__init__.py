@@ -8,6 +8,7 @@ from __future__ import annotations
 import importlib
 
 __all__ = [
+    'BaseInferenceEngine',
     'InferenceEngine',
     'TextGenerator',
     'TensorRTLLMEngine',
@@ -17,9 +18,11 @@ __all__ = [
     'create_inference_engine',
     'EngineType',
     'list_available_engines',
+    'FallbackEngineProxy',
 ]
 
 _LAZY_CLASSES = {
+    'BaseInferenceEngine': '.base_engine',
     'InferenceEngine': '.inference_engine',
     'TextGenerator': '.text_generator',
     'TensorRTLLMEngine': '.tensorrt_llm_engine',
@@ -29,6 +32,7 @@ _LAZY_CLASSES = {
     'create_inference_engine': '.engine_factory',
     'EngineType': '.engine_factory',
     'list_available_engines': '.engine_factory',
+    'FallbackEngineProxy': '.engine_factory',
 }
 
 _import_cache = {}

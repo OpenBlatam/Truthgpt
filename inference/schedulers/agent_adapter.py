@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from typing import Optional, Dict
 try:
     from ..pipelines.execution_pipeline import ExecutionPipeline
@@ -39,7 +40,7 @@ class SmartSchedulerAdapter:
         Submits a request from the smart_scheduler to the inference pipeline.
         Returns a Future that the scheduler can await.
         """
-        req_id = request.request_id or "default_id"
+        req_id = request.request_id or f"req_{id(request)}"
         future = asyncio.Future()
         self.response_registry[req_id] = future
         
@@ -47,6 +48,7 @@ class SmartSchedulerAdapter:
             await self.request_queue.put(request)
         except asyncio.QueueFull:
             logger.error("Inference request queue is full. Rejecting.")
+            self.response_registry.pop(req_id, None)
             future.set_exception(RuntimeError("Queue Full"))
             
         return future
@@ -59,22 +61,40 @@ class SmartSchedulerAdapter:
                 req_id = request.request_id or "default_id"
                 
                 try:
+                    start_time = time.time()
                     # Execute through the middleware pipeline
                     response_text = await self.pipeline.execute(request)
+                    latency_ms = (time.time() - start_time) * 1000.0
                     
-                    response = InferenceResponse(
-                        text=str(response_text),
-                        request_id=req_id,
-                        latency_ms=0.0, # Handled by tracing in real implementation
-                        model_name="tensorrt_model_dynamic"
-                    )
+                    if isinstance(response_text, InferenceResponse):
+                        response = response_text
+                        if not response.request_id:
+                            response.request_id = req_id
+                        if response.latency_ms <= 0:
+                            response.latency_ms = round(latency_ms, 2)
+                    elif hasattr(response_text, "text"):
+                        response = InferenceResponse(
+                            text=str(response_text.text),
+                            request_id=req_id,
+                            latency_ms=round(latency_ms, 2),
+                            model_name=getattr(response_text, 'model_name', getattr(request, 'model', 'default_model'))
+                        )
+                    else:
+                        response = InferenceResponse(
+                            text=str(response_text),
+                            request_id=req_id,
+                            latency_ms=round(latency_ms, 2),
+                            model_name=getattr(request, 'model', 'default_model')
+                        )
                     
-                    if req_id in self.response_registry:
-                        self.response_registry[req_id].set_result(response)
+                    fut = self.response_registry.pop(req_id, None)
+                    if fut and not fut.done():
+                        fut.set_result(response)
                 except Exception as e:
                     logger.error(f"Failed processing request {req_id}: {e}")
-                    if req_id in self.response_registry:
-                        self.response_registry[req_id].set_exception(e)
+                    fut = self.response_registry.pop(req_id, None)
+                    if fut and not fut.done():
+                        fut.set_exception(e)
                 finally:
                     self.request_queue.task_done()
                     
@@ -82,3 +102,4 @@ class SmartSchedulerAdapter:
                 break
             except Exception as e:
                 logger.error(f"Critical error in adapter worker: {e}")
+

@@ -267,6 +267,7 @@ class CallableFactory(BaseFactory):
             creator: Callable that creates the component
         """
         self._creators[component_type] = creator
+        self.register(component_type, creator)
     
     def _check_availability(self, component_type: str) -> bool:
         """Override in subclass."""

@@ -7,15 +7,15 @@ import uuid
 from typing import List, Dict, Any, Callable, Protocol, Optional, runtime_checkable, Type, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from optimization_core.agents.framework.memory.sqlite_memory import SQLiteMemory, BaseMemory
-    from optimization_core.agents.framework.memory.vector_memory import VectorMemory
-    from optimization_core.agents.framework.memory.core_memory import CoreMemory
-    from optimization_core.agents.framework.tools.tools import BaseTool, ToolResult
-    from optimization_core.agents.framework.engines.engines import AsyncLLMEngine
+    from ..memory.sqlite_memory import SQLiteMemory, BaseMemory
+    from ..memory.vector_memory import VectorMemory
+    from ..memory.core_memory import CoreMemory
+    from ..tools.tools import BaseTool, ToolResult
+    from ..engines.engines import AsyncLLMEngine
     from typing import AsyncIterator
 
-from optimization_core.agents.framework.models import AgentAction, AgentResponse, InferenceResult, AgentConfig
-from optimization_core.agents.framework.tools.config import settings
+from ..models import AgentAction, AgentResponse, InferenceResult, AgentConfig
+from ..tools.config import settings
 
 try:
     from interface.cc_style import (
@@ -25,14 +25,64 @@ try:
 except ImportError:
     CC_AVAILABLE = False
 
-from optimization_core.agents.framework.utils import parse_agent_action
+from ..utils import parse_agent_action
 
 try:
-    from optimization_core.agents.framework.observability import global_tracer
+    from ..observability import global_tracer
 except ImportError:
-    from optimization_core.agents.framework.observability import global_tracer
+    global_tracer = None
+
+from .base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
+
+
+class ReActAgent(BaseAgent):
+    """
+    Standard single-session / single-user ReAct Agent based on BaseAgent.
+    Wraps MultiUserReActAgent for single-user workflow execution.
+    """
+
+    def __init__(
+        self,
+        name: str = "ReActAgent",
+        role: str = "ReAct Reasoning Agent",
+        config: Optional[AgentConfig] = None,
+        llm_engine: Optional[AsyncLLMEngine] = None,
+        memory: Optional[BaseMemory] = None,
+        vector_memory: Optional[VectorMemory] = None,
+        custom_system_instructions: Optional[str] = None,
+        tools: Optional[List[BaseTool]] = None,
+        scheduler: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(name=name, role=role)
+        cfg = config or AgentConfig()
+        self._react = MultiUserReActAgent(
+            config=cfg,
+            llm_engine=llm_engine,
+            memory=memory,
+            vector_memory=vector_memory,
+            custom_system_instructions=custom_system_instructions,
+            tools=tools,
+            scheduler=scheduler,
+        )
+
+    def register_tool(self, tool: BaseTool) -> None:
+        """Register a tool into the underlying ReAct engine."""
+        self._react.register_tool(tool)
+
+    async def process(
+        self, query: str, context: Optional[Dict[str, Any]] = None
+    ) -> AgentResponse:
+        """Process a query using the ReAct loop."""
+        user_id = (context or {}).get("user_id", "default_user")
+        response = await self._react.process_message(user_id, query)
+        self.add_to_memory("user", query)
+        content = getattr(response, "content", str(response))
+        self.add_to_memory("assistant", content)
+        return response
+
 
 class MultiUserReActAgent:
     """
@@ -583,3 +633,9 @@ class MultiUserReActAgent:
             metadata={"original_message": original_msg}
         )
         asyncio.create_task(get_persistence_manager().save_snapshot(snapshot))
+
+
+__all__ = [
+    "ReActAgent",
+    "MultiUserReActAgent",
+]

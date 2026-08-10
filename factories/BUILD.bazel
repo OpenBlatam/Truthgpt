@@ -1,5 +1,5 @@
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  Factories Module - BUILD                                                    ║
+# ║  Factories Subsystem - Enterprise Bazel Build Rules                         ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 load("@rules_python//python:defs.bzl", "py_library")
@@ -7,22 +7,139 @@ load("@rules_python//python:defs.bzl", "py_library")
 package(default_visibility = ["//visibility:public"])
 
 py_library(
-    name = "factories",
-    srcs = glob(["**/*.py"]),
+    name = "exceptions",
+    srcs = ["exceptions.py"],
+)
+
+py_library(
+    name = "protocols",
+    srcs = ["protocols.py"],
+)
+
+py_library(
+    name = "base",
+    srcs = ["base.py"],
     deps = [
+        ":exceptions",
+        ":protocols",
+    ],
+)
+
+py_library(
+    name = "utils",
+    srcs = ["utils.py"],
+    deps = [
+        ":exceptions",
+    ],
+)
+
+py_library(
+    name = "registry",
+    srcs = ["registry.py"],
+    deps = [
+        ":base",
+        ":exceptions",
+        ":protocols",
+    ],
+)
+
+py_library(
+    name = "attention",
+    srcs = ["attention.py"],
+    deps = [
+        ":registry",
+        ":utils",
+        "@pip//torch",
+    ],
+)
+
+py_library(
+    name = "optimizer",
+    srcs = ["optimizer.py"],
+    deps = [
+        ":registry",
+        ":utils",
+        "@pip//torch",
+    ],
+)
+
+py_library(
+    name = "datasets",
+    srcs = ["datasets.py"],
+    deps = [
+        ":registry",
+        ":utils",
+        "@pip//torch",
+    ],
+)
+
+py_library(
+    name = "callbacks",
+    srcs = ["callbacks.py"],
+    deps = [
+        ":registry",
+        ":utils",
+    ],
+)
+
+py_library(
+    name = "collate",
+    srcs = ["collate.py"],
+    deps = [
+        ":registry",
+        ":utils",
+        "@pip//torch",
+    ],
+)
+
+py_library(
+    name = "kv_cache",
+    srcs = ["kv_cache.py"],
+    deps = [
+        ":registry",
+        ":utils",
+        "@pip//torch",
+    ],
+)
+
+py_library(
+    name = "memory",
+    srcs = ["memory.py"],
+    deps = [
+        ":registry",
+        ":utils",
+        "@pip//torch",
+    ],
+)
+
+py_library(
+    name = "metrics",
+    srcs = ["metrics.py"],
+    deps = [
+        ":registry",
+        ":utils",
+        "@pip//torch",
+    ],
+)
+
+py_library(
+    name = "factories",
+    srcs = ["__init__.py"],
+    deps = [
+        ":attention",
+        ":base",
+        ":callbacks",
+        ":collate",
+        ":datasets",
+        ":exceptions",
+        ":kv_cache",
+        ":memory",
+        ":metrics",
+        ":optimizer",
+        ":protocols",
+        ":registry",
+        ":utils",
         "@pip//torch",
         "@pip//transformers",
     ],
 )
-
-
-
-
-
-
-
-
-
-
-
-

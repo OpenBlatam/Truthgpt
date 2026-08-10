@@ -17,6 +17,12 @@ from .performance_metrics import (
     get_metrics,
     reset_global_metrics,
 )
+from ..monitoring.metrics import (
+    MetricsCollector,
+    MetricsSnapshot,
+    metrics_collector,
+    InferenceMetrics,
+)
 
 __all__ = [
     "PerformanceMetrics",
@@ -29,7 +35,12 @@ __all__ = [
     "MetricType",
     "get_metrics",
     "reset_global_metrics",
+    "MetricsCollector",
+    "MetricsSnapshot",
+    "metrics_collector",
+    "InferenceMetrics",
 ]
+
 
 
 

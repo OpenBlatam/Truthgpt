@@ -18,20 +18,14 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 try:
-    from optimization_core.agents.framework.models import AgentResponse
+    from ..models import AgentResponse
 except ImportError:
-    try:
-        from agents.framework.models import AgentResponse
-    except ImportError:
-        AgentResponse = Any
+    AgentResponse = Any
 
 try:
-    from optimization_core.core.framework.error_handler import ErrorHandler
+    from core.framework.error_handler import ErrorHandler
 except ImportError:
-    try:
-        from core.framework.error_handler import ErrorHandler
-    except ImportError:
-        ErrorHandler = None
+    ErrorHandler = None
 
 
 

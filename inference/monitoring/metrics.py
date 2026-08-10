@@ -21,6 +21,8 @@ class MetricsSnapshot:
     request_duration_p50_ms: float = 0.0
     request_duration_p95_ms: float = 0.0
     request_duration_p99_ms: float = 0.0
+    time_to_first_token_ms: float = 0.0
+    kv_cache_used_bytes: int = 0
     cache_hits: int = 0
     cache_misses: int = 0
     queue_depth: int = 0
@@ -31,6 +33,7 @@ class MetricsSnapshot:
     active_connections: int = 0
     batch_size_avg: float = 0.0
     tokens_per_second: float = 0.0
+
 
 
 class MetricsCollector:
@@ -111,6 +114,24 @@ class MetricsCollector:
             return 0.0
         return sum(values) / len(values)
     
+    def _get_counter_sum(self, name: str) -> int:
+        """Sum counter values across all label sets for a given metric name."""
+        total = 0
+        for k, v in self.counters.items():
+            base_key = k.split("{")[0]
+            if base_key == name:
+                total += v
+            elif name == "inference_requests_total" and (base_key == "requests_total" or base_key.endswith("_requests_total")):
+                total += v
+        return total
+
+    def _get_gauge_val(self, name: str, default: float = 0.0) -> float:
+        """Get gauge value matching metric name."""
+        for k, v in self.gauges.items():
+            if k == name or k.startswith(f"{name}{{"):
+                return v
+        return default
+
     def get_snapshot(self) -> MetricsSnapshot:
         """Get comprehensive metrics snapshot"""
         with self._lock:
@@ -121,23 +142,23 @@ class MetricsCollector:
             throughput_rps = len(self._request_times) / 60.0 if self._request_times else 0.0
             
             return MetricsSnapshot(
-                requests_total=self.counters.get("inference_requests_total", 0),
-                requests_5xx=self.counters.get("inference_errors_5xx_total", 0),
-                requests_4xx=self.counters.get("inference_errors_4xx_total", 0),
+                requests_total=self._get_counter_sum("inference_requests_total"),
+                requests_5xx=self._get_counter_sum("inference_errors_5xx_total"),
+                requests_4xx=self._get_counter_sum("inference_errors_4xx_total"),
                 request_duration_ms=self._calculate_avg(duration_values),
                 request_duration_p50_ms=self._calculate_percentile(duration_values, 50),
                 request_duration_p95_ms=self._calculate_percentile(duration_values, 95),
                 request_duration_p99_ms=self._calculate_percentile(duration_values, 99),
-                cache_hits=self.counters.get("inference_cache_hits_total", 0),
-                cache_misses=self.counters.get("inference_cache_misses_total", 0),
-                queue_depth=int(self.gauges.get("inference_queue_depth", 0)),
-                active_batches=int(self.gauges.get("inference_active_batches", 0)),
-                circuit_breaker_open=self.counters.get("circuit_breaker_open_total", 0),
-                rate_limit_hits=self.counters.get("rate_limit_hits_total", 0),
+                cache_hits=self._get_counter_sum("inference_cache_hits_total"),
+                cache_misses=self._get_counter_sum("inference_cache_misses_total"),
+                queue_depth=int(self._get_gauge_val("inference_queue_depth", 0)),
+                active_batches=int(self._get_gauge_val("inference_active_batches", 0)),
+                circuit_breaker_open=self._get_counter_sum("circuit_breaker_open_total"),
+                rate_limit_hits=self._get_counter_sum("rate_limit_hits_total"),
                 throughput_rps=throughput_rps,
-                active_connections=int(self.gauges.get("inference_active_connections", 0)),
+                active_connections=int(self._get_gauge_val("inference_active_connections", 0)),
                 batch_size_avg=self._calculate_avg(batch_sizes),
-                tokens_per_second=self.gauges.get("inference_tokens_per_second", 0.0),
+                tokens_per_second=self._get_gauge_val("inference_tokens_per_second", 0.0),
             )
     
     def export_prometheus(self) -> str:
@@ -225,4 +246,5 @@ class MetricsCollector:
 
 # Global metrics collector instance
 metrics_collector = MetricsCollector()
+InferenceMetrics = MetricsCollector
 

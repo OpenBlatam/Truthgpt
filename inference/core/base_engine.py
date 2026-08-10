@@ -67,6 +67,25 @@ class GenerationConfig:
     num_beams: int = 1
     extra_params: Dict[str, Any] = field(default_factory=dict)
 
+    @classmethod
+    def from_dict(cls, kwargs: Dict[str, Any]) -> "GenerationConfig":
+        """Safely build GenerationConfig from arbitrary kwargs dict."""
+        import dataclasses
+        known_fields = {f.name for f in dataclasses.fields(cls) if f.name != "extra_params"}
+        known = {}
+        extra = {}
+        for k, v in kwargs.items():
+            if k in known_fields:
+                known[k] = v
+            else:
+                extra[k] = v
+        if "extra_params" in kwargs and isinstance(kwargs["extra_params"], dict):
+            extra.update(kwargs["extra_params"])
+        if "max_tokens" in kwargs and "max_new_tokens" not in kwargs:
+            known["max_new_tokens"] = kwargs["max_tokens"]
+        return cls(**known, extra_params=extra)
+
+
 
 @dataclass
 class InferenceRequest:
@@ -92,6 +111,44 @@ class InferenceRequest:
     priority: int = 0
     extra_params: Dict[str, Any] = field(default_factory=dict)
 
+    def to_pydantic(self) -> Any:
+        """Convert to pydantic InferenceRequest model."""
+        from ..schemas.requests import InferenceRequest as PydanticInferenceRequest
+        params = {"max_tokens": self.max_tokens, "temperature": self.temperature, "top_p": self.top_p}
+        params.update(self.extra_params)
+        return PydanticInferenceRequest(
+            prompt=self.prompt,
+            request_id=self.request_id,
+            stream=self.stream,
+            params=params,
+            generation_kwargs=self.extra_params
+        )
+
+    @classmethod
+    def from_pydantic(cls, pydantic_obj: Any) -> "InferenceRequest":
+        """Create InferenceRequest dataclass from pydantic model."""
+        params = getattr(pydantic_obj, "params", {}) or {}
+        gen_kwargs = getattr(pydantic_obj, "generation_kwargs", {}) or {}
+        if not isinstance(params, dict):
+            params = {}
+        if not isinstance(gen_kwargs, dict):
+            gen_kwargs = {}
+        merged = {**params, **gen_kwargs}
+        
+        max_tokens = getattr(pydantic_obj, "max_tokens", merged.get("max_tokens", merged.get("max_new_tokens", 128)))
+        temperature = getattr(pydantic_obj, "temperature", merged.get("temperature", 0.7))
+        top_p = getattr(pydantic_obj, "top_p", merged.get("top_p", 0.95))
+        
+        return cls(
+            prompt=getattr(pydantic_obj, "prompt", ""),
+            max_tokens=max_tokens if max_tokens is not None else 128,
+            temperature=temperature if temperature is not None else 0.7,
+            top_p=top_p if top_p is not None else 0.95,
+            request_id=getattr(pydantic_obj, "request_id", getattr(pydantic_obj, "id", None)),
+            stream=getattr(pydantic_obj, "stream", False),
+            extra_params=merged
+        )
+
 
 @dataclass
 class InferenceResponse:
@@ -107,11 +164,45 @@ class InferenceResponse:
         finish_reason: Why generation stopped (e.g. 'stop', 'length', 'error').
     """
     text: str
-    model_name: str
-    latency_ms: float
+    model_name: str = ""
+    latency_ms: float = 0.0
     request_id: Optional[str] = None
     tokens_generated: Optional[int] = None
     finish_reason: Optional[str] = None
+
+    @property
+    def output(self) -> str:
+        return self.text
+
+    def to_pydantic(self) -> Any:
+        """Convert to pydantic InferenceResponse model."""
+        from ..schemas.requests import InferenceResponse as PydanticInferenceResponse
+        return PydanticInferenceResponse(
+            text=self.text,
+            output=self.text,
+            model=self.model_name,
+            model_name=self.model_name,
+            latency_ms=self.latency_ms,
+            request_id=self.request_id,
+            usage={"total_tokens": self.tokens_generated} if self.tokens_generated is not None else {}
+        )
+
+    @classmethod
+    def from_pydantic(cls, pydantic_obj: Any) -> "InferenceResponse":
+        """Create InferenceResponse dataclass from pydantic model."""
+        text = getattr(pydantic_obj, "text", getattr(pydantic_obj, "output", ""))
+        model_name = getattr(pydantic_obj, "model_name", getattr(pydantic_obj, "model", ""))
+        latency_ms = getattr(pydantic_obj, "latency_ms", 0.0)
+        request_id = getattr(pydantic_obj, "request_id", getattr(pydantic_obj, "id", None))
+        usage = getattr(pydantic_obj, "usage", {}) or {}
+        tokens = usage.get("total_tokens", None)
+        return cls(
+            text=text,
+            model_name=model_name,
+            latency_ms=latency_ms,
+            request_id=request_id,
+            tokens_generated=tokens
+        )
 
 
 @dataclass
@@ -163,6 +254,7 @@ class BaseInferenceEngine(ABC):
             **kwargs: Additional engine-specific arguments.
         """
         self.model_path = Path(model) if isinstance(model, (str, Path)) else model
+        self.model = str(self.model_path)
         self._initialized = False
 
     # ------------------------------------------------------------------
@@ -188,6 +280,51 @@ class BaseInferenceEngine(ABC):
         """
         ...
 
+    async def initialize(self, **kwargs) -> Any:
+        """Async lifecycle hook to initialize the engine."""
+        if not self._initialized:
+            res = self._initialize_engine(**kwargs)
+            self._set_initialized(True)
+            return res
+        return self
+
+    async def shutdown(self) -> None:
+        """Async lifecycle hook to gracefully clean up engine resources."""
+        self._set_initialized(False)
+
+    async def warmup(self, sample_prompt: str = "Warmup prompt", max_tokens: int = 1) -> bool:
+        """Warming up engine caches and graph compilation."""
+        try:
+            self.generate(sample_prompt, max_tokens=max_tokens)
+            return True
+        except Exception as e:
+            logger.warning(f"Engine warmup error on {self.__class__.__name__}: {e}")
+            return False
+
+    async def check_health(self) -> bool:
+        """Probe engine health state."""
+        return self._initialized
+
+    def __enter__(self):
+        """Sync context manager entry."""
+        if not self._initialized:
+            self._initialize_engine()
+            self._set_initialized(True)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Sync context manager exit."""
+        pass
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        await self.initialize()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.shutdown()
+
     # ------------------------------------------------------------------
     # Synchronous Generation
     # ------------------------------------------------------------------
@@ -212,8 +349,23 @@ class BaseInferenceEngine(ABC):
         ...
 
     # ------------------------------------------------------------------
-    # Asynchronous Streaming (protocol-compliant)
+    # Asynchronous Generation & Streaming
     # ------------------------------------------------------------------
+
+    async def generate_async(
+        self,
+        prompt: Union[str, List[str]],
+        **kwargs: Any,
+    ) -> Union[InferenceResult, List[InferenceResult]]:
+        """
+        Asynchronously generate text from one or more prompts.
+
+        Default implementation executes ``generate()`` in an executor.
+        Subclasses may override with native async logic.
+        """
+        import asyncio
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, lambda: self.generate(prompt, **kwargs))
 
     async def generate_stream(
         self,
@@ -234,8 +386,8 @@ class BaseInferenceEngine(ABC):
             Token chunks as strings.
         """
         import asyncio
+        loop = asyncio.get_running_loop()
 
-        loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             None,
             lambda: self.generate(
@@ -273,8 +425,7 @@ class BaseInferenceEngine(ABC):
             List of generated text strings.
         """
         import asyncio
-
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def _sync_batch():
             results = self.generate(

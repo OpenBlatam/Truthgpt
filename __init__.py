@@ -34,16 +34,49 @@ __path__ = [_curr_dir]
 
 class OptimizationCoreMetaFinder:
     """Meta path finder ensuring 'optimization_core.xyz' maps to 'xyz' in the workspace."""
+
+    _resolving: set = set()  # re-entrancy guard
+
     def find_spec(self, fullname, path, target=None):
-        if fullname.startswith("optimization_core."):
-            real_name = fullname[len("optimization_core."):]
-            try:
-                mod = importlib.import_module(real_name)
-                sys.modules[fullname] = mod
-                if hasattr(mod, '__spec__') and mod.__spec__ is not None:
-                    return mod.__spec__
-            except Exception:
-                pass
+        if not fullname.startswith("optimization_core."):
+            return None
+
+        # Guard against re-entrant calls.  When ``agents.framework.__init__``
+        # is in the middle of executing and one of its sub-modules does
+        # ``from optimization_core.agents.framework.models import …``, the
+        # old code called ``importlib.import_module('agents.framework.models')``
+        # which re-entered ``agents.framework.__init__`` (still initializing)
+        # and produced a ``KeyError`` / circular-import error.
+        if fullname in self._resolving:
+            return None
+
+        real_name = fullname[len("optimization_core."):]
+
+        # Also skip if the *parent* of the real name is currently
+        # initializing — importing it again would only yield a partially-
+        # initialized module and trigger CPython's ``_initializing`` re-import
+        # path, which is the direct cause of the ``KeyError``.
+        parent = real_name.rpartition('.')[0]
+        if parent:
+            parent_mod = sys.modules.get(parent)
+            if parent_mod is not None:
+                spec = getattr(parent_mod, '__spec__', None)
+                if spec is not None and getattr(spec, '_initializing', False):
+                    # Parent is mid-init.  Fall back to the normal finder so
+                    # Python uses the already-registered (partial) module
+                    # instead of trying to re-import it.
+                    return None
+
+        self._resolving.add(fullname)
+        try:
+            mod = importlib.import_module(real_name)
+            sys.modules[fullname] = mod
+            if hasattr(mod, '__spec__') and mod.__spec__ is not None:
+                return mod.__spec__
+        except Exception:
+            pass
+        finally:
+            self._resolving.discard(fullname)
         return None
 
 if not any(isinstance(finder, OptimizationCoreMetaFinder) for finder in sys.meta_path):

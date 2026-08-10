@@ -5,7 +5,7 @@ Inference Engine Helper Modules
 Helper functions for inference engine operations.
 """
 
-from .engines.engine_helpers import (
+from .engine_helpers import (
     ensure_initialized,
     timing_context,
     handle_generation_errors,

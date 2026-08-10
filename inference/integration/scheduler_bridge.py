@@ -108,8 +108,11 @@ class InferenceSchedulerBridge:
         if hasattr(self.engine, 'generate_async'):
             return await self.engine.generate_async(prompt, **kwargs)
         else:
-            # Wrap sync generate in async
-            loop = asyncio.get_event_loop()
+            # Wrap sync generate in async executor
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(None, lambda: self.engine.generate(prompt, **kwargs))
             if isinstance(result, list):
                 return result[0].text if hasattr(result[0], 'text') else str(result[0])

@@ -32,31 +32,13 @@ async def ready():
         raise HTTPException(status_code=503, detail="Model not loaded")
     return {"status": "ready"}
 
+from ...middleware.telemetry import get_metrics_text
+
 @router.get("/metrics")
 async def metrics():
     """Prometheus-style metrics endpoint"""
     if not ENABLE_METRICS:
         raise HTTPException(status_code=404, detail="Metrics disabled")
     
-    total_requests = state.metrics.get("requests_total", 0)
-    total_duration = state.metrics.get("request_duration_ms", 0)
-    avg_duration = total_duration / total_requests if total_requests > 0 else 0
-    
-    metrics_text = f\"\"\"# HELP inference_requests_total Total number of inference requests
-# TYPE inference_requests_total counter
-inference_requests_total {total_requests}
-
-# HELP inference_request_duration_ms Average request duration in milliseconds
-# TYPE inference_request_duration_ms gauge
-inference_request_duration_ms {avg_duration:.2f}
-
-# HELP inference_errors_5xx_total Total number of 5xx errors
-# TYPE inference_errors_5xx_total counter
-inference_errors_5xx_total {state.metrics.get("errors_5xx", 0)}
-
-# HELP inference_cache_hits_total Total number of cache hits
-# TYPE inference_cache_hits_total counter
-inference_cache_hits_total {state.metrics.get("cache_hits", 0)}
-\"\"\"
-    
+    metrics_text = get_metrics_text()
     return Response(content=metrics_text, media_type="text/plain")

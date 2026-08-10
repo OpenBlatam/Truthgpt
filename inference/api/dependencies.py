@@ -18,6 +18,10 @@ class GlobalState:
 
 state = GlobalState()
 
+def get_global_state() -> GlobalState:
+    """Returns global application state instance."""
+    return state
+
 async def verify_token(authorization: Optional[str] = Header(None)):
     """Verify API token"""
     if not authorization or not authorization.lower().startswith("bearer "):

@@ -38,22 +38,25 @@ def _normalize_engine_key(name: str) -> str:
 class EngineRegistry:
     """Refactored Singleton Registry for LLM Providers."""
     _instance = None
+    _lock = threading.Lock()
 
     def __new__(cls):
         if cls._instance is None:
-            inst = super().__new__(cls)
-            inst._providers: Dict[str, BaseProvider] = {}
-            # Defaults are registered as classes for lazy instantiation
-            inst._default_providers = {
-                "deepseek": DeepSeekProvider,
-                "google": GoogleGeminiProvider,
-                "chatgpt": OpenAIProvider,
-                "openai": OpenAIProvider,
-                "claude": AnthropicProvider,
-                "anthropic": AnthropicProvider,
-                "openrouter": OpenRouterProvider
-            }
-            cls._instance = inst
+            with cls._lock:
+                if cls._instance is None:
+                    inst = super().__new__(cls)
+                    inst._providers: Dict[str, BaseProvider] = {}
+                    # Defaults are registered as classes for lazy instantiation
+                    inst._default_providers = {
+                        "deepseek": DeepSeekProvider,
+                        "google": GoogleGeminiProvider,
+                        "chatgpt": OpenAIProvider,
+                        "openai": OpenAIProvider,
+                        "claude": AnthropicProvider,
+                        "anthropic": AnthropicProvider,
+                        "openrouter": OpenRouterProvider
+                    }
+                    cls._instance = inst
         return cls._instance
 
     def register(self, name: str, provider: Union[BaseProvider, Type[BaseProvider]]):

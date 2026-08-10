@@ -31,13 +31,24 @@ _LAZY_IMPORTS = {
     # Middleware & Batching
     'BatchProcessor': '.batch.batch_scheduler',
     'CacheManager': '.middleware.cache_manager',
+    'CacheInterceptor': '.middleware.cache_interceptor',
     
     # Submodules
     'core': '.core',
+    'engines': '.engines',
+    'interfaces': '.interfaces',
     'batch': '.batch',
     'middleware': '.middleware',
+    'middlewares': '.middleware',
+    'metrics': '.metrics',
     'monitoring': '.monitoring',
+    'decorators': '.decorators',
     'api': '.api',
+    'schemas': '.schemas',
+    'config': '.config',
+    'pipelines': '.pipelines',
+    'schedulers': '.schedulers',
+    'integration': '.integration',
     'server': '.server',
     'utils': '.utils',
 }
@@ -50,7 +61,13 @@ def __getattr__(name: str):
     module_path = _LAZY_IMPORTS[name]
     
     try:
-        if name in ['core', 'batch', 'middleware', 'monitoring', 'api', 'server', 'utils']:
+        submodules = [
+            'core', 'engines', 'interfaces', 'batch', 'middleware', 
+            'middlewares', 'metrics', 'monitoring', 'decorators', 'api', 
+            'schemas', 'config', 'pipelines', 'schedulers', 'integration',
+            'server', 'utils'
+        ]
+        if name in submodules:
             return importlib.import_module(module_path, package=__name__)
         
         module = importlib.import_module(module_path, package=__name__)

@@ -366,12 +366,17 @@ class SmartAgentScheduler:
         }
 
 
+# Alias for scheduler interface
+SmartScheduler = SmartAgentScheduler
+
 __all__ = [
     "CircuitBreaker",
     "AdaptiveTimeoutStrategy",
     "AgentTask",
     "SmartAgentScheduler",
+    "SmartScheduler",
 ]
+
 
 
 

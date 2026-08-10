@@ -9,8 +9,32 @@ import logging
 from typing import List, Union, Optional, Any
 from pathlib import Path
 
-from optimization_core.core.file_utils import validate_file_path
-from optimization_core.core.validators import validate_path
+try:
+    from ..utils.validators import validate_file_path, validate_non_empty_string
+    from ..utils.file_utils import validate_file_format
+except (ImportError, ValueError):
+    try:
+        from optimization_core.data.utils.validators import validate_file_path, validate_non_empty_string
+        from optimization_core.data.utils.file_utils import validate_file_format
+    except ImportError:
+        def validate_file_path(path, must_exist=True, allowed_extensions=None):
+            p = Path(path)
+            if must_exist and not p.exists():
+                raise FileNotFoundError(f"Path does not exist: {path}")
+            if allowed_extensions and p.suffix.lower() not in allowed_extensions:
+                raise ValueError(f"Invalid extension {p.suffix}")
+            return p
+        def validate_non_empty_string(val, name):
+            if not val or not str(val).strip():
+                raise ValueError(f"{name} cannot be empty")
+        def validate_file_format(path, allowed_formats=None):
+            return Path(path).suffix.lower().lstrip(".")
+
+def validate_path(path: Union[str, Path]) -> Path:
+    """Validate path object."""
+    if not path:
+        raise ValueError("path cannot be empty")
+    return Path(path)
 
 try:
     import polars as pl
@@ -34,8 +58,6 @@ def normalize_paths(paths: Union[str, Path, List[str], List[Path]]) -> List[Path
     """
     Normalize file paths to list of Path objects.
     
-    Uses core.validators.validate_path for consistency.
-    
     Args:
         paths: Single path or list of paths
     
@@ -58,8 +80,6 @@ def validate_file_exists(path: Path, extension: Optional[str] = None):
     """
     Validate that file exists and optionally has correct extension.
     
-    Uses core.file_utils.validate_file_path for consistency.
-    
     Args:
         path: Path to validate
         extension: Expected file extension (e.g., '.parquet')
@@ -75,7 +95,7 @@ def validate_file_exists(path: Path, extension: Optional[str] = None):
     )
 
 
-def detect_dataframe_type(df: Union[pl.DataFrame, pl.LazyFrame]) -> str:
+def detect_dataframe_type(df: Any) -> str:
     """
     Detect if DataFrame is eager or lazy.
     
@@ -85,12 +105,12 @@ def detect_dataframe_type(df: Union[pl.DataFrame, pl.LazyFrame]) -> str:
     Returns:
         "eager" or "lazy"
     """
-    if isinstance(df, pl.LazyFrame):
+    if pl is not None and isinstance(df, pl.LazyFrame):
         return "lazy"
     return "eager"
 
 
-def ensure_lazy(df: Union[pl.DataFrame, pl.LazyFrame]) -> pl.LazyFrame:
+def ensure_lazy(df: Any) -> Any:
     """
     Convert DataFrame to LazyFrame if needed.
     
@@ -98,14 +118,17 @@ def ensure_lazy(df: Union[pl.DataFrame, pl.LazyFrame]) -> pl.LazyFrame:
         df: DataFrame or LazyFrame
     
     Returns:
-        LazyFrame
+        LazyFrame or original object if Polars unavailable
     """
-    if isinstance(df, pl.LazyFrame):
-        return df
-    return df.lazy()
+    if pl is not None:
+        if isinstance(df, pl.LazyFrame):
+            return df
+        if isinstance(df, pl.DataFrame):
+            return df.lazy()
+    return df
 
 
-def ensure_eager(df: Union[pl.DataFrame, pl.LazyFrame]) -> pl.DataFrame:
+def ensure_eager(df: Any) -> Any:
     """
     Convert LazyFrame to DataFrame if needed.
     
@@ -113,14 +136,17 @@ def ensure_eager(df: Union[pl.DataFrame, pl.LazyFrame]) -> pl.DataFrame:
         df: DataFrame or LazyFrame
     
     Returns:
-        DataFrame
+        DataFrame or original object if Polars unavailable
     """
-    if isinstance(df, pl.DataFrame):
-        return df
-    return df.collect()
+    if pl is not None:
+        if isinstance(df, pl.DataFrame):
+            return df
+        if isinstance(df, pl.LazyFrame):
+            return df.collect()
+    return df
 
 
-def get_numeric_columns(df: Union[pl.DataFrame, pl.LazyFrame]) -> List[str]:
+def get_numeric_columns(df: Any) -> List[str]:
     """
     Get list of numeric column names.
     
@@ -130,12 +156,10 @@ def get_numeric_columns(df: Union[pl.DataFrame, pl.LazyFrame]) -> List[str]:
     Returns:
         List of numeric column names
     """
-    if isinstance(df, pl.LazyFrame):
-        # For LazyFrame, we need to collect schema
-        schema = df.schema
-    else:
-        schema = df.schema
+    if pl is None:
+        return []
     
+    schema = df.schema
     numeric_types = (
         pl.Int8, pl.Int16, pl.Int32, pl.Int64,
         pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64,
@@ -149,7 +173,7 @@ def get_numeric_columns(df: Union[pl.DataFrame, pl.LazyFrame]) -> List[str]:
 
 
 def log_dataframe_info(
-    df: Union[pl.DataFrame, pl.LazyFrame],
+    df: Any,
     operation: str,
     logger_instance: Optional[logging.Logger] = None
 ):
@@ -163,13 +187,12 @@ def log_dataframe_info(
     """
     log = logger_instance or logger
     
-    if isinstance(df, pl.LazyFrame):
-        # For LazyFrame, we can only get schema
+    if pl is not None and isinstance(df, pl.LazyFrame):
         log.debug(f"{operation}: LazyFrame with {len(df.schema)} columns")
-    else:
+    elif pl is not None and isinstance(df, pl.DataFrame):
         log.debug(
             f"{operation}: DataFrame shape={df.shape}, "
             f"columns={len(df.columns)}, memory={df.estimated_size()}"
         )
-
-
+    else:
+        log.debug(f"{operation}: Data object type={type(df).__name__}")

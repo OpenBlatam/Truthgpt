@@ -209,8 +209,16 @@ class DynamicBatcher(Generic[T, R]):
             raise BatchProcessingError(f"Batch processing failed: {e}") from e
     
     def _optimize_batch(self, batch: List[T]) -> List[T]:
-        """Optimize batch order for better performance."""
-        return batch
+        """Optimize batch order by prompt length to minimize padding overhead."""
+        if not batch or not self.optimize_batches:
+            return batch
+        try:
+            return sorted(
+                batch,
+                key=lambda x: len(getattr(x, "prompt", x)) if isinstance(getattr(x, "prompt", x), str) else 0
+            )
+        except Exception:
+            return batch
     
     async def get_stats(self) -> Dict[str, Any]:
         """Get batcher statistics."""
@@ -242,10 +250,43 @@ class ContinuousBatcher(DynamicBatcher[T, R]):
     Continuous batcher that processes items as they arrive using asyncio.
     """
     
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        processor: Optional[Callable] = None,
+        engine: Optional[Any] = None,
+        latency_budget_ms: Optional[float] = None,
+        max_wait_time: float = 0.02,
+        **kwargs
+    ):
+        async def _dynamic_processor(batch):
+            eng = getattr(self, "engine", engine)
+            if eng is not None:
+                if hasattr(eng, "generate_batch"):
+                    return await eng.generate_batch(batch)
+                elif hasattr(eng, "agenerate"):
+                    return await eng.agenerate(batch)
+                elif hasattr(eng, "generate"):
+                    loop = asyncio.get_running_loop()
+                    return await loop.run_in_executor(None, eng.generate, batch)
+            if processor is not None:
+                return await processor(batch)
+            raise RuntimeError("No engine or processor configured for ContinuousBatcher")
+        
+        if latency_budget_ms is not None:
+            max_wait_time = latency_budget_ms / 1000.0
+            
+        super().__init__(processor=_dynamic_processor, max_wait_time=max_wait_time, **kwargs)
+        self.engine = engine
         self._pending_results: Dict[int, asyncio.Future] = {}
         self._result_counter = 0
+
+    async def stop(self):
+        """Stop batcher and set exception on any pending result futures."""
+        await super().stop()
+        for fut in self._pending_results.values():
+            if not fut.done():
+                fut.set_exception(BatchProcessingError("ContinuousBatcher stopped before request completion"))
+        self._pending_results.clear()
     
     async def submit_async(
         self,
@@ -278,11 +319,32 @@ class ContinuousBatcher(DynamicBatcher[T, R]):
         start_time = time.time()
         batch_data = [item.data for item in items]
         
-        if self.optimize_batches:
-            batch_data = self._optimize_batch(batch_data)
+        proc = None
+        if self.engine is not None:
+            if hasattr(self.engine, "agenerate"):
+                proc = self.engine.agenerate
+            elif hasattr(self.engine, "generate_batch"):
+                proc = self.engine.generate_batch
+            elif hasattr(self.engine, "generate"):
+                proc = self.engine.generate
+            else:
+                proc = self.engine
+        if proc is None:
+            proc = self.processor
             
+        if proc is None:
+            raise BatchProcessingError("No engine or processor configured for ContinuousBatcher")
+                
         try:
-            results = await self.processor(batch_data)
+            import inspect
+            if inspect.iscoroutinefunction(proc):
+                results = await proc(batch_data)
+            else:
+                res = proc(batch_data)
+                if asyncio.iscoroutine(res) or hasattr(res, "__await__"):
+                    results = await res
+                else:
+                    results = res
             
             if not isinstance(results, list):
                 results = [results] * len(items)

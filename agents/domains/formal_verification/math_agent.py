@@ -512,6 +512,7 @@ class MathVerificationAgent(BaseAgent):
         user_id = (context or {}).get("user_id", "math_verifier_default")
         return await self.react_agent.process_message(user_id, query)
 
+        # Fallback: describe capabilities
         return AgentResponse(
             content=(
                 f"Soy {self.name}. Puedo verificar:\n"
@@ -590,3 +591,18 @@ class MathVerificationAgent(BaseAgent):
                 content=f"Error en razonamiento matemático: {e}",
                 action_type="error",
             )
+
+
+# Alias for unified agent naming convention
+MathAgent = MathVerificationAgent
+
+__all__ = [
+    "SymPyVerifyTool",
+    "Lean4VerifyTool",
+    "Z3VerifyTool",
+    "NumericalVerifyTool",
+    "CodeVerifyTool",
+    "MathVerificationAgent",
+    "MathAgent",
+]
+

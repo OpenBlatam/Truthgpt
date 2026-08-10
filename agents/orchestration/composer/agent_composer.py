@@ -254,3 +254,15 @@ class ComposedAgent(BaseAgent):
             if key in catalog:
                 lines.append(f"  • {catalog[key]['description']}")
         return "\n".join(lines) if lines else "  (sin capacidades)"
+
+
+# Alias for composition interface
+AgentComposer = ComposedAgent
+
+__all__ = [
+    "ComposedAgent",
+    "AgentComposer",
+    "save_blueprint",
+    "load_blueprints",
+]
+

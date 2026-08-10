@@ -5,6 +5,10 @@ This module contains monitoring components: metrics collector and observability.
 """
 
 from __future__ import annotations
+import importlib
+import logging
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     'MetricsCollector',
@@ -34,7 +38,7 @@ def __getattr__(name: str):
     
     module_path = _LAZY_IMPORTS[name]
     try:
-        module = __import__(module_path, fromlist=[name], level=1)
+        module = importlib.import_module(module_path, package=__name__)
         obj = getattr(module, name)
         _import_cache[name] = obj
         return obj
@@ -60,4 +64,3 @@ def get_monitoring_component_info(component_name: str) -> dict[str, any]:
         'module': _LAZY_IMPORTS[component_name],
         'available': component_name in _import_cache or True,
     }
-

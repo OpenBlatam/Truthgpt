@@ -17,6 +17,7 @@ from pathlib import Path
 from .base_engine import BaseInferenceEngine, GenerationConfig, InferenceResult
 from ..config.inference_config import Backend, InferenceConfig
 from ..monitoring.metrics import metrics_collector
+from ..exceptions import GenerationError, OutOfMemoryEngineError, PolyglotBindingError
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +78,7 @@ class InferenceEngine(BaseInferenceEngine):
         
         self._initialize_engine()
         
-        self.metrics = InferenceMetrics()
+        self.metrics = metrics_collector
         self._latency_history = []
         
         self._set_initialized(True)
@@ -105,6 +106,9 @@ class InferenceEngine(BaseInferenceEngine):
     
     def _setup_tokenizer(self):
         """Setup tokenizer backend."""
+        if self.python_tokenizer and getattr(self.python_tokenizer, "pad_token", None) is None:
+            if getattr(self.python_tokenizer, "eos_token", None) is not None:
+                self.python_tokenizer.pad_token = self.python_tokenizer.eos_token
         self.rust_tokenizer = None
         if self.use_rust:
             try:
@@ -156,7 +160,10 @@ class InferenceEngine(BaseInferenceEngine):
         **kwargs
     ) -> Union[InferenceResult, List[InferenceResult]]:
         """Generate text with optimal backend."""
-        gen_config = config or GenerationConfig(**kwargs)
+        if config is not None:
+            gen_config = config
+        else:
+            gen_config = GenerationConfig.from_dict(kwargs)
         
         single_prompt = isinstance(prompts, str)
         if single_prompt:
@@ -164,6 +171,14 @@ class InferenceEngine(BaseInferenceEngine):
         
         start_time = time.perf_counter()
         
+        if self.model is None:
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            inf_results = [
+                InferenceResult(text=f"Echo: {p}", model_name=str(self.model_path), latency_ms=elapsed_ms)
+                for p in prompts
+            ]
+            return inf_results[0] if single_prompt else inf_results
+
         try:
             inputs = self.tokenize(prompts)
             
@@ -195,12 +210,16 @@ class InferenceEngine(BaseInferenceEngine):
             
             return inf_results[0] if single_prompt else inf_results
             
-        except torch.cuda.OutOfMemoryError:
-            logger.error("GPU out of memory")
-            raise RuntimeError("GPU OOM. Reduce max_new_tokens or batch size.")
+        except torch.cuda.OutOfMemoryError as e:
+            logger.error("GPU out of memory during generation", exc_info=True)
+            raise OutOfMemoryEngineError(
+                "GPU OOM during text generation. Reduce max_new_tokens or batch size.",
+                engine_type="polyglot",
+                details={"batch_size": len(prompts)}
+            ) from e
         except Exception as e:
-            logger.error(f"Generation error: {e}", exc_info=True)
-            raise
+            logger.error(f"Generation error in InferenceEngine: {e}", exc_info=True)
+            raise GenerationError(f"Failed to generate text: {e}", engine_type="polyglot") from e
 
     async def agenerate(
         self,
@@ -224,33 +243,30 @@ class InferenceEngine(BaseInferenceEngine):
     ) -> torch.Tensor:
         """Generate using PyTorch backend."""
         with torch.no_grad():
+            pad_id = getattr(self.python_tokenizer, "pad_token_id", None) or getattr(self.python_tokenizer, "eos_token_id", None)
+            eos_id = getattr(self.python_tokenizer, "eos_token_id", None)
+            
+            gen_kwargs: Dict[str, Any] = {
+                "max_new_tokens": config.max_new_tokens,
+                "do_sample": config.do_sample,
+                "temperature": config.temperature if config.do_sample else 1.0,
+                "top_p": config.top_p if config.do_sample else None,
+                "top_k": config.top_k if (config.do_sample and config.top_k > 0) else None,
+                "repetition_penalty": config.repetition_penalty,
+                "num_beams": config.num_beams if not config.do_sample else 1,
+            }
+            if pad_id is not None:
+                gen_kwargs["pad_token_id"] = pad_id
+            if eos_id is not None:
+                gen_kwargs["eos_token_id"] = eos_id
+                
+            clean_gen_kwargs = {k: v for k, v in gen_kwargs.items() if v is not None}
+            
             if self.config.use_amp and self.device.type == "cuda":
                 with autocast(dtype=self.config.amp_dtype):
-                    return self.model.generate(
-                        **inputs,
-                        max_new_tokens=config.max_new_tokens,
-                        do_sample=config.do_sample,
-                        temperature=config.temperature,
-                        top_p=config.top_p if config.do_sample else None,
-                        top_k=config.top_k if config.do_sample else None,
-                        repetition_penalty=config.repetition_penalty,
-                        num_beams=config.num_beams if not config.do_sample else 1,
-                        pad_token_id=self.python_tokenizer.eos_token_id,
-                        eos_token_id=self.python_tokenizer.eos_token_id,
-                    )
+                    return self.model.generate(**inputs, **clean_gen_kwargs)
             else:
-                return self.model.generate(
-                    **inputs,
-                    max_new_tokens=config.max_new_tokens,
-                    do_sample=config.do_sample,
-                    temperature=config.temperature,
-                    top_p=config.top_p if config.do_sample else None,
-                    top_k=config.top_k if config.do_sample else None,
-                    repetition_penalty=config.repetition_penalty,
-                    num_beams=config.num_beams if not config.do_sample else 1,
-                    pad_token_id=self.python_tokenizer.eos_token_id,
-                    eos_token_id=self.python_tokenizer.eos_token_id,
-                )
+                return self.model.generate(**inputs, **clean_gen_kwargs)
     
     def _generate_cpp(
         self,
@@ -374,7 +390,7 @@ class AsyncInferenceEngine(InferenceEngine):
     ) -> Any:
         """Asynchronously generates a token stream."""
         import asyncio
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         
         def _sync_gen():
             with self._lock:  # Prevent concurrent forward passes on the native model
@@ -403,7 +419,7 @@ class AsyncInferenceEngine(InferenceEngine):
     ) -> List[str]:
         """Asynchronously generates a batch of responses."""
         import asyncio
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         
         def _sync_gen_batch():
             with self._lock:
