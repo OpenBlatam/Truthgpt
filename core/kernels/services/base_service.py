@@ -10,7 +10,13 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 from enum import Enum
 
-from ...event_system import EventEmitter, Event
+try:
+    from ...systems.event_system import EventEmitter, Event
+except (ImportError, ValueError):
+    try:
+        from core.systems.event_system import EventEmitter, Event
+    except ImportError:
+        from optimization_core.core.systems.event_system import EventEmitter, Event
 
 
 class ServiceState(Enum):

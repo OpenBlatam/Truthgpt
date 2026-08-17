@@ -30,6 +30,8 @@ from .utils.file_utils import (
     ensure_output_directory,
 )
 
+from .base_processor import BaseDataProcessor
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -70,7 +72,7 @@ class JoinType(Enum):
 # POLARS PROCESSOR
 # ════════════════════════════════════════════════════════════════════════════════
 
-class PolarsProcessor:
+class PolarsProcessor(BaseDataProcessor):
     """
     High-performance DataFrame processor using Polars.
     
@@ -160,7 +162,7 @@ class PolarsProcessor:
         validated_paths = []
         for p in path:
             validated_paths.append(
-                validate_file_path(p, must_exist=True, allowed_extensions=['.parquet'])
+                validate_file_path(p, must_exist=True, allowed_extensions=['.parquet', '.pq'])
             )
         
         try:
@@ -360,16 +362,27 @@ class PolarsProcessor:
         
         if aggregations is None:
             # Auto-detect numeric columns
-            if isinstance(df, pl.LazyFrame):
+            try:
+                from .helpers.polars_helpers import get_numeric_columns
+                detected_numeric = [col for col in get_numeric_columns(df) if col != category_col]
+            except Exception:
                 schema = df.schema
-            else:
-                schema = df.schema
+                numeric_types = (
+                    pl.Int8, pl.Int16, pl.Int32, pl.Int64,
+                    pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64,
+                    pl.Float32, pl.Float64
+                )
+                detected_numeric = []
+                for col, dtype in schema.items():
+                    if col == category_col:
+                        continue
+                    if hasattr(dtype, "is_numeric") and callable(getattr(dtype, "is_numeric")):
+                        if dtype.is_numeric():
+                            detected_numeric.append(col)
+                    elif isinstance(dtype, numeric_types) or dtype in numeric_types or type(dtype) in numeric_types:
+                        detected_numeric.append(col)
             
-            agg_cols = agg_cols or [
-                col for col, dtype in schema.items()
-                if col != category_col and dtype in (pl.Int64, pl.Float64, pl.Float32, pl.Int32, pl.UInt64)
-            ]
-            
+            agg_cols = agg_cols or detected_numeric
             aggregations = {
                 col: ["mean", "count", "min", "max", "std"]
                 for col in agg_cols
@@ -701,11 +714,7 @@ class PolarsProcessor:
         Returns:
             Schema dictionary
         """
-        if isinstance(df, pl.LazyFrame):
-            schema = df.schema
-        else:
-            schema = df.schema
-        
+        schema = df.schema
         return {name: str(dtype) for name, dtype in schema.items()}
     
     def get_stats(

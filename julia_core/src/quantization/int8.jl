@@ -7,10 +7,6 @@ Provides both symmetric and asymmetric quantization methods with
 numerical stability and efficient computation.
 """
 
-include("constants.jl")
-include("types.jl")
-include("utils.jl")
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # HELPER FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════

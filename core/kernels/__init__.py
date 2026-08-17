@@ -1,29 +1,33 @@
 """
-TruthGPT Kernel Package
+TruthGPT Kernel Package & Services Shim.
 
-Provides the core kernel architecture for TruthGPT:
-- TruthGPTKernel: Main kernel orchestrator
-- KernelConfig: Kernel configuration dataclass
-- KernelState: Kernel lifecycle states
-- get_kernel(): Global kernel singleton accessor
-- set_kernel(): Global kernel singleton setter
+DEPRECATED: This module exists for backward compatibility.
+Use `core.kernel` directly for kernel components.
+Use `core.kernel.services` or import kernel services from `core.kernel`.
 
-Usage:
-    from core.kernels import get_kernel, TruthGPTKernel, KernelConfig
-
-    config = KernelConfig(
-        log_level="INFO",
-        enable_hot_reload=True,
-        max_concurrent_tasks=1000,
-    )
-    kernel = TruthGPTKernel(config)
-    await kernel.run()
+Provides backward-compatible access to the core kernel and kernel services:
+- TruthGPTKernel: Main kernel orchestrator (from core.kernel)
+- KernelConfig, LogLevel: Configuration data structures (from core.kernel)
+- get_kernel, set_kernel: Singleton accessors (from core.kernel)
+- Kernel services: AgentService, ModelService, ResearchService, etc.
 """
 
-from .truthgpt_kernel import (
+import warnings as _warnings
+
+# Flag set by core/__init__.py to suppress this warning during package init.
+_SUPPRESS_DEPRECATION = False
+
+if not _SUPPRESS_DEPRECATION:
+    _warnings.warn(
+        "core.kernels is deprecated, use core.kernel instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
+from ..kernel import (
     TruthGPTKernel,
     KernelConfig,
-    KernelState,
+    LogLevel,
     get_kernel,
     set_kernel,
 )
@@ -34,13 +38,16 @@ from .services import (
     ResearchService,
     OptimizationService,
     InferenceService,
+    BenchmarkService,
+    TraceService,
+    BaseService,
 )
 
 __all__ = [
     # Kernel core
     "TruthGPTKernel",
     "KernelConfig",
-    "KernelState",
+    "LogLevel",
     "get_kernel",
     "set_kernel",
     # Services
@@ -49,4 +56,7 @@ __all__ = [
     "ResearchService",
     "OptimizationService",
     "InferenceService",
+    "BenchmarkService",
+    "TraceService",
+    "BaseService",
 ]

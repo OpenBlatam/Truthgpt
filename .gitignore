@@ -51,3 +51,9 @@ verify_out.txt
 verify_out_utf8.txt
 import_test_report.json
 import_time.log
+cargo_out.txt
+*.cargo_out.txt
+rust_core/cargo_out.txt
+rust_core/build_target/
+opus_clips_output/
+test_cover.png

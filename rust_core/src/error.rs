@@ -52,6 +52,10 @@ pub enum TruthGPTError {
     #[error("Internal error: {0}")]
     Internal(String),
 
+    /// Quantization errors
+    #[error("Quantization error: {0}")]
+    Quantization(String),
+
     /// Serialization errors
     #[error("Serialization error: {0}")]
     Serialization(String),
@@ -112,6 +116,11 @@ impl TruthGPTError {
     pub fn serialization(msg: impl Into<String>) -> Self {
         Self::Serialization(msg.into())
     }
+
+    /// Create a quantization error
+    pub fn quantization(msg: impl Into<String>) -> Self {
+        Self::Quantization(msg.into())
+    }
 }
 
 #[cfg(feature = "python")]
@@ -121,7 +130,7 @@ impl From<TruthGPTError> for PyErr {
             TruthGPTError::Cache(_) | TruthGPTError::Attention(_) | TruthGPTError::Model(_) => {
                 PyRuntimeError::new_err(err.to_string())
             }
-            TruthGPTError::Compression(_) | TruthGPTError::Tensor(_) => {
+            TruthGPTError::Compression(_) | TruthGPTError::Tensor(_) | TruthGPTError::Quantization(_) => {
                 PyRuntimeError::new_err(err.to_string())
             }
             TruthGPTError::Tokenization(_) | TruthGPTError::Config(_) => {
@@ -144,6 +153,24 @@ impl From<std::io::Error> for TruthGPTError {
 impl From<serde_json::Error> for TruthGPTError {
     fn from(err: serde_json::Error) -> Self {
         TruthGPTError::DataLoading(err.to_string())
+    }
+}
+
+impl From<bincode::Error> for TruthGPTError {
+    fn from(err: bincode::Error) -> Self {
+        TruthGPTError::Serialization(err.to_string())
+    }
+}
+
+impl From<lz4_flex::block::DecompressError> for TruthGPTError {
+    fn from(err: lz4_flex::block::DecompressError) -> Self {
+        TruthGPTError::Compression(err.to_string())
+    }
+}
+
+impl From<lz4_flex::block::CompressError> for TruthGPTError {
+    fn from(err: lz4_flex::block::CompressError) -> Self {
+        TruthGPTError::Compression(err.to_string())
     }
 }
 

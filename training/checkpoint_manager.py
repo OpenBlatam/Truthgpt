@@ -1,35 +1,56 @@
 """
-Unified Checkpoint Manager - Handles model checkpointing, RNG state tracking, atomic writes, and state pruning.
+Unified Checkpoint Manager Module
+==================================
+Handles PyTorch model checkpointing, random number generator (RNG) state capture/restoration,
+cross-platform atomic file operations, manifest queries, safe loading, and automated pruning.
 """
-import os
+
 import json
-import random
 import logging
+import os
+import random
 import shutil
 import tempfile
 import time
 from pathlib import Path
-from typing import Optional, Dict, Any, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import torch
 import torch.nn as nn
+
+try:
+    from ..trainers.interfaces import BaseCheckpointManager
+except ImportError:
+    try:
+        from optimization_core.trainers.interfaces import BaseCheckpointManager
+    except ImportError:
+        from abc import ABC, abstractmethod
+
+        class BaseCheckpointManager(ABC):  # type: ignore
+            """Fallback abstract base class for CheckpointManager."""
+            pass
 
 logger = logging.getLogger(__name__)
 
 
 class CheckpointError(RuntimeError):
-    """Exception raised when checkpoint save/load fails."""
+    """Exception raised when a checkpoint save, load, prune, or delete operation fails."""
+
     pass
 
 
-class CheckpointManager:
+class CheckpointManager(BaseCheckpointManager):
     """
-    Manages model checkpointing and state persistence.
-    Supports both object instance state management and static/dynamic parameter save/load methods.
+    Manages PyTorch model checkpointing, RNG state preservation, manifest metadata,
+    safe state-dict loading, and automated pruning.
+
+    Implements the BaseCheckpointManager interface with support for instance state
+    and static/dynamic parameter save/load operations.
     """
 
     def __init__(
         self,
-        output_dir: str,
+        output_dir: Union[str, Path] = "./checkpoints",
         checkpoint_config: Optional[Any] = None,
         model: Optional[nn.Module] = None,
         optimizer: Optional[torch.optim.Optimizer] = None,
@@ -37,44 +58,91 @@ class CheckpointManager:
         scaler: Optional[Any] = None,
         tokenizer: Optional[Any] = None,
     ) -> None:
-        self.output_dir = str(output_dir)
-        self.checkpoint_config = checkpoint_config
-        self.model = model
-        self.optimizer = optimizer
-        self.scheduler = scheduler
-        self.scaler = scaler
-        self.tokenizer = tokenizer
+        """
+        Initialize CheckpointManager.
 
-        os.makedirs(self.output_dir, exist_ok=True)
+        Args:
+            output_dir: Path string or Path object pointing to checkpoint directory.
+            checkpoint_config: Optional CheckpointConfig configuration object.
+            model: Optional PyTorch module instance.
+            optimizer: Optional PyTorch optimizer instance.
+            scheduler: Optional learning rate scheduler instance.
+            scaler: Optional PyTorch GradScaler instance.
+            tokenizer: Optional tokenizer instance.
+
+        Raises:
+            CheckpointError: If output directory creation fails.
+        """
+        self.output_path: Path = Path(output_dir)
+        self.output_dir: str = str(self.output_path)
+        self.checkpoint_config: Optional[Any] = checkpoint_config
+        self.model: Optional[nn.Module] = model
+        self.optimizer: Optional[torch.optim.Optimizer] = optimizer
+        self.scheduler: Optional[Any] = scheduler
+        self.scaler: Optional[Any] = scaler
+        self.tokenizer: Optional[Any] = tokenizer
+
+        try:
+            self.output_path.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logger.error(f"Failed to create checkpoint directory '{self.output_path}': {e}")
+            raise CheckpointError(f"Cannot initialize directory '{self.output_path}': {e}") from e
 
     def _get_base_model(self, model: Optional[nn.Module] = None) -> nn.Module:
-        """Unwrap parallel or distributed model wrappers."""
+        """
+        Unwrap parallel or distributed model containers to access the underlying PyTorch module.
+
+        Args:
+            model: Optional model module override.
+
+        Returns:
+            Unwrapped base nn.Module instance.
+
+        Raises:
+            CheckpointError: If no model instance is available.
+        """
         target_model = model if model is not None else self.model
         if target_model is None:
-            raise CheckpointError("Model cannot be None for CheckpointManager operation.")
-        if isinstance(target_model, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
+            raise CheckpointError("Model cannot be None for CheckpointManager operations.")
+
+        while isinstance(target_model, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
             target_model = target_model.module
-        if hasattr(target_model, "module"):
+        if hasattr(target_model, "module") and isinstance(getattr(target_model, "module"), nn.Module):
             target_model = target_model.module
+
         return target_model
 
     def _capture_rng_state(self) -> Dict[str, Any]:
-        """Capture python, torch, and CUDA random number generator states."""
+        """
+        Capture random number generator states across Python, PyTorch, CUDA, and NumPy.
+
+        Returns:
+            Dictionary containing random generator state representations.
+        """
         rng_state: Dict[str, Any] = {
             "python": random.getstate(),
             "torch": torch.get_rng_state(),
         }
         if torch.cuda.is_available():
-            rng_state["torch_cuda"] = torch.cuda.get_rng_state_all()
+            try:
+                rng_state["torch_cuda"] = torch.cuda.get_rng_state_all()
+            except Exception as e:
+                logger.warning(f"Could not capture CUDA RNG state: {e}")
         try:
             import numpy as np
+
             rng_state["numpy"] = np.random.get_state()
         except ImportError:
             pass
         return rng_state
 
     def _restore_rng_state(self, rng_state: Dict[str, Any]) -> None:
-        """Restore random number generator states."""
+        """
+        Restore Python, PyTorch, CUDA, and NumPy random number generator states safely.
+
+        Args:
+            rng_state: State dictionary previously produced by _capture_rng_state().
+        """
         try:
             if "python" in rng_state:
                 random.setstate(rng_state["python"])
@@ -84,10 +152,11 @@ class CheckpointManager:
                 torch.cuda.set_rng_state_all(rng_state["torch_cuda"])
             if "numpy" in rng_state:
                 import numpy as np
+
                 np.random.set_state(rng_state["numpy"])
-            logger.info("RNG states restored successfully")
+            logger.info("RNG states restored successfully.")
         except Exception as e:
-            logger.warning(f"Could not restore RNG state: {e}")
+            logger.warning(f"Could not restore RNG state cleanly: {e}")
 
     def save(
         self,
@@ -103,30 +172,55 @@ class CheckpointManager:
         scaler: Optional[Any] = None,
         tokenizer: Optional[Any] = None,
     ) -> str:
-        """Save complete training checkpoint atomically."""
+        """
+        Save a complete training checkpoint atomically.
+
+        Args:
+            filename: Checkpoint filename or subfolder name (e.g. 'step_10.pt').
+            step: Current training step count.
+            epoch: Current training epoch count.
+            is_best: Whether this checkpoint represents the best model state so far.
+            metrics: Optional dictionary of evaluation metrics.
+            extra_state: Optional extra state dictionary (e.g. EMA weights).
+            model: Optional model instance override.
+            optimizer: Optional optimizer instance override.
+            scheduler: Optional scheduler instance override.
+            scaler: Optional scaler instance override.
+            tokenizer: Optional tokenizer instance override.
+
+        Returns:
+            Absolute string path to saved checkpoint directory.
+
+        Raises:
+            CheckpointError: If saving process encounters filesystem or serialization errors.
+        """
         try:
-            checkpoint_path = os.path.join(self.output_dir, filename)
+            checkpoint_path = self.output_path / filename
             if filename.endswith(".pt"):
-                checkpoint_dir = checkpoint_path.replace(".pt", "")
+                checkpoint_dir = checkpoint_path.with_suffix("")
             else:
                 checkpoint_dir = checkpoint_path
 
-            os.makedirs(checkpoint_dir, exist_ok=True)
+            checkpoint_dir.mkdir(parents=True, exist_ok=True)
             base_model = self._get_base_model(model)
             active_tokenizer = tokenizer if tokenizer is not None else self.tokenizer
             active_optimizer = optimizer if optimizer is not None else self.optimizer
             active_scheduler = scheduler if scheduler is not None else self.scheduler
             active_scaler = scaler if scaler is not None else self.scaler
 
-            # Save HuggingFace format if model supports it
+            # Attempt HuggingFace pretrained serialization if model/tokenizer support it
             try:
-                save_st = getattr(self.checkpoint_config, "save_safetensors", True) if self.checkpoint_config else True
+                save_st = (
+                    getattr(self.checkpoint_config, "save_safetensors", True)
+                    if self.checkpoint_config
+                    else True
+                )
                 if hasattr(base_model, "save_pretrained"):
-                    base_model.save_pretrained(checkpoint_dir, safe_serialization=save_st)
+                    base_model.save_pretrained(str(checkpoint_dir), safe_serialization=save_st)
                 if active_tokenizer is not None and hasattr(active_tokenizer, "save_pretrained"):
-                    active_tokenizer.save_pretrained(checkpoint_dir)
+                    active_tokenizer.save_pretrained(str(checkpoint_dir))
             except Exception as e:
-                logger.warning(f"Could not save pretrained format ({e}). Saving state dict only.")
+                logger.warning(f"Could not save pretrained model format ({e}); defaulting to PyTorch state dict.")
 
             state: Dict[str, Any] = {
                 "step": step,
@@ -141,25 +235,29 @@ class CheckpointManager:
                 state["scheduler_state_dict"] = active_scheduler.state_dict()
             if active_scaler is not None and hasattr(active_scaler, "state_dict"):
                 state["scaler_state_dict"] = active_scaler.state_dict()
-            if metrics:
+            if metrics is not None:
                 state["metrics"] = metrics
-            if extra_state:
+            if extra_state is not None:
                 state["extra_state"] = extra_state
             if is_best:
                 state["is_best"] = True
 
-            state_path = os.path.join(checkpoint_dir, "training_state.pt")
+            state_path = checkpoint_dir / "training_state.pt"
 
-            # Atomic save via temp file
-            temp_fd, temp_path = tempfile.mkstemp(dir=checkpoint_dir, suffix=".tmp")
+            # Execute atomic write via temporary file replace
+            temp_fd, temp_path_str = tempfile.mkstemp(dir=str(checkpoint_dir), suffix=".tmp")
             os.close(temp_fd)
+            temp_path = Path(temp_path_str)
             try:
                 torch.save(state, temp_path)
                 os.replace(temp_path, state_path)
-            except Exception:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-                raise
+            except Exception as save_err:
+                if temp_path.exists():
+                    try:
+                        temp_path.unlink()
+                    except OSError:
+                        pass
+                raise CheckpointError(f"Failed writing PyTorch state dict atomically: {save_err}") from save_err
 
             manifest = {
                 "step": step,
@@ -167,14 +265,22 @@ class CheckpointManager:
                 "is_best": is_best,
                 "metrics": metrics or {},
                 "timestamp": time.time(),
+                "has_optimizer": active_optimizer is not None,
+                "has_scheduler": active_scheduler is not None,
+                "has_scaler": active_scaler is not None,
             }
-            with open(os.path.join(checkpoint_dir, "checkpoint_manifest.json"), "w", encoding="utf-8") as f:
+            manifest_path = checkpoint_dir / "checkpoint_manifest.json"
+            manifest_temp = checkpoint_dir / "manifest.tmp"
+            with open(manifest_temp, "w", encoding="utf-8") as f:
                 json.dump(manifest, f, indent=2)
+            os.replace(manifest_temp, manifest_path)
 
             logger.debug(f"Checkpoint saved successfully to {checkpoint_dir}")
-            return checkpoint_dir
+            return str(checkpoint_dir)
 
         except Exception as e:
+            if isinstance(e, CheckpointError):
+                raise
             logger.error(f"Error saving checkpoint '{filename}': {e}", exc_info=True)
             raise CheckpointError(f"Failed to save checkpoint '{filename}': {e}") from e
 
@@ -189,9 +295,11 @@ class CheckpointManager:
         scaler: Optional[Any] = None,
         ema_state: Optional[Dict[str, torch.Tensor]] = None,
         save_safetensors: bool = True,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
-        """Compatibility wrapper method for saving checkpoints."""
+        """
+        Compatibility wrapper method for saving checkpoints directly from arguments.
+        """
         filename = os.path.basename(path) or f"step_{step}"
         extra_state = kwargs.pop("extra_state", {})
         if ema_state:
@@ -205,25 +313,46 @@ class CheckpointManager:
             scaler=scaler,
             tokenizer=tokenizer,
             extra_state=extra_state,
+            **kwargs,
         )
 
-    def load(self, checkpoint_path: str, model: Optional[nn.Module] = None) -> Dict[str, Any]:
-        """Load checkpoint and restore training states."""
-        try:
-            if os.path.isdir(checkpoint_path):
-                state_path = os.path.join(checkpoint_path, "training_state.pt")
-                if not os.path.exists(state_path):
-                    state_path = checkpoint_path + ".pt" if not checkpoint_path.endswith(".pt") else checkpoint_path
-            else:
-                state_path = checkpoint_path
+    def load(
+        self,
+        checkpoint_path: Union[str, Path],
+        model: Optional[nn.Module] = None,
+        device: Optional[Union[str, torch.device]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Load checkpoint state and restore model, optimizer, scheduler, and RNG state.
 
-            if not os.path.exists(state_path):
+        Args:
+            checkpoint_path: Path to checkpoint directory or state file.
+            model: Optional model instance to restore parameters into.
+            device: Optional target torch device.
+
+        Returns:
+            Dictionary containing loaded checkpoint state.
+
+        Raises:
+            CheckpointError: If checkpoint folder or state file cannot be read.
+        """
+        try:
+            path_obj = Path(checkpoint_path)
+            if path_obj.is_dir():
+                state_path = path_obj / "training_state.pt"
+                if not state_path.exists():
+                    state_path = Path(str(path_obj) + ".pt") if not str(path_obj).endswith(".pt") else path_obj
+            else:
+                state_path = path_obj
+
+            if not state_path.exists():
                 raise CheckpointError(f"Checkpoint state file not found: {state_path}")
 
+            map_loc = device or "cpu"
             try:
-                state = torch.load(state_path, map_location="cpu", weights_only=False)
+                state = torch.load(state_path, map_location=map_loc, weights_only=False)
             except TypeError:
-                state = torch.load(state_path, map_location="cpu")
+                state = torch.load(state_path, map_location=map_loc)
 
             base_model = self._get_base_model(model)
 
@@ -252,8 +381,16 @@ class CheckpointManager:
             logger.error(f"Error loading checkpoint '{checkpoint_path}': {e}", exc_info=True)
             raise CheckpointError(f"Failed to load checkpoint '{checkpoint_path}': {e}") from e
 
-    def load_checkpoint(self, path: str, model: nn.Module, optimizer: Optional[torch.optim.Optimizer] = None, **kwargs) -> Dict[str, Any]:
-        """Compatibility wrapper method for loading checkpoints."""
+    def load_checkpoint(
+        self,
+        path: str,
+        model: nn.Module,
+        optimizer: Optional[torch.optim.Optimizer] = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """
+        Compatibility wrapper method for loading checkpoints.
+        """
         old_opt = self.optimizer
         if optimizer is not None:
             self.optimizer = optimizer
@@ -261,18 +398,119 @@ class CheckpointManager:
         self.optimizer = old_opt
         return res
 
+    def list_checkpoints(self) -> List[Dict[str, Any]]:
+        """
+        List all valid checkpoints in output directory with step metadata sorted by step.
+
+        Returns:
+            List of metadata dictionaries containing checkpoint details and paths.
+        """
+        if not self.output_path.exists():
+            return []
+
+        checkpoints = []
+        for entry in self.output_path.iterdir():
+            manifest_path = entry / "checkpoint_manifest.json"
+            if entry.is_dir() and manifest_path.exists():
+                try:
+                    with open(manifest_path, "r", encoding="utf-8") as f:
+                        meta = json.load(f)
+                    meta["path"] = str(entry)
+                    checkpoints.append(meta)
+                except Exception as e:
+                    logger.warning(f"Could not read checkpoint manifest at {manifest_path}: {e}")
+
+        checkpoints.sort(key=lambda x: x.get("step", 0))
+        return checkpoints
+
+    def get_latest_checkpoint(self) -> Optional[str]:
+        """
+        Get the file system path string to the most recent checkpoint by step count.
+
+        Returns:
+            Path string or None if no valid checkpoints exist.
+        """
+        checkpoints = self.list_checkpoints()
+        if not checkpoints:
+            return None
+        return checkpoints[-1]["path"]
+
+    def find_best_checkpoint(self, metric_name: str = "loss", mode: str = "min") -> Optional[str]:
+        """
+        Find checkpoint path corresponding to the optimal metric value.
+
+        Args:
+            metric_name: Name of metric to evaluate (e.g. 'loss', 'accuracy').
+            mode: Comparison mode ('min' or 'max').
+
+        Returns:
+            Path string to best checkpoint, or None if no checkpoints match.
+
+        Raises:
+            ValueError: If mode is not 'min' or 'max'.
+        """
+        if mode not in ("min", "max"):
+            raise ValueError(f"Mode must be 'min' or 'max', got '{mode}'")
+
+        checkpoints = self.list_checkpoints()
+        if not checkpoints:
+            return None
+
+        best_path: Optional[str] = None
+        best_val: float = float("inf") if mode == "min" else float("-inf")
+
+        for ckpt in checkpoints:
+            metrics = ckpt.get("metrics", {})
+            if metric_name in metrics:
+                val = metrics[metric_name]
+                if (mode == "min" and val < best_val) or (mode == "max" and val > best_val):
+                    best_val = val
+                    best_path = ckpt["path"]
+
+        return best_path
+
+    def delete_checkpoint(self, checkpoint_path: Union[str, Path]) -> bool:
+        """
+        Delete a checkpoint directory or file safely.
+
+        Args:
+            checkpoint_path: Path string or Path object pointing to checkpoint directory.
+
+        Returns:
+            True if deletion succeeded, False otherwise.
+        """
+        path_obj = Path(checkpoint_path)
+        if not path_obj.exists():
+            logger.warning(f"Checkpoint path does not exist for deletion: {checkpoint_path}")
+            return False
+
+        try:
+            if path_obj.is_dir():
+                shutil.rmtree(path_obj)
+            else:
+                path_obj.unlink()
+            logger.info(f"Successfully deleted checkpoint at {checkpoint_path}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete checkpoint at {checkpoint_path}: {e}")
+            return False
+
     def prune_checkpoints(self) -> None:
-        """Prune old step checkpoints keeping only the most recent keep_last items."""
+        """
+        Prune older step checkpoints according to keep_last configuration setting.
+        """
         keep_last = getattr(self.checkpoint_config, "keep_last", 3) if self.checkpoint_config else 3
         if keep_last <= 0:
             return
 
         try:
-            entries = os.listdir(self.output_dir)
-            step_entries = []
-            for entry in entries:
-                if entry.startswith("step_"):
-                    step_str = entry.replace("step_", "").replace(".pt", "")
+            if not self.output_path.exists():
+                return
+            step_entries: List[Tuple[int, Path]] = []
+            for entry in self.output_path.iterdir():
+                name = entry.name
+                if name.startswith("step_"):
+                    step_str = name.replace("step_", "").removesuffix(".pt")
                     if step_str.isdigit():
                         step_entries.append((int(step_str), entry))
 
@@ -281,18 +519,10 @@ class CheckpointManager:
 
             if excess_count > 0:
                 for idx in range(excess_count):
-                    step_num, entry_name = step_entries[idx]
-                    full_path = os.path.join(self.output_dir, entry_name)
-                    try:
-                        if os.path.isdir(full_path):
-                            shutil.rmtree(full_path)
-                        else:
-                            os.remove(full_path)
-                        logger.debug(f"Pruned old checkpoint step {step_num}: {entry_name}")
-                    except Exception as e:
-                        logger.warning(f"Could not prune checkpoint {entry_name}: {e}")
+                    step_num, entry_path = step_entries[idx]
+                    self.delete_checkpoint(entry_path)
         except Exception as e:
-            logger.warning(f"Error during checkpoint pruning: {e}")
+            logger.warning(f"Error during checkpoint pruning execution: {e}")
 
 
 __all__ = ["CheckpointManager", "CheckpointError"]

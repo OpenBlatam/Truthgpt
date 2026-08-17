@@ -77,9 +77,19 @@ def validate_dataframe_schema(
     if isinstance(df_or_schema, dict):
         existing_cols = list(df_or_schema.keys())
     elif hasattr(df_or_schema, "columns"):
-        existing_cols = list(df_or_schema.columns)
+        cols = df_or_schema.columns
+        existing_cols = list(cols() if callable(cols) else cols)
+    elif hasattr(df_or_schema, "schema"):
+        sch = df_or_schema.schema
+        if hasattr(sch, "names"):
+            existing_cols = list(sch.names)
+        elif isinstance(sch, dict):
+            existing_cols = list(sch.keys())
+        elif hasattr(sch, "keys"):
+            existing_cols = list(sch.keys())
     elif hasattr(df_or_schema, "names"):
-        existing_cols = list(df_or_schema.names)
+        names_attr = df_or_schema.names
+        existing_cols = list(names_attr() if callable(names_attr) else names_attr)
     elif isinstance(df_or_schema, (list, set, tuple)):
         existing_cols = list(df_or_schema)
     

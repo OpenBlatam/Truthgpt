@@ -11,6 +11,7 @@ Modular services that replace the monolithic architecture:
 - TraceService: Records decision-making traces and rationales
 """
 
+from .base_service import BaseService, ServiceState
 from .agent_service import AgentService
 from .model_service import ModelService
 from .research_service import ResearchService
@@ -20,11 +21,13 @@ from .benchmark_service import BenchmarkService
 from .trace_service import TraceService
 
 __all__ = [
+    "BaseService",
+    "ServiceState",
     "AgentService",
     "ModelService", 
     "ResearchService",
     "OptimizationService",
     "InferenceService",
     "BenchmarkService",
-    "TraceService"
+    "TraceService",
 ]

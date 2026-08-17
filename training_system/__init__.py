@@ -14,48 +14,79 @@ try:
         CheckpointConfig,
         EMAConfig,
     )
-except ImportError:
-    TrainerConfig = None
-    ModelConfig = None
-    TrainingConfig = None
-    HardwareConfig = None
-    CheckpointConfig = None
-    EMAConfig = None
+except (ImportError, ValueError):
+    try:
+        from trainers.config import (
+            TrainerConfig,
+            ModelConfig,
+            TrainingConfig,
+            HardwareConfig,
+            CheckpointConfig,
+            EMAConfig,
+        )
+    except ImportError:
+        TrainerConfig = None
+        ModelConfig = None
+        TrainingConfig = None
+        HardwareConfig = None
+        CheckpointConfig = None
+        EMAConfig = None
 
 try:
     from ..trainers.model_manager import ModelManager as TrainersModelManager
-except ImportError:
-    TrainersModelManager = None
+except (ImportError, ValueError):
+    try:
+        from trainers.model_manager import ModelManager as TrainersModelManager
+    except ImportError:
+        TrainersModelManager = None
 
 try:
     from ..trainers.optimizer_manager import OptimizerManager as TrainersOptimizerManager
-except ImportError:
-    TrainersOptimizerManager = None
+except (ImportError, ValueError):
+    try:
+        from trainers.optimizer_manager import OptimizerManager as TrainersOptimizerManager
+    except ImportError:
+        TrainersOptimizerManager = None
 
 try:
     from ..trainers.data_manager import DataManager as TrainersDataManager
-except ImportError:
-    TrainersDataManager = None
+except (ImportError, ValueError):
+    try:
+        from trainers.data_manager import DataManager as TrainersDataManager
+    except ImportError:
+        TrainersDataManager = None
 
 try:
     from ..trainers.ema_manager import EMAManager as TrainersEMAManager
-except ImportError:
-    TrainersEMAManager = None
+except (ImportError, ValueError):
+    try:
+        from trainers.ema_manager import EMAManager as TrainersEMAManager
+    except ImportError:
+        TrainersEMAManager = None
 
 try:
     from ..trainers.evaluator import Evaluator as TrainersEvaluator
-except ImportError:
-    TrainersEvaluator = None
+except (ImportError, ValueError):
+    try:
+        from trainers.evaluator import Evaluator as TrainersEvaluator
+    except ImportError:
+        TrainersEvaluator = None
 
 try:
     from ..trainers.checkpoint_manager import CheckpointManager as TrainersCheckpointManager
-except ImportError:
-    TrainersCheckpointManager = None
+except (ImportError, ValueError):
+    try:
+        from trainers.checkpoint_manager import CheckpointManager as TrainersCheckpointManager
+    except ImportError:
+        TrainersCheckpointManager = None
 
 try:
     from ..trainers.trainer import GenericTrainer
-except ImportError:
-    GenericTrainer = None
+except (ImportError, ValueError):
+    try:
+        from trainers.trainer import GenericTrainer
+    except ImportError:
+        GenericTrainer = None
 
 try:
     from ..trainers.callbacks import (
@@ -64,37 +95,60 @@ try:
         WandbLogger,
         TensorBoardLogger,
     )
-except ImportError:
-    Callback = None
-    PrintLogger = None
-    WandbLogger = None
-    TensorBoardLogger = None
+except (ImportError, ValueError):
+    try:
+        from trainers.callbacks import (
+            Callback,
+            PrintLogger,
+            WandbLogger,
+            TensorBoardLogger,
+        )
+    except ImportError:
+        Callback = None
+        PrintLogger = None
+        WandbLogger = None
+        TensorBoardLogger = None
 
 # Import training components
 try:
     from ..training.evaluator import Evaluator as TrainingEvaluator
-except ImportError:
-    TrainingEvaluator = None
+except (ImportError, ValueError):
+    try:
+        from training.evaluator import Evaluator as TrainingEvaluator
+    except ImportError:
+        TrainingEvaluator = None
 
 try:
     from ..training.checkpoint_manager import CheckpointManager as TrainingCheckpointManager
-except ImportError:
-    TrainingCheckpointManager = None
+except (ImportError, ValueError):
+    try:
+        from training.checkpoint_manager import CheckpointManager as TrainingCheckpointManager
+    except ImportError:
+        TrainingCheckpointManager = None
 
 try:
     from ..training.ema_manager import EMAManager as TrainingEMAManager
-except ImportError:
-    TrainingEMAManager = None
+except (ImportError, ValueError):
+    try:
+        from training.ema_manager import EMAManager as TrainingEMAManager
+    except ImportError:
+        TrainingEMAManager = None
 
 try:
     from ..training.training_loop import TrainingLoop
-except ImportError:
-    TrainingLoop = None
+except (ImportError, ValueError):
+    try:
+        from training.training_loop import TrainingLoop
+    except ImportError:
+        TrainingLoop = None
 
 try:
     from ..training.experiment_tracker import ExperimentTracker
-except ImportError:
-    ExperimentTracker = None
+except (ImportError, ValueError):
+    try:
+        from training.experiment_tracker import ExperimentTracker
+    except ImportError:
+        ExperimentTracker = None
 
 
 # Unified training component factory

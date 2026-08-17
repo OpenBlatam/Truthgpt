@@ -6,7 +6,7 @@ Calculates statistics from optimization history
 import numpy as np
 from typing import Dict, Any, List
 
-from .core.models import AIOptimizationResult
+from .models import AIOptimizationResult
 from .learning_mechanism import LearningMechanism
 from .metrics_calculator import AIOptimizationLevel
 
@@ -27,29 +27,31 @@ class StatisticsCalculator:
         results = list(optimization_history)
         
         metrics = {
-            'speed_improvement': [r.speed_improvement for r in results],
-            'memory_reduction': [r.memory_reduction for r in results],
-            'intelligence_score': [r.intelligence_score for r in results],
-            'learning_efficiency': [r.learning_efficiency for r in results],
-            'neural_adaptation': [r.neural_adaptation for r in results],
-            'cognitive_enhancement': [r.cognitive_enhancement for r in results],
-            'artificial_wisdom': [r.artificial_wisdom for r in results]
+            'speed_improvement': [getattr(r, 'speed_improvement', 1.0) for r in results],
+            'memory_reduction': [getattr(r, 'memory_reduction', 0.0) for r in results],
+            'intelligence_score': [getattr(r, 'intelligence_score', 1.0) for r in results],
+            'learning_efficiency': [getattr(r, 'learning_efficiency', 1.0) for r in results],
+            'neural_adaptation': [getattr(r, 'neural_adaptation', 0.0) for r in results],
+            'cognitive_enhancement': [getattr(r, 'cognitive_enhancement', 0.0) for r in results],
+            'artificial_wisdom': [getattr(r, 'artificial_wisdom', 0.0) for r in results]
         }
+        
+        opt_level = getattr(optimization_level, 'value', str(optimization_level))
         
         return {
             'total_optimizations': len(results),
-            'avg_speed_improvement': np.mean(metrics['speed_improvement']),
-            'max_speed_improvement': max(metrics['speed_improvement']),
-            'avg_memory_reduction': np.mean(metrics['memory_reduction']),
-            'avg_intelligence_score': np.mean(metrics['intelligence_score']),
-            'avg_learning_efficiency': np.mean(metrics['learning_efficiency']),
-            'avg_neural_adaptation': np.mean(metrics['neural_adaptation']),
-            'avg_cognitive_enhancement': np.mean(metrics['cognitive_enhancement']),
-            'avg_artificial_wisdom': np.mean(metrics['artificial_wisdom']),
-            'optimization_level': optimization_level.value,
-            'learning_history_length': len(learning_mechanism.get_learning_history()),
-            'experience_buffer_size': len(learning_mechanism.get_experience_buffer()),
-            'exploration_rate': learning_mechanism.get_exploration_rate()
+            'avg_speed_improvement': float(np.mean(metrics['speed_improvement'])),
+            'max_speed_improvement': float(max(metrics['speed_improvement'])) if metrics['speed_improvement'] else 1.0,
+            'avg_memory_reduction': float(np.mean(metrics['memory_reduction'])),
+            'avg_intelligence_score': float(np.mean(metrics['intelligence_score'])),
+            'avg_learning_efficiency': float(np.mean(metrics['learning_efficiency'])),
+            'avg_neural_adaptation': float(np.mean(metrics['neural_adaptation'])),
+            'avg_cognitive_enhancement': float(np.mean(metrics['cognitive_enhancement'])),
+            'avg_artificial_wisdom': float(np.mean(metrics['artificial_wisdom'])),
+            'optimization_level': opt_level,
+            'learning_history_length': len(learning_mechanism.get_learning_history()) if hasattr(learning_mechanism, 'get_learning_history') else 0,
+            'experience_buffer_size': len(learning_mechanism.get_experience_buffer()) if hasattr(learning_mechanism, 'get_experience_buffer') else 0,
+            'exploration_rate': learning_mechanism.get_exploration_rate() if hasattr(learning_mechanism, 'get_exploration_rate') else 0.1
         }
 
 

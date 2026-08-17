@@ -117,14 +117,12 @@ impl Default for JsonProcessor {
 
 /// Fast JSON parsing (standalone function)
 pub fn fast_parse(json_str: &str) -> Result<Value> {
-    serde_json::from_str(json_str)
-        .map_err(|e| TruthGPTError::Io(format!("JSON parse error: {}", e)))
+    JsonProcessor::default().parse(json_str)
 }
 
 /// Fast JSON stringification (standalone function)
 pub fn fast_stringify(value: &Value) -> Result<String> {
-    serde_json::to_string(value)
-        .map_err(|e| TruthGPTError::Io(format!("JSON stringify error: {}", e)))
+    JsonProcessor::default().stringify(value)
 }
 
 #[cfg(test)]

@@ -7,8 +7,6 @@ Provides reusable functions for computing scales, zero points, and
 quantizing individual values across different quantization schemes.
 """
 
-include("constants.jl")
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # SCALE COMPUTATION FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════

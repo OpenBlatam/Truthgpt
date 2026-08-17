@@ -11,12 +11,89 @@ Features:
 - Type safety
 """
 import logging
-from typing import Optional, Union, Dict, Any
+from typing import Optional, Union, Dict, Any, List
+from pathlib import Path
 from enum import Enum
 
+from .base_processor import BaseDataProcessor
 from .polars_processor import PolarsProcessor, POLARS_AVAILABLE, create_polars_processor
 
 logger = logging.getLogger(__name__)
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# PROCESSOR ADAPTERS
+# ════════════════════════════════════════════════════════════════════════════════
+
+class PandasProcessor(BaseDataProcessor):
+    """Pandas data processor adapter implementing BaseDataProcessor interface."""
+
+    def __init__(self, **kwargs: Any):
+        try:
+            import pandas as pd
+            self.pd = pd
+        except ImportError as e:
+            raise RuntimeError("Pandas is not installed. Install with: pip install pandas") from e
+
+    def read_parquet(self, path: Union[str, List[str], Path], **kwargs: Any) -> Any:
+        if isinstance(path, list):
+            return self.pd.concat([self.pd.read_parquet(p, **kwargs) for p in path], ignore_index=True)
+        return self.pd.read_parquet(path, **kwargs)
+
+    def read_csv(self, path: Union[str, List[str], Path], **kwargs: Any) -> Any:
+        if isinstance(path, list):
+            return self.pd.concat([self.pd.read_csv(p, **kwargs) for p in path], ignore_index=True)
+        return self.pd.read_csv(path, **kwargs)
+
+    def read_jsonl(self, path: Union[str, List[str], Path], **kwargs: Any) -> Any:
+        if isinstance(path, list):
+            return self.pd.concat([self.pd.read_json(p, lines=True, **kwargs) for p in path], ignore_index=True)
+        return self.pd.read_json(path, lines=True, **kwargs)
+
+    def write_parquet(self, df: Any, path: Union[str, Path], **kwargs: Any) -> None:
+        df.to_parquet(path, **kwargs)
+
+    def write_csv(self, df: Any, path: Union[str, Path], **kwargs: Any) -> None:
+        df.to_csv(path, index=False, **kwargs)
+
+    def get_stats(self, df: Any) -> Dict[str, Any]:
+        return {
+            "rows": len(df),
+            "columns": len(df.columns),
+            "schema": {str(col): str(dtype) for col, dtype in df.dtypes.items()},
+        }
+
+
+class DaskProcessor(BaseDataProcessor):
+    """Dask data processor adapter implementing BaseDataProcessor interface."""
+
+    def __init__(self, **kwargs: Any):
+        try:
+            import dask.dataframe as dd
+            self.dd = dd
+        except ImportError as e:
+            raise RuntimeError("Dask is not installed. Install with: pip install dask[dataframe]") from e
+
+    def read_parquet(self, path: Union[str, List[str], Path], **kwargs: Any) -> Any:
+        return self.dd.read_parquet(path, **kwargs)
+
+    def read_csv(self, path: Union[str, List[str], Path], **kwargs: Any) -> Any:
+        return self.dd.read_csv(path, **kwargs)
+
+    def read_jsonl(self, path: Union[str, List[str], Path], **kwargs: Any) -> Any:
+        return self.dd.read_json(path, **kwargs)
+
+    def write_parquet(self, df: Any, path: Union[str, Path], **kwargs: Any) -> None:
+        df.to_parquet(path, **kwargs)
+
+    def write_csv(self, df: Any, path: Union[str, Path], **kwargs: Any) -> None:
+        df.to_csv(path, **kwargs)
+
+    def get_stats(self, df: Any) -> Dict[str, Any]:
+        return {
+            "columns": len(df.columns),
+            "schema": {str(col): str(dtype) for col, dtype in df.dtypes.items()},
+        }
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -41,7 +118,7 @@ def create_data_processor(
     streaming: bool = False,
     num_threads: Optional[int] = None,
     **kwargs
-) -> Any:
+) -> BaseDataProcessor:
     """
     Factory function to create data processor.
     
@@ -59,25 +136,7 @@ def create_data_processor(
         **kwargs: Processor-specific arguments
     
     Returns:
-        Data processor instance
-    
-    Raises:
-        ValueError: If processor type is invalid
-        RuntimeError: If processor is unavailable
-    
-    Examples:
-        >>> # Auto-select best processor
-        >>> processor = create_data_processor()
-        
-        >>> # Explicit Polars processor
-        >>> processor = create_data_processor(ProcessorType.POLARS, lazy=True)
-        
-        >>> # Streaming processor for large datasets
-        >>> processor = create_data_processor(
-        ...     processor_type=ProcessorType.POLARS,
-        ...     streaming=True,
-        ...     num_threads=8
-        ... )
+        Data processor instance implementing BaseDataProcessor
     """
     # Normalize processor type
     if isinstance(processor_type, str):
@@ -110,28 +169,24 @@ def create_data_processor(
     elif processor_type == ProcessorType.PANDAS:
         # Fallback to pandas
         try:
-            import pandas as pd
             logger.warning(
                 "Using pandas as fallback. Consider installing Polars for "
                 "10-100x better performance: pip install polars"
             )
-            # Return pandas directly (could wrap in adapter if needed)
-            return pd
-        except ImportError:
+            return PandasProcessor(**kwargs)
+        except Exception as e:
             raise RuntimeError(
-                "Neither Polars nor pandas is available. "
-                "Install at least one: pip install polars or pip install pandas"
-            )
+                f"Neither Polars nor pandas is available: {e}"
+            ) from e
     
     elif processor_type == ProcessorType.DASK:
         # Dask for very large datasets
         try:
-            import dask.dataframe as dd
             logger.info("Using Dask for distributed processing")
-            return dd
-        except ImportError:
+            return DaskProcessor(**kwargs)
+        except Exception as e:
             logger.warning(
-                "Dask not available, falling back to Polars or pandas"
+                f"Dask not available ({e}), falling back to Polars or pandas"
             )
             return create_data_processor(
                 processor_type=ProcessorType.AUTO,

@@ -6,9 +6,18 @@ from typing import Dict, Any, Optional, List, Union
 import torch
 
 from .base_service import BaseService
-from ..event_system import EventType
-from ...inference.text_generator import TextGenerator
-from ...inference.inference_engine import InferenceEngine
+from ..systems.event_system import EventType
+try:
+    from ...inference.text_generator import TextGenerator
+    from ...inference.inference_engine import InferenceEngine
+except (ImportError, ValueError):
+    try:
+        from inference.text_generator import TextGenerator  # type: ignore
+        from inference.inference_engine import InferenceEngine  # type: ignore
+    except (ImportError, ValueError):
+        TextGenerator = None  # type: ignore
+        InferenceEngine = None  # type: ignore
+
 
 logger = logging.getLogger(__name__)
 

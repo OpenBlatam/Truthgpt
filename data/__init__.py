@@ -17,20 +17,39 @@ from typing import Any, Dict, List, Optional
 
 # Direct imports for backward compatibility
 from .dataset_manager import DatasetManager
-from .data_loader_factory import DataLoaderFactory
-from .collators import LMCollator
-from .processor_factory import create_data_processor, ProcessorType, list_available_processors
-from .polars_processor import PolarsProcessor
-from .registry import register_dataset, build_dataset
+from .data_loader_factory import DataLoaderFactory, DataLoaderBuilder, LengthBucketBatchSampler, LengthBucketSampler
+from .collators import BaseCollator, LMCollator, ClassificationCollator
+from .base_processor import BaseDataProcessor
+from .processor_factory import (
+    create_data_processor,
+    ProcessorType,
+    PandasProcessor,
+    list_available_processors,
+    get_processor_recommendation,
+    get_processor_info,
+)
+from .polars_processor import PolarsProcessor, create_polars_processor
+from .registry import (
+    DatasetRegistry,
+    default_registry,
+    register_dataset,
+    unregister_dataset,
+    build_dataset,
+    has_dataset,
+    get_dataset_info,
+    list_registered_datasets,
+    get_dataset_builder,
+    clear_dataset_registry,
+)
 
 logger = logging.getLogger(__name__)
 
 # Lazy imports for additional components
 _LAZY_IMPORTS = {
-    'text_hf': '.text_hf',
-    'registry': '.registry',
-    'processor_factory': '.processor_factory',
-    'polars_processor': '.polars_processor',
+    'text_hf': 'optimization_core.data.text_hf',
+    'registry': 'optimization_core.data.registry',
+    'processor_factory': 'optimization_core.data.processor_factory',
+    'polars_processor': 'optimization_core.data.polars_processor',
 }
 
 _import_cache = {}
@@ -47,12 +66,12 @@ def __getattr__(name: str):
     if name in _import_cache:
         return _import_cache[name]
     
-    module_path = _LAZY_IMPORTS[name]
+    import importlib
     try:
-        module = __import__(module_path, fromlist=[name], level=1)
+        module = importlib.import_module(_LAZY_IMPORTS[name])
         _import_cache[name] = module
         return module
-    except (ImportError, AttributeError) as e:
+    except Exception as e:
         raise AttributeError(
             f"module '{__name__}' has no attribute '{name}'. "
             f"Failed to import: {e}"
@@ -65,8 +84,8 @@ def create_data_component(component_type: str = "dataset_manager", config: Optio
     
     Args:
         component_type: Type of component. Options: 
-            "dataset_manager", "data_loader_factory", "collator", 
-            "processor_factory", "polars_processor"
+            "dataset_manager", "data_loader_factory", "data_loader_builder",
+            "length_bucket_batch_sampler", "collator", "processor_factory", "polars_processor"
         config: Optional configuration dictionary
     
     Returns:
@@ -78,11 +97,17 @@ def create_data_component(component_type: str = "dataset_manager", config: Optio
     component_type = component_type.lower()
     
     factory_map = {
-        "dataset_manager": lambda cfg: DatasetManager(**cfg),
-        "data_loader_factory": lambda cfg: DataLoaderFactory(**cfg),
+        "dataset_manager": lambda cfg: DatasetManager(cfg),
+        "data_loader_factory": lambda cfg: DataLoaderFactory(),
+        "data_loader_builder": lambda cfg: DataLoaderBuilder(),
+        "length_bucket_batch_sampler": lambda cfg: LengthBucketBatchSampler(**cfg),
         "collator": lambda cfg: LMCollator(**cfg),
+        "classification_collator": lambda cfg: ClassificationCollator(**cfg),
         "processor_factory": lambda cfg: create_data_processor(**cfg),
         "polars_processor": lambda cfg: PolarsProcessor(**cfg),
+        "pandas_processor": lambda cfg: PandasProcessor(**cfg),
+        "create_polars_processor": lambda cfg: create_polars_processor(**cfg),
+        "dataset_registry": lambda cfg: DatasetRegistry(),
     }
     
     if component_type not in factory_map:
@@ -105,8 +130,20 @@ DATA_COMPONENT_REGISTRY = {
         "class": DataLoaderFactory,
         "module": "data.data_loader_factory",
     },
+    "data_loader_builder": {
+        "class": DataLoaderBuilder,
+        "module": "data.data_loader_factory",
+    },
+    "length_bucket_batch_sampler": {
+        "class": LengthBucketBatchSampler,
+        "module": "data.data_loader_factory",
+    },
     "collator": {
         "class": LMCollator,
+        "module": "data.collators",
+    },
+    "classification_collator": {
+        "class": ClassificationCollator,
         "module": "data.collators",
     },
     "processor_factory": {
@@ -117,8 +154,16 @@ DATA_COMPONENT_REGISTRY = {
         "class": PolarsProcessor,
         "module": "data.polars_processor",
     },
+    "pandas_processor": {
+        "class": PandasProcessor,
+        "module": "data.processor_factory",
+    },
     "registry": {
         "function": build_dataset,
+        "module": "data.registry",
+    },
+    "dataset_registry": {
+        "class": DatasetRegistry,
         "module": "data.registry",
     },
 }
@@ -148,15 +193,35 @@ def get_data_component_info(component_type: str) -> Dict[str, Any]:
 __all__ = [
     "DatasetManager",
     "DataLoaderFactory",
+    "DataLoaderBuilder",
+    "LengthBucketBatchSampler",
+    "LengthBucketSampler",
+    "BaseCollator",
     "LMCollator",
+    "ClassificationCollator",
+    "BaseDataProcessor",
     "PolarsProcessor",
+    "PandasProcessor",
     "ProcessorType",
     "create_data_processor",
+    "create_polars_processor",
     "list_available_processors",
+    "get_processor_recommendation",
+    "get_processor_info",
+    "DatasetRegistry",
+    "default_registry",
     "register_dataset",
+    "unregister_dataset",
     "build_dataset",
+    "has_dataset",
+    "get_dataset_info",
+    "list_registered_datasets",
+    "get_dataset_builder",
+    "clear_dataset_registry",
     "create_data_component",
     "list_available_data_components",
     "get_data_component_info",
     "DATA_COMPONENT_REGISTRY",
 ]
+
+

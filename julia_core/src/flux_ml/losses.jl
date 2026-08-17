@@ -7,8 +7,6 @@ Provides utilities for creating appropriate loss functions based on task type
 (classification vs regression) with proper validation and error handling.
 """
 
-include("constants.jl")
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # LOSS FUNCTION CREATION
 # ═══════════════════════════════════════════════════════════════════════════════

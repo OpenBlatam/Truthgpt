@@ -7,8 +7,6 @@ Provides high-performance operations using integer arithmetic with
 proper scaling to maintain numerical accuracy.
 """
 
-include("types.jl")
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # HELPER FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════

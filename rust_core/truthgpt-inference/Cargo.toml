@@ -1,9 +1,0 @@
-[package]
-name = "truthgpt-inference"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-truthgpt-core = { path = "../truthgpt-core" }
-truthgpt-models = { path = "../truthgpt-models" }
-truthgpt-cache = { path = "../truthgpt-cache" }

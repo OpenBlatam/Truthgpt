@@ -1,5 +1,5 @@
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  Julia Core Module - BUILD                                                   ║
+# ║  TruthGPT Julia Core Module - BUILD                                          ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 load("@rules_python//python:defs.bzl", "py_library")
@@ -10,12 +10,13 @@ package(default_visibility = ["//visibility:public"])
 # JULIA MODULE (via genrule)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Note: Julia doesn't have official Bazel rules
-# We'll use genrule to build and package the Julia module
-
 genrule(
     name = "julia_core_pkg",
-    srcs = glob(["**/*.jl", "Project.toml"]),
+    srcs = glob([
+        "src/**/*.jl",
+        "test/**/*.jl",
+        "Project.toml",
+    ]),
     outs = ["julia_core.tar.gz"],
     cmd = """
         cd $(location :Project.toml)/.. && \
@@ -29,15 +30,3 @@ py_library(
     srcs = glob(["**/*.py"]),
     data = [":julia_core_pkg"],
 )
-
-
-
-
-
-
-
-
-
-
-
-

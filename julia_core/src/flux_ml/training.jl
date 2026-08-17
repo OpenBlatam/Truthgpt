@@ -4,13 +4,6 @@ Training
 Functions for training neural network models.
 """
 
-include("constants.jl")
-include("device.jl")
-include("validation.jl")
-include("losses.jl")
-include("optimizers.jl")
-include("models.jl")
-
 """
     format_loss_value(loss)
 

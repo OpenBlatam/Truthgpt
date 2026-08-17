@@ -166,10 +166,14 @@ def get_numeric_columns(df: Any) -> List[str]:
         pl.Float32, pl.Float64
     )
     
-    return [
-        col for col, dtype in schema.items()
-        if isinstance(dtype, numeric_types)
-    ]
+    result = []
+    for col, dtype in schema.items():
+        if hasattr(dtype, "is_numeric") and callable(getattr(dtype, "is_numeric")):
+            if dtype.is_numeric():
+                result.append(col)
+        elif isinstance(dtype, numeric_types) or dtype in numeric_types or type(dtype) in numeric_types:
+            result.append(col)
+    return result
 
 
 def log_dataframe_info(

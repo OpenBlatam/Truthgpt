@@ -12,9 +12,9 @@ using Statistics
 
 # Include all submodules
 include("constants.jl")
-include("types.jl")
 include("device.jl")
 include("validation.jl")
+include("types.jl")
 include("models.jl")
 include("losses.jl")
 include("optimizers.jl")

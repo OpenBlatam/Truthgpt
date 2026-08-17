@@ -8,7 +8,16 @@ Configuration classes for Polars data processor.
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
 
-from optimization_core.core.config_base import ValidatedConfig
+try:
+    from optimization_core.core.config_base import ValidatedConfig
+except (ImportError, ModuleNotFoundError):
+    class ValidatedConfig:
+        def _validate(self) -> None:
+            pass
+
+        def validate_positive_int(self, val: Any, name: str) -> None:
+            if val is not None and (not isinstance(val, int) or val <= 0):
+                raise ValueError(f"{name} must be a positive integer, got {val}")
 
 
 @dataclass

@@ -64,7 +64,7 @@ class Compressor:
         """Compress data."""
         if self.backend == "rust" and self._compressor:
             try:
-                return bytes(self._compressor.compress(list(data)))
+                return bytes(self._compressor.compress(data))
             except Exception as e:
                 logger.warning(f"Rust compression failed: {e}, falling back")
         
@@ -74,7 +74,7 @@ class Compressor:
         """Decompress data."""
         if self.backend == "rust" and self._compressor:
             try:
-                return bytes(self._compressor.decompress(list(data)))
+                return bytes(self._compressor.decompress(data))
             except Exception as e:
                 logger.warning(f"Rust decompression failed: {e}, falling back")
         
@@ -84,7 +84,7 @@ class Compressor:
         """Compress with statistics."""
         if self.backend == "rust" and self._compressor:
             try:
-                compressed, stats = self._compressor.compress_with_stats(list(data))
+                compressed, stats = self._compressor.compress_with_stats(data)
                 return bytes(compressed), stats
             except Exception as e:
                 logger.warning(f"Rust compression failed: {e}, falling back")

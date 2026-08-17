@@ -4,9 +4,6 @@ Model Building
 Functions for creating neural network models.
 """
 
-include("constants.jl")
-include("validation.jl")
-
 """
     build_dense_layers(input_size, hidden_sizes, output_size, activation)
 

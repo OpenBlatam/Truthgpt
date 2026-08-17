@@ -7,8 +7,6 @@ Provides type-safe structures for representing quantized data and
 their associated parameters for accurate dequantization.
 """
 
-include("constants.jl")
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # QUANTIZATION PARAMETERS
 # ═══════════════════════════════════════════════════════════════════════════════

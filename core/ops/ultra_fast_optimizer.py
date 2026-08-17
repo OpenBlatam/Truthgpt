@@ -22,7 +22,9 @@ from functools import partial, lru_cache
 import gc
 import psutil
 import ctypes
+import hashlib
 from contextlib import contextmanager
+from enum import Enum
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -480,9 +482,18 @@ class CacheOptimizer:
         return result
     
     def _generate_model_hash(self, model: nn.Module) -> str:
-        """Generate hash for model."""
-        model_str = str(model.state_dict())
-        return hashlib.md5(model_str.encode()).hexdigest()
+        """Generate hash for model safely."""
+        try:
+            if hasattr(model, 'state_dict'):
+                state_dict = model.state_dict()
+                param_info = [(k, tuple(v.shape), str(v.dtype)) for k, v in state_dict.items() if hasattr(v, 'shape')]
+                model_str = f"{model.__class__.__name__}_{param_info}"
+            else:
+                model_str = str(model)
+        except Exception:
+            model_str = f"{type(model).__name__}_{id(model)}"
+        return hashlib.md5(model_str.encode('utf-8', errors='ignore')).hexdigest()
+
 
 # Factory functions
 def create_ultra_fast_optimizer(config: Optional[Dict[str, Any]] = None) -> UltraFastOptimizer:

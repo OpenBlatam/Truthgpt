@@ -116,7 +116,7 @@ class KVCache:
     ):
         """Store value in cache."""
         if self.backend == "rust":
-            self._cache.put(layer_idx, position, list(data))
+            self._cache.put(layer_idx, position, data)
         elif self.backend == "cpp":
             import numpy as np
             if isinstance(data, tuple):

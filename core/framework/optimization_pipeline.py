@@ -15,7 +15,7 @@ from .learning_mechanism import LearningMechanism
 from .metrics_calculator import MetricsCalculator
 from .insights_generator import InsightsGenerator
 from .result_builder import ResultBuilder
-from .core.models import AIOptimizationResult
+from .models import AIOptimizationResult
 from .metrics_calculator import AIOptimizationLevel
 from .model_utils import calculate_memory_reduction
 from .error_handler import StrategyErrorHandler
@@ -48,9 +48,11 @@ class OptimizationPipeline:
     def execute(
         self,
         model: nn.Module,
-        start_time: float
+        start_time: float = None
     ) -> AIOptimizationResult:
         """Execute the complete optimization pipeline."""
+        if start_time is None:
+            start_time = time.perf_counter()
         model_features = self.feature_extractor.extract(model)
         strategy, confidence = self.strategy_selector.select_strategy(model_features)
         optimized_model, techniques_applied = self._apply_strategy(model, strategy)

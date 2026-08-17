@@ -7,18 +7,12 @@ Provides 2x memory savings compared to INT8 by packing two INT4 values
 (4 bits each) into a single UInt8 byte.
 """
 
-include("constants.jl")
-include("types.jl")
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Bit manipulation constants for INT4 packing
-const INT4_LOW_MASK = 0x0F      # Lower 4 bits mask
-const INT4_HIGH_SHIFT = 4       # Shift for upper 4 bits
 const INT4_SIGN_THRESHOLD = 8   # Threshold for sign extension (4-bit signed: -8 to 7)
-const INT4_SIGN_OFFSET = 16     # Offset for sign extension
+const INT4_SIGN_OFFSET = 16     # Offset to subtract for negative values (2^4)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PACKING/UNPACKING FUNCTIONS

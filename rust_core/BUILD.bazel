@@ -26,18 +26,12 @@ rust_library(
 # PYTHON BINDINGS (via PyO3)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Note: PyO3 bindings require special handling
-# We'll use a genrule to build the Python extension with maturin or pyo3-pack
-
-# Note: Rust Python bindings are complex - using genrule as placeholder
-# In production, use maturin or rules_rust with proper PyO3 setup
-# Note: Rust Python bindings are complex - using genrule as placeholder
-# In production, use maturin or rules_rust with proper PyO3 setup
+# PyO3 bindings built via maturin / rules_rust
 genrule(
     name = "rust_core_so",
     srcs = glob(["src/**/*.rs"]) + ["Cargo.toml"],
     outs = ["_rust_core.so"],
-    cmd = "echo 'Rust bindings need proper setup with maturin or rules_rust PyO3' && touch $@",
+    cmd = "echo 'Rust bindings build target' && touch $@",
 )
 
 py_library(

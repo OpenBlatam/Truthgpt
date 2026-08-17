@@ -5,8 +5,16 @@ import json
 import os
 from pathlib import Path
 
-from ...interfaces import BaseService
-from core.kernel.truthgpt_kernel import TruthGPTKernel
+from .base_service import BaseService, ServiceState
+
+try:
+    from ...kernel.truthgpt_kernel import TruthGPTKernel
+except (ImportError, ValueError):
+    try:
+        from optimization_core.core.kernel.truthgpt_kernel import TruthGPTKernel
+    except (ImportError, ValueError):
+        from core.kernel.truthgpt_kernel import TruthGPTKernel
+
 
 class BenchmarkService(BaseService):
     """

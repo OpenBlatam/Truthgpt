@@ -121,6 +121,20 @@ impl Default for Compressor {
     }
 }
 
+impl crate::traits::Compress for Compressor {
+    fn compress(&self, data: &[u8]) -> crate::error::Result<Vec<u8>> {
+        self.compress(data).map_err(crate::error::TruthGPTError::from)
+    }
+
+    fn decompress(&self, data: &[u8]) -> crate::error::Result<Vec<u8>> {
+        self.decompress(data).map_err(crate::error::TruthGPTError::from)
+    }
+
+    fn algorithm_name(&self) -> &'static str {
+        self.algorithm().name()
+    }
+}
+
 /// Compress data with specified algorithm
 pub fn compress(data: &[u8], algorithm: &CompressionAlgorithm) -> Result<Vec<u8>> {
     match algorithm {
@@ -357,6 +371,20 @@ impl BatchCompressor {
             .par_iter()
             .map(|data| decompress(data, &self.algorithm))
             .collect()
+    }
+}
+
+impl crate::traits::Compress for Compressor {
+    fn compress(&self, data: &[u8]) -> crate::error::Result<Vec<u8>> {
+        self.compress(data).map_err(|e| crate::error::TruthGPTError::compression(e.to_string()))
+    }
+
+    fn decompress(&self, data: &[u8]) -> crate::error::Result<Vec<u8>> {
+        self.decompress(data).map_err(|e| crate::error::TruthGPTError::compression(e.to_string()))
+    }
+
+    fn algorithm_name(&self) -> &'static str {
+        self.algorithm.name()
     }
 }
 

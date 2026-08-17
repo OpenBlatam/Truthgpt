@@ -419,21 +419,9 @@ impl TreeSpeculation {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Compute softmax of log probabilities
+#[inline]
 fn softmax_single(logprobs: &[f32]) -> Vec<f32> {
-    if logprobs.is_empty() {
-        return Vec::new();
-    }
-    
-    let max_logprob = logprobs.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-    
-    let exp_vals: Vec<f32> = logprobs
-        .iter()
-        .map(|&lp| (lp - max_logprob).exp())
-        .collect();
-    
-    let sum: f32 = exp_vals.iter().sum();
-    
-    exp_vals.iter().map(|&e| e / sum).collect()
+    crate::utils::softmax_1d(logprobs)
 }
 
 /// Compute KL divergence between two distributions

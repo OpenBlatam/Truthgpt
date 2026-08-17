@@ -42,11 +42,22 @@ def main():
     parser.add_argument("--email-sequence", type=str, help="Emails con Fatigue Model")
     parser.add_argument("--budget", type=str, help="Presupuesto con Causal Forest uplift")
     parser.add_argument("--dashboard", action="store_true", help="Mostrar panel de control v3.0")
+    parser.add_argument("--opus", type=str, help="Procesar video con Opus Clip AI (URL o archivo local)")
+    parser.add_argument("--auto", action="store_true", help="Modo 100% automático para Opus Clip")
+    parser.add_argument("--postpub", action="store_true", help="Menú de estrategia post-publicación y analítica de redes sociales")
+    parser.add_argument("--broll", type=str, help="Generar B-Rolls visuales y sugerencias de efectos de sonido SFX IA")
     args = parser.parse_args()
 
     app = IntegratedMarketingAITerminal()
 
-    if args.pipeline:
+    if args.postpub:
+        app.cmd_postpub()
+    elif args.broll:
+        app.cmd_broll(args.broll)
+    elif args.opus:
+        arg_str = f"{args.opus} --auto" if args.auto else args.opus
+        app.cmd_opus(arg_str)
+    elif args.pipeline:
         app.cmd_pipeline(args.pipeline)
     elif args.funnel:
         app.cmd_funnel(args.funnel)

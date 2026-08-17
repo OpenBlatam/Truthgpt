@@ -41,7 +41,7 @@ candle-transformers = { version = "0.3", optional = true }
 # ════════════════════════════════════════════════════════════════════════════════
 
 # HuggingFace tokenizers - fastest tokenization
-tokenizers = { version = "0.15", default-features = false, features = ["onig"] }
+tokenizers = { version = "0.15", default-features = false, features = ["fancy-regex"] }
 # SafeTensors - fast model loading
 safetensors = "0.4"
 

@@ -434,6 +434,33 @@ impl ConcurrentKVCache {
     }
 }
 
+impl crate::traits::Cache<CacheKey, Vec<u8>> for ConcurrentKVCache {
+    fn get(&self, key: &CacheKey) -> Option<Vec<u8>> {
+        self.get(key.0, key.1)
+    }
+
+    fn put(&self, key: CacheKey, value: Vec<u8>) {
+        self.put(key.0, key.1, value);
+    }
+
+    fn remove(&self, key: &CacheKey) -> Option<Vec<u8>> {
+        self.remove(key.0, key.1)
+    }
+
+    fn clear(&self) {
+        self.clear();
+    }
+
+    fn len(&self) -> usize {
+        self.size()
+    }
+
+    fn stats(&self) -> HashMap<String, f64> {
+        self.stats()
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -2,6 +2,7 @@
 Core Optimizers
 ===============
 Unified exports for all optimizers in the core directory.
+Serves as the single entry point for all optimizer types.
 """
 
 # Import ops optimizers
@@ -52,24 +53,29 @@ from ..framework.ai_extreme_optimizer import (
 )
 
 # Import advanced optimizations
-from ..advanced_optimizations import (
+from .advanced_optimizations import (
     QuantumInspiredOptimizer,
     EvolutionaryOptimizer,
     MetaLearningOptimizer,
 )
 
+# Import base and unified optimizers
+from .base_truthgpt_optimizer import BaseTruthGPTOptimizer
+from .unified_optimizer import UnifiedTruthGPTOptimizer
+
 # Import other core optimizers
-from ..modern_truthgpt_optimizer import (
+from .modern_truthgpt_optimizer import (
     ModernTruthGPTOptimizer,
 )
 
-from ..modular_optimizer import (
+from .modular_optimizer import (
     ModularOptimizer,
 )
 
-from ..pytorch_optimizer_base import (
+from .pytorch_optimizer_base import (
     PyTorchOptimizerBase,
 )
+
 
 
 # Unified factory function for core optimizers
@@ -119,6 +125,8 @@ def create_core_optimizer(
         "meta_learning": lambda cfg: MetaLearningOptimizer(cfg),
         "modern_truthgpt": lambda cfg: ModernTruthGPTOptimizer(cfg),
         "modular": lambda cfg: ModularOptimizer(cfg),
+        "base": lambda cfg: BaseTruthGPTOptimizer(cfg),
+        "unified": lambda cfg: UnifiedTruthGPTOptimizer(cfg),
     }
     
     if optimizer_type not in factory_map:
@@ -132,7 +140,7 @@ def create_core_optimizer(
     return factory(config)
 
 
-# Registry of all available core optimizers
+# Registry of all available core optimizers (module paths corrected)
 CORE_OPTIMIZER_REGISTRY = {
     "extreme": {
         "class": ExtremeOptimizer,
@@ -168,23 +176,31 @@ CORE_OPTIMIZER_REGISTRY = {
     },
     "quantum_inspired": {
         "class": QuantumInspiredOptimizer,
-        "module": "core.advanced_optimizations",
+        "module": "core.optimizers.advanced_optimizations",
     },
     "evolutionary": {
         "class": EvolutionaryOptimizer,
-        "module": "core.advanced_optimizations",
+        "module": "core.optimizers.advanced_optimizations",
     },
     "meta_learning": {
         "class": MetaLearningOptimizer,
-        "module": "core.advanced_optimizations",
+        "module": "core.optimizers.advanced_optimizations",
     },
     "modern_truthgpt": {
         "class": ModernTruthGPTOptimizer,
-        "module": "core.modern_truthgpt_optimizer",
+        "module": "core.optimizers.modern_truthgpt_optimizer",
     },
     "modular": {
         "class": ModularOptimizer,
-        "module": "core.modular_optimizer",
+        "module": "core.optimizers.modular_optimizer",
+    },
+    "base": {
+        "class": BaseTruthGPTOptimizer,
+        "module": "core.optimizers.base_truthgpt_optimizer",
+    },
+    "unified": {
+        "class": UnifiedTruthGPTOptimizer,
+        "module": "core.optimizers.unified_optimizer",
     },
 }
 
@@ -247,6 +263,8 @@ __all__ = [
     "ModernTruthGPTOptimizer",
     "ModularOptimizer",
     "PyTorchOptimizerBase",
+    "BaseTruthGPTOptimizer",
+    "UnifiedTruthGPTOptimizer",
     # Unified factory
     "create_core_optimizer",
     # Registry
@@ -254,4 +272,3 @@ __all__ = [
     "list_available_core_optimizers",
     "get_core_optimizer_info",
 ]
-

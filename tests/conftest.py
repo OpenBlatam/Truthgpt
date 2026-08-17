@@ -8,12 +8,44 @@ import torch
 import sys
 from pathlib import Path
 
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Ensure parent directory (TruthGPT-main) is at head of sys.path
+_project_dir = Path(__file__).parent.parent
+_parent_dir = _project_dir.parent
 
-from tests.fixtures.test_data import TestDataFactory
-from tests.fixtures.mock_components import MockModel, MockOptimizer, MockAttention, MockMLP, MockKVCache, MockDataset
-from tests.fixtures.test_utils import TestUtils, PerformanceProfiler, MemoryTracker
+if str(_project_dir) in sys.path:
+    sys.path.remove(str(_project_dir))
+if str(_parent_dir) in sys.path:
+    sys.path.remove(str(_parent_dir))
+
+sys.path.insert(0, str(_parent_dir))
+sys.path.insert(0, str(_project_dir))
+
+
+if "core" in sys.modules:
+    _core_mod = sys.modules["core"]
+    if not hasattr(_core_mod, "list_available_core_modules"):
+        del sys.modules["core"]
+
+import core  # Force import of optimization_core/core
+
+if "tests" in sys.modules:
+    _tests_mod = sys.modules["tests"]
+    if getattr(_tests_mod, "__file__", None) and "optimization_core" not in getattr(_tests_mod, "__file__", ""):
+        del sys.modules["tests"]
+
+if "optimization_core" in sys.modules:
+    _mod = sys.modules["optimization_core"]
+    if getattr(_mod, "__file__", None) and "optimization_core\\optimization_core" in getattr(_mod, "__file__", ""):
+        del sys.modules["optimization_core"]
+
+try:
+    from tests.fixtures.test_data import TestDataFactory
+    from tests.fixtures.mock_components import MockModel, MockOptimizer, MockAttention, MockMLP, MockKVCache, MockDataset
+    from tests.fixtures.test_utils import TestUtils, PerformanceProfiler, MemoryTracker
+except (ModuleNotFoundError, ImportError):
+    from .fixtures.test_data import TestDataFactory
+    from .fixtures.mock_components import MockModel, MockOptimizer, MockAttention, MockMLP, MockKVCache, MockDataset
+    from .fixtures.test_utils import TestUtils, PerformanceProfiler, MemoryTracker
 
 @pytest.fixture(scope="session")
 def test_data_factory():

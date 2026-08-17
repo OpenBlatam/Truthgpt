@@ -7,9 +7,6 @@ Provides better quantization accuracy by computing separate scale factors
 for each group of elements, rather than a single scale for the entire tensor.
 """
 
-include("constants.jl")
-include("types.jl")
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # HELPER FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════

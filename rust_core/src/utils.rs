@@ -531,6 +531,30 @@ pub fn format_duration(dur: Duration) -> String {
 // TESTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// FAST NUMERIC / VECTOR HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Numerically stable 1D softmax
+pub fn softmax_1d(arr: &[f32]) -> Vec<f32> {
+    if arr.is_empty() {
+        return Vec::new();
+    }
+    let max = arr.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+    let exps: Vec<f32> = arr.iter().map(|&x| (x - max).exp()).collect();
+    let sum: f32 = exps.iter().sum();
+    if sum > 0.0 {
+        exps.iter().map(|&x| x / sum).collect()
+    } else {
+        vec![1.0 / arr.len() as f32; arr.len()]
+    }
+}
+
+/// Compute inner dot product between two f32 slices
+pub fn dot_product_f32(a: &[f32], b: &[f32]) -> f32 {
+    a.iter().zip(b.iter()).map(|(&x, &y)| x * y).sum()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

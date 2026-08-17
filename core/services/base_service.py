@@ -5,8 +5,8 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 
-from ..service_registry import ServiceRegistry
-from ..event_system import EventEmitter, EventType, emit_event
+from ..systems.service_registry import ServiceRegistry
+from ..systems.event_system import EventEmitter, EventType, emit_event
 
 logger = logging.getLogger(__name__)
 

@@ -4,10 +4,6 @@ Prediction
 Functions for making predictions with trained models.
 """
 
-include("constants.jl")
-include("device.jl")
-include("validation.jl")
-
 """
     predict(model, x; device=:cpu)
 

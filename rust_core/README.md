@@ -170,7 +170,9 @@ rust_core/
 ├── Cargo.toml              # Dependencies & features
 ├── README.md               # This file
 ├── src/
-│   ├── lib.rs              # Main module & Python bindings
+│   ├── lib.rs              # Main entry point & re-exports
+│   ├── python.rs           # PyO3 Python bindings
+│   ├── traits.rs           # Generic trait abstractions (Cache, Compress, Quantize)
 │   ├── error.rs            # Error types
 │   ├── kv_cache.rs         # KV Cache implementation
 │   ├── compression.rs      # LZ4/Zstd compression

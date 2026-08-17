@@ -7,9 +7,6 @@ Provides structured configuration types for training and model management
 with comprehensive validation and sensible defaults.
 """
 
-include("constants.jl")
-include("validation.jl")
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # TRAINING CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════════

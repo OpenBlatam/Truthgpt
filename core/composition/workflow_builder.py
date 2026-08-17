@@ -5,7 +5,7 @@ import logging
 from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass, field
 
-from ..service_registry import ServiceContainer
+from ..systems.service_registry import ServiceContainer
 
 logger = logging.getLogger(__name__)
 

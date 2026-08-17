@@ -36,30 +36,30 @@ __all__ = [
 
 _LAZY_IMPORTS = {
     # Dynamic Factory
-    'DynamicFactory': '..dynamic_factory',
-    'factory': '..dynamic_factory',
-    'register_component': '..dynamic_factory',
-    'create_factory': '..dynamic_factory',
+    'DynamicFactory': '.dynamic_factory',
+    'factory': '.dynamic_factory',
+    'register_component': '.dynamic_factory',
+    'create_factory': '.dynamic_factory',
     # Event System
-    'EventEmitter': '..event_system',
-    'EventType': '..event_system',
-    'Event': '..event_system',
-    'get_event_emitter': '..event_system',
-    'emit_event': '..event_system',
-    'on_event': '..event_system',
+    'EventEmitter': '.event_system',
+    'EventType': '.event_system',
+    'Event': '.event_system',
+    'get_event_emitter': '.event_system',
+    'emit_event': '.event_system',
+    'on_event': '.event_system',
     # Service Registry
-    'ServiceRegistry': '..service_registry',
-    'ServiceContainer': '..service_registry',
-    'register_service': '..service_registry',
-    'get_service': '..service_registry',
+    'ServiceRegistry': '.service_registry',
+    'ServiceContainer': '.service_registry',
+    'register_service': '.service_registry',
+    'get_service': '.service_registry',
     # Plugin System
-    'Plugin': '..plugin_system',
-    'PluginManager': '..plugin_system',
-    'get_plugin_manager': '..plugin_system',
+    'Plugin': '.plugin_system',
+    'PluginManager': '.plugin_system',
+    'get_plugin_manager': '.plugin_system',
     # Module Loader
-    'ModuleLoader': '..module_loader',
-    'get_module_loader': '..module_loader',
-    'lazy_load': '..module_loader',
+    'ModuleLoader': '.module_loader',
+    'get_module_loader': '.module_loader',
+    'lazy_load': '.module_loader',
 }
 
 _import_cache = {}
@@ -78,7 +78,8 @@ def __getattr__(name: str):
     
     module_path = _LAZY_IMPORTS[name]
     try:
-        module = __import__(module_path, fromlist=[name], level=2)
+        import importlib
+        module = importlib.import_module(module_path, package=__name__)
         obj = getattr(module, name)
         _import_cache[name] = obj
         return obj

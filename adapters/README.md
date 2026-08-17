@@ -1,60 +1,63 @@
-Adapters 
+# Unified Adapters Architecture (`optimization_core/adapters`)
 
-current adapters:
+The `adapters` package provides a standardized, Pydantic-first adapter infrastructure that bridges core components (models, datasets, optimizers, trainers) into autonomous tool registries (`BaseTool`) and execution pipelines.
 
-- optimizer_adapter.py
-- data_adapter.py
-- model_adapter.py
-- edge_inference_adapter.py
-- truthgpt_adapters.py
-- enterprise_truthgpt_adapter.py
+## Key Design Principles
 
-OpenSource LLM Adapters:
+1. **Pydantic-First Data Contracts**: All adapter inputs and execution outputs return strongly typed Pydantic response models with full runtime validation and JSON serialization.
+2. **Global ObjectStore**: Heavyweight PyTorch models, datasets, optimizers, and trainers are stored in a thread-safe in-memory `ObjectStore` singleton, passing lightweight string IDs (`model_id`, `data_id`, `optimizer_id`) across tool interactions.
+3. **Structured Exception Hierarchy**: Operations raise specific exceptions (`AdapterError`, `ObjectNotFoundError`, `AdapterConfigurationError`, `AdapterExecutionError`) for predictable error handling.
+4. **Dual Module Alias Registration**: Full support for both `import optimization_core.adapters` and `import adapters` via transparent `sys.modules` aliasing.
 
-- https://gemini.google.com/app/e5ccc56ba5c0a011?hl=es
+---
 
+## Subsystems & Modules
 
-Arquitectura de adaptadores:
+- **`base.py`**: Base protocol (`BaseAdapterProtocol`), generic lifecycle abstract class (`BaseAdapter`), tool-compatible dynamic base (`BaseDynamicAdapter`), exception hierarchy, and thread-safe in-memory `ObjectStore`.
+- **`data_adapter.py`**: Dataset loading, split management, HuggingFace Hub integration (`HuggingFaceDataAdapter`), and local JSONL file processing (`JSONLDataAdapter`).
+- **`model_adapter.py`**: PyTorch and HuggingFace model I/O, parameter inspection, and state management (`ModelAdapter`, `HuggingFaceModelAdapter`).
+- **`optimizer_adapter.py`**: PyTorch optimizer creation, parameter group management, CUDA fused kernel detection, and state queries (`OptimizerAdapter`, `PyTorchOptimizerAdapter`).
+- **`training_adapter.py`**: Lifecycle management for model training loops (`TrainingAdapter`).
+- **`truthgpt_adapters.py`**: Standard and legacy TruthGPT optimization wrappers (`TruthGPTAdapter`, `TruthGPTPerformanceAdapter`, etc.).
+- **`enterprise_truthgpt_adapter.py`**: Enterprise-grade model creation, inference optimization, and hardware analytics (`EnterpriseTruthGPTAdapter`).
+- **`__init__.py`**: Unified factory function (`create_adapter`), central registry (`ADAPTER_REGISTRY`), and inspection helper functions (`list_available_adapter_types`, `list_available_adapter_subtypes`, `get_adapter_info`).
 
-- 
-s Componentes Técnicos Clave
-Para que esto funcione en tu máquina, la estructura suele verse así:
+---
 
-A. El Host (El que manda)
-Puede ser Claude Desktop, Claude Code o el propio OpenClaw. Este componente es el "Host MCP". Tiene un archivo de configuración (normalmente claude_desktop_config.json) donde le dices: "Mira, para leer archivos de GitHub, usa este ejecutable".
+## Usage Examples
 
-B. El Servidor MCP (El que obedece)
-Son procesos pequeños que corren en segundo plano (usualmente en Node.js o Python). No guardan datos, solo exponen "herramientas" (tools) que la IA puede invocar.
+### 1. Unified Factory & Inspection
 
-Ejemplo: El servidor de Fetch le da a la IA la herramienta fetch_url.
+```python
+import optimization_core.adapters as adapters
 
-C. Los Skills (El "Know-how")
-A diferencia de los servidores MCP, los Skills suelen ser archivos de texto (prompts de sistema) o funciones pre-escritas que le dicen a la IA cómo usar esas herramientas de forma lógica para resolver problemas de ingeniería o ciencia.
+# Inspect registered types and subtypes
+types = adapters.list_available_adapter_types()
+opt_subtypes = adapters.list_available_adapter_subtypes("optimizer")
+info = adapters.get_adapter_info("optimizer", "pytorch")
 
-What is next ?
+# Instantiate adapters via factory
+opt_adapter = adapters.create_adapter("optimizer", "pytorch")
+jsonl_adapter = adapters.create_adapter("data", "jsonl")
+```
 
-Actions that I do or actions that thet decide to do ?
+### 2. Working with `ObjectStore` & Dynamic Adapters
 
-bulk , non stop in continuos planing and contonous more
+```python
+from optimization_core.adapters.base import ObjectStore
 
-Insights:
-Bottleneck 
+store = ObjectStore.instance()
 
-Principio de Abierto/Cerrado (Open/Closed Principle).
+# Storing PyTorch model
+model_id = store.put(my_pytorch_model, kind="model", meta={"name": "my_model"})
 
-To much loops and try catch for the building blocks this is not good for the performance and the scalability of the system for a auto governance long term.
+# Executing adapter process via JSON string or dictionary
+output = opt_adapter.process({
+    "action": "create",
+    "model_id": model_id,
+    "optimizer_type": "adamw",
+    "kwargs": {"lr": 1e-4}
+})
 
-Riesgo de Ejecución: Si la IA interpreta mal una instrucción, podría ejecutar un proceso de optimización costoso o incorrecto.
-
-
-El "Sweet Spot" para ti:
-Lo que más te conviene es estandarizar la interfaz. Si diseñas tus adaptadores siguiendo la estructura de herramienta (Input -> Process -> Output)
-
-
-Research:
-
-De Static a Dynamic Tooling: Ya no se programa la secuencia; se le dan los adaptadores a la IA y ella construye el grafo de ejecución.
-
-Edge Intelligence: Los papers de 2025 están obsesionados con mover estos adaptadores a local (tu edge_inference_adapter) para reducir latencia y costo.
-
-Safety as a Layer: La validación no es una opción, es parte del protocolo de comunicación (MCP Security Layer).
+print("Created optimizer_id:", output["optimizer_id"])
+```

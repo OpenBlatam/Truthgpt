@@ -7,8 +7,15 @@ from typing import Dict, Any, Optional
 import torch
 
 from .base_service import BaseService
-from ..event_system import EventType
-from ...models.model_manager import ModelManager
+from ..systems.event_system import EventType
+try:
+    from ...models.model_manager import ModelManager
+except (ImportError, ValueError):
+    try:
+        from models.model_manager import ModelManager  # type: ignore
+    except (ImportError, ValueError):
+        ModelManager = None  # type: ignore
+
 
 logger = logging.getLogger(__name__)
 

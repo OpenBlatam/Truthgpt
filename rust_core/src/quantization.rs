@@ -57,6 +57,80 @@ impl QuantizationType {
     }
 }
 
+impl crate::traits::Quantize for QuantizationType {
+    type Quantized = QuantizedTensor;
+
+    fn quantize(&self, data: &[f32]) -> Self::Quantized {
+        let params = QuantizationParams::from_tensor(data, *self);
+        let qdata = match self {
+            QuantizationType::INT8 => {
+                let i8_bytes = quantize_int8(data, &params);
+                i8_bytes.into_iter().map(|x| x as u8).collect()
+            }
+            QuantizationType::INT4 => quantize_int4(data, &params),
+            QuantizationType::FP16 => quantize_fp16(data),
+            QuantizationType::BF16 => quantize_bf16(data),
+            QuantizationType::FP32 => data.iter().flat_map(|x| x.to_ne_bytes()).collect(),
+        };
+
+        QuantizedTensor {
+            data: qdata,
+            params: vec![params],
+            shape: vec![data.len()],
+            qtype: *self,
+            group_size: 0,
+        }
+    }
+
+    fn dequantize(&self, tensor: &Self::Quantized) -> Vec<f32> {
+        let params = tensor.params.first().cloned().unwrap_or_else(|| QuantizationParams::from_tensor(&[], *self));
+        match self {
+            QuantizationType::INT8 => {
+                let i8_data: Vec<i8> = tensor.data.iter().map(|&x| x as i8).collect();
+                dequantize_int8(&i8_data, &params)
+            }
+            QuantizationType::INT4 => dequantize_int4(&tensor.data, &params, tensor.numel()),
+            QuantizationType::FP16 => dequantize_fp16(&tensor.data),
+            QuantizationType::BF16 => dequantize_bf16(&tensor.data),
+            QuantizationType::FP32 => {
+                tensor.data.chunks_exact(4)
+                    .map(|c| f32::from_ne_bytes(c.try_into().unwrap_or_default()))
+                    .collect()
+            }
+        }
+    }
+
+    fn compression_ratio(&self) -> f32 {
+        self.memory_ratio()
+    }
+}
+
+/// Helper struct for INT8 quantization implementing Quantize trait
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Int8Quantizer;
+
+impl Int8Quantizer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl crate::traits::Quantize for Int8Quantizer {
+    type Quantized = QuantizedTensor;
+
+    fn quantize(&self, data: &[f32]) -> Self::Quantized {
+        QuantizationType::INT8.quantize(data)
+    }
+
+    fn dequantize(&self, data: &Self::Quantized) -> Vec<f32> {
+        QuantizationType::INT8.dequantize(data)
+    }
+
+    fn compression_ratio(&self) -> f32 {
+        4.0
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // QUANTIZATION PARAMETERS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -78,7 +152,8 @@ impl QuantizationParams {
     /// Create params for INT8 (asymmetric)
     #[must_use]
     pub fn int8_asymmetric(min: f32, max: f32) -> Self {
-        let scale = (max - min) / 255.0;
+        let diff = if (max - min).abs() < 1e-8 || !(max - min).is_finite() { 1.0 } else { max - min };
+        let scale = diff / 255.0;
         let zero_point = ((-min / scale).round() as i32).clamp(0, 255);
         
         Self {
@@ -92,7 +167,8 @@ impl QuantizationParams {
     /// Create params for INT8 (symmetric)
     #[must_use]
     pub fn int8_symmetric(abs_max: f32) -> Self {
-        let scale = abs_max / 127.0;
+        let safe_max = if abs_max <= 0.0 || !abs_max.is_finite() { 1.0 } else { abs_max };
+        let scale = safe_max / 127.0;
         
         Self {
             scale,
@@ -105,7 +181,8 @@ impl QuantizationParams {
     /// Create params for INT4
     #[must_use]
     pub fn int4_symmetric(abs_max: f32) -> Self {
-        let scale = abs_max / 7.0;
+        let safe_max = if abs_max <= 0.0 || !abs_max.is_finite() { 1.0 } else { abs_max };
+        let scale = safe_max / 7.0;
         
         Self {
             scale,
@@ -118,6 +195,9 @@ impl QuantizationParams {
     /// Compute params from data (per-tensor)
     #[must_use]
     pub fn from_tensor(data: &[f32], qtype: QuantizationType) -> Self {
+        if data.is_empty() {
+            return Self::int8_symmetric(1.0);
+        }
         let (min, max) = data.iter().fold((f32::MAX, f32::MIN), |(min, max), &x| {
             (min.min(x), max.max(x))
         });
@@ -339,6 +419,13 @@ pub fn matmul_int8(
     n: usize,
     k: usize,
 ) -> Vec<f32> {
+    let inv_scale = if weight_params.scale != 0.0 { 1.0 / weight_params.scale } else { 1.0 };
+    let input_q: Vec<i32> = input
+        .iter()
+        .map(|&x| (x * inv_scale).round() as i32)
+        .collect();
+    let scale_sq = weight_params.scale * weight_params.scale;
+
     (0..n)
         .into_par_iter()
         .map(|i| {
@@ -347,11 +434,10 @@ pub fn matmul_int8(
             
             for j in 0..k {
                 let w = weights[row_start + j] as i32;
-                let x = (input[j] / weight_params.scale).round() as i32;
-                sum += w * x;
+                sum += w * input_q[j];
             }
             
-            sum as f32 * weight_params.scale * weight_params.scale
+            sum as f32 * scale_sq
         })
         .collect()
 }
@@ -381,6 +467,44 @@ pub fn matmul_fp16(
             sum
         })
         .collect()
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// QUANTIZER TRAIT IMPLEMENTATIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Tensor Quantizer implementing the Quantize trait
+#[derive(Debug, Clone)]
+pub struct TensorQuantizer {
+    pub qtype: QuantizationType,
+    pub params: QuantizationParams,
+}
+
+impl TensorQuantizer {
+    pub fn new(qtype: QuantizationType, params: QuantizationParams) -> Self {
+        Self { qtype, params }
+    }
+
+    pub fn from_data(qtype: QuantizationType, data: &[f32]) -> Self {
+        let params = QuantizationParams::from_tensor(data, qtype);
+        Self { qtype, params }
+    }
+}
+
+impl crate::traits::Quantize for TensorQuantizer {
+    type Quantized = QuantizedTensor;
+
+    fn quantize(&self, data: &[f32]) -> Self::Quantized {
+        self.qtype.quantize(data)
+    }
+
+    fn dequantize(&self, tensor: &Self::Quantized) -> Vec<f32> {
+        self.qtype.dequantize(tensor)
+    }
+
+    fn compression_ratio(&self) -> f32 {
+        self.qtype.compression_ratio()
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
