@@ -1,5 +1,22 @@
 """
 Optimization Engine for TruthGPT Compiler
+"""
+
+import time
+import logging
+from typing import Any, Callable, Dict, List, Optional
+from dataclasses import dataclass, field
+
+from .pass_manager import OptimizationPass
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class OptimizationResult:
+    """Result of an optimization pass or engine run"""
+    success: bool
+    optimized_data: Any = None
     optimization_metrics: Dict[str, float] = None
     execution_time: float = 0.0
     error_message: Optional[str] = None
@@ -8,12 +25,14 @@ Optimization Engine for TruthGPT Compiler
         if self.optimization_metrics is None:
             self.optimization_metrics = {}
 
+
 class OptimizationEngine:
     """Core optimization engine for compilation"""
     
     def __init__(self, name: str):
         self.name: str = name
         self.optimization_passes: Dict[str, Dict[str, Any]] = {}
+
         self.pass_dependencies: Dict[str, List[str]] = {}
         self.execution_order: List[str] = []
         

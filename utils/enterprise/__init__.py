@@ -1,11 +1,15 @@
 """
 Enterprise Utilities Module
 
-This module contains enterprise-grade utilities for authentication, caching,
-monitoring, and cloud integration.
+Enterprise-grade utilities for authentication, caching, monitoring,
+metrics, cloud integration, and TruthGPT adapters.
 """
 
 from __future__ import annotations
+
+from typing import Any, Dict, List
+
+from .._lazy_loader import create_lazy_module
 
 __all__ = [
     'EnterpriseAuth',
@@ -14,51 +18,40 @@ __all__ = [
     'EnterpriseMetrics',
     'EnterpriseCloudIntegration',
     'EnterpriseTruthGPTAdapter',
+    'list_available_enterprise_components',
+    'get_enterprise_component_info',
 ]
 
-_LAZY_IMPORTS = {
-    'EnterpriseAuth': '..enterprise_auth',
-    'EnterpriseCache': '..enterprise_cache',
-    'EnterpriseMonitor': '..enterprise_monitor',
-    'EnterpriseMetrics': '..enterprise_metrics',
-    'EnterpriseCloudIntegration': '..enterprise_cloud_integration',
-    'EnterpriseTruthGPTAdapter': '..enterprise_truthgpt_adapter',
+_LAZY_IMPORTS: Dict[str, str] = {
+    'EnterpriseAuth': '.auth',
+    'EnterpriseCache': '.cache',
+    'EnterpriseMonitor': '.monitor',
+    'EnterpriseMetrics': '.metrics',
+    'EnterpriseCloudIntegration': '.cloud_integration',
+    'EnterpriseTruthGPTAdapter': '.truthgpt_adapter',
 }
 
-_import_cache = {}
+_loader = create_lazy_module(
+    package_name=__name__,
+    lazy_imports=_LAZY_IMPORTS,
+    all_exports=__all__,
+    globals_dict=globals(),
+)
 
 
-def __getattr__(name: str):
-    """Lazy import system for enterprise utility modules."""
-    if name.startswith('_'):
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-    
-    if name not in _LAZY_IMPORTS:
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-    
-    if name in _import_cache:
-        return _import_cache[name]
-    
-    import importlib
-    module_path = _LAZY_IMPORTS[name]
-    try:
-        if module_path.startswith('..'):
-            module = importlib.import_module(module_path, package=__name__)
-        elif module_path.startswith('.'):
-            module = importlib.import_module(module_path, package=__name__)
-        else:
-            module = importlib.import_module(module_path)
-        
-        if hasattr(module, name):
-            obj = getattr(module, name)
-        else:
-            obj = module
-        _import_cache[name] = obj
-        return obj
-    except (ImportError, AttributeError) as e:
-        raise AttributeError(
-            f"module '{__name__}' has no attribute '{name}'. "
-            f"Failed to import: {e}"
-        ) from e
+def __getattr__(name: str) -> Any:
+    return _loader.__getattr__(name)
 
 
+def __dir__() -> List[str]:
+    return _loader.__dir__()
+
+
+def list_available_enterprise_components() -> List[str]:
+    """List all available enterprise utility components."""
+    return _loader.list_components()
+
+
+def get_enterprise_component_info(component_name: str) -> Dict[str, Any]:
+    """Get information about an enterprise component."""
+    return _loader.get_component_info(component_name)

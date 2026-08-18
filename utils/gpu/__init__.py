@@ -1,10 +1,14 @@
 """
 GPU Utilities Module
 
-This module contains GPU-specific utilities and CUDA kernel optimizations.
+GPU-specific utilities, CUDA kernel optimizations, and kernel fusion.
 """
 
 from __future__ import annotations
+
+from typing import Any, Dict, List
+
+from .._lazy_loader import create_lazy_module
 
 __all__ = [
     'GPUUtils',
@@ -12,50 +16,41 @@ __all__ = [
     'OptimizedLayerNorm',
     'OptimizedRMSNorm',
     'EnhancedCUDAOptimizations',
+    'KernelFusion',
+    'list_available_gpu_components',
+    'get_gpu_component_info',
 ]
 
-_LAZY_IMPORTS = {
-    'GPUUtils': '..gpu_utils',
-    'CUDAOptimizations': '..cuda_kernels',
-    'OptimizedLayerNorm': '..cuda_kernels',
-    'OptimizedRMSNorm': '..cuda_kernels',
-    'EnhancedCUDAOptimizations': '..enhanced_cuda_kernels',
+_LAZY_IMPORTS: Dict[str, str] = {
+    'GPUUtils': '.gpu_utils',
+    'CUDAOptimizations': '.cuda_kernels',
+    'OptimizedLayerNorm': '.cuda_kernels',
+    'OptimizedRMSNorm': '.cuda_kernels',
+    'EnhancedCUDAOptimizations': '.enhanced_cuda_kernels',
+    'KernelFusion': '.kernel_fusion',
 }
 
-_import_cache = {}
+_loader = create_lazy_module(
+    package_name=__name__,
+    lazy_imports=_LAZY_IMPORTS,
+    all_exports=__all__,
+    globals_dict=globals(),
+)
 
 
-def __getattr__(name: str):
-    """Lazy import system for GPU utility modules."""
-    if name.startswith('_'):
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-    
-    if name not in _LAZY_IMPORTS:
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-    
-    if name in _import_cache:
-        return _import_cache[name]
-    
-    import importlib
-    module_path = _LAZY_IMPORTS[name]
-    try:
-        if module_path.startswith('..'):
-            module = importlib.import_module(module_path, package=__name__)
-        elif module_path.startswith('.'):
-            module = importlib.import_module(module_path, package=__name__)
-        else:
-            module = importlib.import_module(module_path)
-        
-        if hasattr(module, name):
-            obj = getattr(module, name)
-        else:
-            obj = module
-        _import_cache[name] = obj
-        return obj
-    except (ImportError, AttributeError) as e:
-        raise AttributeError(
-            f"module '{__name__}' has no attribute '{name}'. "
-            f"Failed to import: {e}"
-        ) from e
+def __getattr__(name: str) -> Any:
+    return _loader.__getattr__(name)
 
 
+def __dir__() -> List[str]:
+    return _loader.__dir__()
+
+
+def list_available_gpu_components() -> List[str]:
+    """List all available GPU utility components."""
+    return _loader.list_components()
+
+
+def get_gpu_component_info(component_name: str) -> Dict[str, Any]:
+    """Get information about a GPU component."""
+    return _loader.get_component_info(component_name)

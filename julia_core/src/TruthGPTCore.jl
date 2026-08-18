@@ -86,16 +86,7 @@ module Optimization
 end
 
 module JumpOptimization
-    using JuMP
-    using HiGHS
-    include("jump_optimization/constants.jl")
-    include("jump_optimization/validation.jl")
-    include("jump_optimization/helpers.jl")
-    include("jump_optimization/linear.jl")
-    include("jump_optimization/quadratic.jl")
-    include("jump_optimization/mip.jl")
-    include("jump_optimization/hyperparams.jl")
-    export optimize_linear, optimize_quadratic, optimize_mip, optimize_hyperparameters
+    include("jump_optimization/jump_optimization.jl")
 end
 
 module FluxML
@@ -119,6 +110,8 @@ module GPU
     include("gpu/gpu.jl")
 end
 
+const JuMPOptimization = JumpOptimization
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # TOP-LEVEL RE-EXPORTS (FOR PYTHON FFI & CONVENIENT JULIA ACCESS)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -136,7 +129,8 @@ using .Inference
 using .GPU
 
 # Export submodules
-export Utils, Attention, Cache, Compression, Quantization, Optimization, JumpOptimization, FluxML, Transformer, Inference, GPU
+export Utils, Attention, Cache, Compression, Quantization, Optimization, JumpOptimization, JuMPOptimization, FluxML, Transformer, Inference, GPU
+
 
 # Attention Exports
 export AttentionConfig, AttentionOutput, d_model, scale
@@ -184,19 +178,24 @@ export parallel_map, parallel_reduce
 export random_normal, random_uniform, xavier_init, he_init
 export softmax, log_softmax, gelu, swish, sigmoid, layer_norm, rms_norm
 
-# Backward-Compatibility Aliases & Polyglot Helpers
-const quantize_tensor = quantize_int8
-const dequantize_tensor = dequantize
-function create_transformer(d_model::Int=768, n_heads::Int=12, d_ff::Int=3072; n_layers::Int=12, vocab_size::Int=32000)
-    config = TransformerConfig(
-        d_model=d_model,
-        n_heads=n_heads,
-        n_layers=n_layers,
-        d_ff=d_ff,
-        vocab_size=vocab_size
-    )
+# Backward-Compatibility Wrappers & Polyglot Helpers
+function create_transformer(d_model::Int=768, n_heads::Int=12, d_ff::Int=3072; n_layers::Int=12, vocab_size::Int=32000, kwargs...)
+    config = TransformerConfig(d_model=d_model, n_heads=n_heads, n_layers=n_layers, d_ff=d_ff, vocab_size=vocab_size; kwargs...)
     return Transformer(config)
 end
+
+function quantize_tensor(tensor::AbstractArray; bits::Int=8, symmetric::Bool=true)
+    if bits == 4
+        return quantize_int4(to_float32(tensor))
+    else
+        return quantize_int8(to_float32(tensor), symmetric=symmetric)
+    end
+end
+
+function dequantize_tensor(qtensor)
+    return dequantize(qtensor)
+end
+
 export quantize_tensor, dequantize_tensor, create_transformer
 
 function __init__()

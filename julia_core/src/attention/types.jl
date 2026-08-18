@@ -115,3 +115,14 @@ struct RoPE{T}
     cos_cache::Matrix{T}
     sin_cache::Matrix{T}
 end
+
+"""
+    AttentionOutput{T}
+
+Output container for attention computation holding output tensor and optional attention weights.
+"""
+struct AttentionOutput{T}
+    output::Array{T, 4}
+    weights::Union{Array{T, 4}, Nothing}
+end
+

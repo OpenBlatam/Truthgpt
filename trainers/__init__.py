@@ -20,6 +20,14 @@ This module provides:
 
 __version__ = "2.5.0"
 
+import sys
+_mod = sys.modules.get(__name__)
+if _mod is not None:
+    if __name__ == "optimization_core.trainers":
+        sys.modules["trainers"] = _mod
+    elif __name__ == "trainers":
+        sys.modules["optimization_core.trainers"] = _mod
+
 try:
     from .config import (
         TrainerConfig,

@@ -1,51 +1,65 @@
 """
 Quantum Utilities Module
 
-This module contains quantum computing utilities and quantum-based optimization systems.
+Quantum computing utilities, quantum circuit simulation, VQE, QAOA,
+and quantum-based deep learning optimization engines.
 """
 
 from __future__ import annotations
 
+from typing import Any, Dict, List
+
+from .._lazy_loader import create_lazy_module
+
 __all__ = [
     'QuantumUtils',
+    'QuantumOptimizationLevel',
     'QuantumDeepLearningSystem',
     'QuantumHybridAISystem',
     'QuantumNeuralOptimizationEngine',
     'UniversalQuantumOptimizer',
+    'CuttingEdgeUniversalQuantumOptimizer',
+    'NextGenQuantumNeuralOptimizationEngine',
+    'RevolutionaryQuantumDeepLearningSystem',
+    'UltraQuantumOptimization',
+    'list_available_quantum_components',
+    'get_quantum_component_info',
 ]
 
-_LAZY_IMPORTS = {
-    'QuantumUtils': '..quantum_utils',
-    'QuantumDeepLearningSystem': '..quantum_deep_learning_system',
-    'QuantumHybridAISystem': '..quantum_hybrid_ai_system',
-    'QuantumNeuralOptimizationEngine': '..quantum_neural_optimization_engine',
-    'UniversalQuantumOptimizer': '..universal_quantum_optimizer',
+_LAZY_IMPORTS: Dict[str, str] = {
+    'QuantumUtils': '.quantum_utils',
+    'QuantumOptimizationLevel': '.quantum_utils',
+    'QuantumDeepLearningSystem': '.quantum_deep_learning_system',
+    'QuantumHybridAISystem': '.quantum_hybrid_ai_system',
+    'QuantumNeuralOptimizationEngine': '.quantum_neural_optimization_engine',
+    'UniversalQuantumOptimizer': '.universal_quantum_optimizer',
+    'CuttingEdgeUniversalQuantumOptimizer': '.cutting_edge_universal_quantum_optimizer',
+    'NextGenQuantumNeuralOptimizationEngine': '.next_gen_quantum_neural_optimization_engine',
+    'RevolutionaryQuantumDeepLearningSystem': '.revolutionary_quantum_deep_learning_system',
+    'UltraQuantumOptimization': '.ultra_quantum_optimization',
 }
 
-_import_cache = {}
+_loader = create_lazy_module(
+    package_name=__name__,
+    lazy_imports=_LAZY_IMPORTS,
+    all_exports=__all__,
+    globals_dict=globals(),
+)
 
 
-def __getattr__(name: str):
-    """Lazy import system for quantum utility modules."""
-    if name.startswith('_'):
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-    
-    if name not in _LAZY_IMPORTS:
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-    
-    if name in _import_cache:
-        return _import_cache[name]
-    
-    module_path = _LAZY_IMPORTS[name]
-    try:
-        module = __import__(module_path, fromlist=[name], level=2)
-        obj = getattr(module, name)
-        _import_cache[name] = obj
-        return obj
-    except (ImportError, AttributeError) as e:
-        raise AttributeError(
-            f"module '{__name__}' has no attribute '{name}'. "
-            f"Failed to import: {e}"
-        ) from e
+def __getattr__(name: str) -> Any:
+    return _loader.__getattr__(name)
 
 
+def __dir__() -> List[str]:
+    return _loader.__dir__()
+
+
+def list_available_quantum_components() -> List[str]:
+    """List all available quantum utility components."""
+    return _loader.list_components()
+
+
+def get_quantum_component_info(component_name: str) -> Dict[str, Any]:
+    """Get information about a quantum component."""
+    return _loader.get_component_info(component_name)

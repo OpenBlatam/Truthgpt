@@ -16,5 +16,5 @@ include("kv_cache.jl")
 include("sharded.jl")
 
 export EvictionStrategy, LRU, LFU, FIFO, Adaptive
-export CacheConfig, KVCache, ShardedKVCache
+export CacheConfig, CacheEntry, KVCache, ShardedKVCache
 export kv_cache_get, kv_cache_put, clear!, hit_rate, stats

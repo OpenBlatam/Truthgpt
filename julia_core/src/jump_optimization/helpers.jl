@@ -10,7 +10,7 @@ Solution extraction and constraint setting helpers.
 Extract solution and objective value from solved optimization model.
 """
 function extract_solution(model::Model, x, status)
-    if status == STATUS_OPTIMAL
+    if status == STATUS_OPTIMAL || Symbol(status) == :OPTIMAL || string(status) == "OPTIMAL"
         solution = value.(x)
         objective = objective_value(model)
         return solution, objective
@@ -18,6 +18,7 @@ function extract_solution(model::Model, x, status)
         error("Optimization failed with status: $status")
     end
 end
+
 
 """
     set_integer_constraints!(model, x, integer_vars)

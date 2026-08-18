@@ -12,10 +12,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
-from pydantic import BaseModel
-
-from optimization_core.agents.framework.memory.base import BaseMemory
-from optimization_core.agents.framework.exceptions import MemoryPersistenceError
+from .base import BaseMemory
+from ..exceptions import MemoryPersistenceError
 
 logger = logging.getLogger(__name__)
 

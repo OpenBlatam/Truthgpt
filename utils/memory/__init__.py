@@ -1,10 +1,14 @@
 """
 Memory Utilities Module
 
-This module contains memory optimization and management utilities.
+Memory optimization, pooling, activation caching, and tensor management.
 """
 
 from __future__ import annotations
+
+from typing import Any, Dict, List
+
+from .._lazy_loader import create_lazy_module
 
 __all__ = [
     'MemoryOptimizer',
@@ -14,42 +18,41 @@ __all__ = [
     'ActivationCache',
     'MemoryPoolingOptimizer',
     'MemoryUtils',
+    'list_available_memory_components',
+    'get_memory_component_info',
 ]
 
-_LAZY_IMPORTS = {
-    'MemoryOptimizer': '..memory_optimizations',
-    'MemoryOptimizationConfig': '..memory_optimizations',
-    'create_memory_optimizer': '..memory_optimizations',
-    'TensorPool': '..memory_pooling',
-    'ActivationCache': '..memory_pooling',
-    'MemoryPoolingOptimizer': '..memory_pooling',
-    'MemoryUtils': '..memory_utils',
+_LAZY_IMPORTS: Dict[str, str] = {
+    'MemoryOptimizer': '.optimizations',
+    'MemoryOptimizationConfig': '.optimizations',
+    'create_memory_optimizer': '.optimizations',
+    'TensorPool': '.pooling',
+    'ActivationCache': '.pooling',
+    'MemoryPoolingOptimizer': '.pooling',
+    'MemoryUtils': '.memory_utils',
 }
 
-_import_cache = {}
+_loader = create_lazy_module(
+    package_name=__name__,
+    lazy_imports=_LAZY_IMPORTS,
+    all_exports=__all__,
+    globals_dict=globals(),
+)
 
 
-def __getattr__(name: str):
-    """Lazy import system for memory utility modules."""
-    if name.startswith('_'):
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-    
-    if name not in _LAZY_IMPORTS:
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-    
-    if name in _import_cache:
-        return _import_cache[name]
-    
-    module_path = _LAZY_IMPORTS[name]
-    try:
-        module = __import__(module_path, fromlist=[name], level=2)
-        obj = getattr(module, name)
-        _import_cache[name] = obj
-        return obj
-    except (ImportError, AttributeError) as e:
-        raise AttributeError(
-            f"module '{__name__}' has no attribute '{name}'. "
-            f"Failed to import: {e}"
-        ) from e
+def __getattr__(name: str) -> Any:
+    return _loader.__getattr__(name)
 
 
+def __dir__() -> List[str]:
+    return _loader.__dir__()
+
+
+def list_available_memory_components() -> List[str]:
+    """List all available memory utility components."""
+    return _loader.list_components()
+
+
+def get_memory_component_info(component_name: str) -> Dict[str, Any]:
+    """Get information about a memory component."""
+    return _loader.get_component_info(component_name)

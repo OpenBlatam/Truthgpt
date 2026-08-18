@@ -9,9 +9,16 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import plotly.graph_objects as go
-import plotly.express as px
-from plotly.subplots import make_subplots
+try:
+    import plotly.graph_objects as go
+    import plotly.express as px
+    from plotly.subplots import make_subplots
+    _PLOTLY_AVAILABLE = True
+except ImportError:
+    go = None
+    px = None
+    make_subplots = None
+    _PLOTLY_AVAILABLE = False
 import logging
 from typing import Dict, Any, List, Optional, Tuple, Union, Callable
 from dataclasses import dataclass, field

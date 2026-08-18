@@ -6,37 +6,26 @@ Supports precision-aware shadow parameter tracking, CPU offloading, dynamic deca
 and exception-safe weight swapping via context managers.
 """
 
+from __future__ import annotations
+
 from contextlib import contextmanager
 import logging
-from typing import Any, Dict, Iterator, Optional
+import math
+from typing import Any, Dict, Iterator, Optional, Union
 import torch
 import torch.nn as nn
 
-try:
-    from ..trainers.interfaces import BaseEMAManager
-except ImportError:
-    try:
-        from optimization_core.trainers.interfaces import BaseEMAManager
-    except ImportError:
-        from abc import ABC, abstractmethod
-
-        class BaseEMAManager(ABC):  # type: ignore
-            """Fallback abstract base class for EMAManager."""
-            pass
+from .exceptions import EMAError
+from .interfaces import BaseEMAManager
+from .types import EMAConfig, EMADecaySchedule
 
 logger = logging.getLogger(__name__)
-
-
-class EMAError(RuntimeError):
-    """Exception raised when Exponential Moving Average weight update, swap, or initialization fails."""
-
-    pass
 
 
 class EMAManager(BaseEMAManager):
     """
     Manages Exponential Moving Average (EMA) of model weights for training and inference evaluation.
-    Implements the BaseEMAManager interface.
+    Maintains shadow parameter copies and supports zero-copy weight swapping for validation.
     """
 
     def __init__(
@@ -44,32 +33,33 @@ class EMAManager(BaseEMAManager):
         decay: float = 0.999,
         model: Optional[torch.nn.Module] = None,
         offload_to_cpu: bool = False,
-        ema_config: Optional[Any] = None,
+        ema_config: Optional[Union[Dict[str, Any], EMAConfig]] = None,
         use_dynamic_decay: bool = False,
+        warmup_steps: int = 2000,
+        **kwargs: Any,
     ) -> None:
         """
         Initialize EMAManager.
-
-        Args:
-            decay: EMA decay factor in range [0.0, 1.0) (default: 0.999).
-            model: Optional PyTorch module instance to initialize shadow parameters from.
-            offload_to_cpu: Whether to offload EMA shadow tensors to CPU memory.
-            ema_config: Optional EMA configuration object for compatibility settings.
-            use_dynamic_decay: Whether to scale decay dynamically during early training steps.
-
-        Raises:
-            ValueError: If decay factor is not in range [0.0, 1.0).
         """
         if ema_config is not None:
-            self.decay = float(getattr(ema_config, "decay", decay))
-            self.offload_to_cpu = bool(getattr(ema_config, "offload_to_cpu", offload_to_cpu))
-            self.enabled = bool(getattr(ema_config, "enabled", True))
-            self.use_dynamic_decay = bool(getattr(ema_config, "use_dynamic_decay", use_dynamic_decay))
+            if isinstance(ema_config, EMAConfig):
+                self.decay = float(ema_config.decay)
+                self.offload_to_cpu = bool(ema_config.offload_to_cpu)
+                self.enabled = bool(ema_config.enabled)
+                self.use_dynamic_decay = (ema_config.schedule != EMADecaySchedule.CONSTANT)
+                self.warmup_steps = int(ema_config.warmup_steps)
+            elif isinstance(ema_config, dict):
+                self.decay = float(ema_config.get("decay", decay))
+                self.offload_to_cpu = bool(ema_config.get("offload_to_cpu", offload_to_cpu))
+                self.enabled = bool(ema_config.get("enabled", True))
+                self.use_dynamic_decay = bool(ema_config.get("use_dynamic_decay", use_dynamic_decay))
+                self.warmup_steps = int(ema_config.get("warmup_steps", warmup_steps))
         else:
             self.decay = float(decay)
             self.offload_to_cpu = bool(offload_to_cpu)
             self.enabled = True
             self.use_dynamic_decay = bool(use_dynamic_decay)
+            self.warmup_steps = int(warmup_steps)
 
         if not (0.0 <= self.decay < 1.0):
             raise ValueError(f"EMA decay must be in range [0.0, 1.0), got {self.decay}")
@@ -85,15 +75,6 @@ class EMAManager(BaseEMAManager):
     def _get_base_model(self, model: Optional[torch.nn.Module] = None) -> torch.nn.Module:
         """
         Unwrap DataParallel or DistributedDataParallel containers cleanly.
-
-        Args:
-            model: Optional model module override.
-
-        Returns:
-            Unwrapped base nn.Module instance.
-
-        Raises:
-            EMAError: If no model instance is provided.
         """
         target_model = model if model is not None else self.model
         if target_model is None:
@@ -108,171 +89,151 @@ class EMAManager(BaseEMAManager):
 
     def initialize(self, model: Optional[torch.nn.Module] = None) -> None:
         """
-        Initialize EMA shadow parameters from model parameters requiring gradients.
-
-        Args:
-            model: Optional model module override.
+        Initialize shadow parameter tensors matching model trainable parameters.
         """
-        base_model = self._get_base_model(model)
-        self._shadow = {}
-        target_device = torch.device("cpu") if self.offload_to_cpu else None
-
-        for name, param in base_model.named_parameters():
+        target_model = self._get_base_model(model)
+        self._shadow.clear()
+        for name, param in target_model.named_parameters():
             if param.requires_grad:
-                dev = target_device or param.device
-                self._shadow[name] = param.detach().clone().to(device=dev, dtype=param.dtype)
+                tensor_data = param.detach().clone()
+                if self.offload_to_cpu:
+                    tensor_data = tensor_data.cpu()
+                self._shadow[name] = tensor_data
+        self._update_count = 0
+        logger.debug(f"Initialized EMA tracking for {len(self._shadow)} parameter tensors.")
 
-        logger.debug(f"EMA initialized with {len(self._shadow)} shadow parameters.")
-
-    def get_decay(self, step: Optional[int] = None) -> float:
-        """
-        Calculate active EMA decay factor, applying optional dynamic warmup.
-
-        Args:
-            step: Optional step count.
-
-        Returns:
-            Calculated float decay value.
-        """
+    def _compute_current_decay(self, step: Optional[int] = None) -> float:
+        """Calculate active decay factor considering dynamic warmup."""
         if not self.use_dynamic_decay:
             return self.decay
-        current_step = step if step is not None else self._update_count
-        dynamic_decay = (1.0 + current_step) / (10.0 + current_step)
-        return float(min(self.decay, dynamic_decay))
 
-    @torch.no_grad()
+        current_step = step if step is not None else self._update_count
+        if current_step <= 0:
+            return 0.0
+        # Smooth asymptotic warmup: decay * (1 - exp(-step / warmup_steps))
+        factor = 1.0 - math.exp(-float(current_step) / max(1.0, float(self.warmup_steps)))
+        return float(min(self.decay, self.decay * factor))
+
+    def get_decay(self, step: Optional[int] = None) -> float:
+        """Get current effective decay factor."""
+        return self._compute_current_decay(step)
+
     def update(self, model: Optional[torch.nn.Module] = None, step: Optional[int] = None) -> None:
         """
-        Update EMA shadow parameters using exponential decay update formula.
-
-        Args:
-            model: Optional model module override.
-            step: Optional step override for dynamic decay.
+        Update shadow parameters with model's current weights.
         """
         if not self.enabled:
             return
 
-        base_model = self._get_base_model(model)
+        target_model = self._get_base_model(model)
         if not self._shadow:
-            self.initialize(base_model)
-            return
-
-        d = self.get_decay(step)
-        for name, param in base_model.named_parameters():
-            if not param.requires_grad or name not in self._shadow:
-                continue
-            shadow_tensor = self._shadow[name]
-            param_detached = param.detach().to(device=shadow_tensor.device, dtype=shadow_tensor.dtype)
-            shadow_tensor.mul_(d).add_(param_detached, alpha=1.0 - d)
+            self.initialize(target_model)
 
         self._update_count += 1
+        active_decay = self._compute_current_decay(step)
 
-    @torch.no_grad()
-    def apply_to_model(self, model: Optional[torch.nn.Module] = None) -> None:
+        with torch.no_grad():
+            for name, param in target_model.named_parameters():
+                if name in self._shadow and param.requires_grad:
+                    param_data = param.detach()
+                    shadow_data = self._shadow[name]
+
+                    if self.offload_to_cpu:
+                        param_data = param_data.to("cpu")
+
+                    if shadow_data.dtype != param_data.dtype:
+                        shadow_data = shadow_data.to(param_data.dtype)
+
+                    shadow_data.lerp_(param_data, 1.0 - active_decay)
+                    self._shadow[name] = shadow_data
+
+    def apply_shadow(self, model: Optional[torch.nn.Module] = None) -> None:
         """
-        Swap model parameters with current EMA shadow parameters and back up original weights.
-
-        Args:
-            model: Optional model module override.
+        Copy shadow weights into model parameters, preserving backup for restoration.
         """
         if not self.enabled or not self._shadow:
             return
 
-        base_model = self._get_base_model(model)
+        target_model = self._get_base_model(model)
         self._backup = {}
 
-        for name, param in base_model.named_parameters():
-            if name in self._shadow and param.requires_grad:
-                self._backup[name] = param.detach().clone()
-                shadow_data = self._shadow[name].data.to(device=param.device, dtype=param.dtype)
-                param.data.copy_(shadow_data)
+        with torch.no_grad():
+            for name, param in target_model.named_parameters():
+                if name in self._shadow:
+                    self._backup[name] = param.detach().clone()
+                    shadow_val = self._shadow[name].to(device=param.device, dtype=param.dtype)
+                    param.copy_(shadow_val)
 
-    apply_ema = apply_to_model
-
-    @torch.no_grad()
-    def restore_from_backup(self, model: Optional[torch.nn.Module] = None) -> None:
+    def restore(self, model: Optional[torch.nn.Module] = None) -> None:
         """
-        Restore original model weights from saved backup after evaluation.
-
-        Args:
-            model: Optional model module override.
+        Restore original model parameters from pre-evaluation backup.
         """
-        if not self.enabled or self._backup is None:
+        if self._backup is None:
             return
 
-        base_model = self._get_base_model(model)
-
-        for name, param in base_model.named_parameters():
-            if name in self._backup and param.requires_grad:
-                param.data.copy_(self._backup[name].data)
+        target_model = self._get_base_model(model)
+        with torch.no_grad():
+            for name, param in target_model.named_parameters():
+                if name in self._backup:
+                    param.copy_(self._backup[name].to(device=param.device, dtype=param.dtype))
 
         self._backup = None
 
-    restore_from_ema = restore_from_backup
-
-    @torch.no_grad()
     def copy_shadow_to_model(self, model: Optional[torch.nn.Module] = None) -> None:
-        """
-        Permanently copy EMA shadow parameters into model parameters without saving backup.
-
-        Args:
-            model: Optional model module override.
-        """
-        if not self.enabled or not self._shadow:
-            return
-
-        base_model = self._get_base_model(model)
-        for name, param in base_model.named_parameters():
-            if name in self._shadow and param.requires_grad:
-                shadow_data = self._shadow[name].data.to(device=param.device, dtype=param.dtype)
-                param.data.copy_(shadow_data)
+        """Permanently copy shadow weights into model parameters without backup."""
+        self.apply_shadow(model)
+        self._backup = None
 
     @contextmanager
-    def ema_scope(self, model: Optional[torch.nn.Module] = None) -> Iterator[None]:
+    def swap_weights(self, model: Optional[torch.nn.Module] = None) -> Iterator[None]:
         """
-        Context manager for temporary weight swapping during evaluation routines.
-        Ensures original parameters are restored cleanly even if an exception occurs.
-
-        Args:
-            model: Optional model module override.
+        Context manager to evaluate with EMA weights and safely restore original weights afterwards.
         """
-        self.apply_to_model(model)
+        self.apply_shadow(model)
         try:
             yield
         finally:
-            self.restore_from_backup(model)
+            self.restore(model)
 
-    def get_shadow_parameters(self) -> Dict[str, torch.Tensor]:
+    @contextmanager
+    def ema_scope(self, model: Optional[torch.nn.Module] = None) -> Iterator[None]:
+        """Alias for swap_weights context manager."""
+        with self.swap_weights(model):
+            yield
+
+    def state_dict(self, full: bool = False) -> Dict[str, Any]:
         """
-        Return a detached clone dictionary of current EMA shadow parameters.
-
-        Returns:
-            Dict mapping parameter names to detached shadow tensors.
+        Serialize EMA manager state for checkpointing.
         """
-        return {k: v.detach().clone() for k, v in self._shadow.items()}
+        if full:
+            return {
+                "decay": self.decay,
+                "update_count": self._update_count,
+                "shadow": {k: v.cpu().clone() for k, v in self._shadow.items()},
+                "offload_to_cpu": self.offload_to_cpu,
+                "use_dynamic_decay": self.use_dynamic_decay,
+                "warmup_steps": self.warmup_steps,
+            }
+        return {k: v.cpu().clone() for k, v in self._shadow.items()}
 
-    def state_dict(self, to_cpu: bool = False) -> Dict[str, torch.Tensor]:
+    def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
         """
-        Get EMA state dictionary of shadow parameters.
-
-        Args:
-            to_cpu: Whether to force copy all shadow tensors to CPU memory.
-
-        Returns:
-            State dictionary mapping parameter names to cloned shadow tensors.
+        Restore EMA manager state from checkpoint.
         """
-        if to_cpu:
-            return {k: v.detach().cpu().clone() for k, v in self._shadow.items()}
-        return {k: v.detach().clone() for k, v in self._shadow.items()}
+        if "shadow" in state_dict:
+            self.decay = state_dict.get("decay", self.decay)
+            self._update_count = state_dict.get("update_count", self._update_count)
+            self.offload_to_cpu = state_dict.get("offload_to_cpu", self.offload_to_cpu)
+            self.use_dynamic_decay = state_dict.get("use_dynamic_decay", self.use_dynamic_decay)
+            self.warmup_steps = state_dict.get("warmup_steps", self.warmup_steps)
+            shadow_dict = state_dict["shadow"]
+        else:
+            shadow_dict = state_dict
 
-    def load_state_dict(self, state_dict: Dict[str, torch.Tensor]) -> None:
-        """
-        Load EMA state dictionary into shadow parameters.
-
-        Args:
-            state_dict: State dictionary containing shadow tensors.
-        """
-        self._shadow = {k: v.detach().clone() for k, v in state_dict.items()}
-
-
-__all__ = ["EMAManager", "EMAError"]
+        self._shadow = {}
+        for k, v in shadow_dict.items():
+            tensor = v if isinstance(v, torch.Tensor) else torch.tensor(v)
+            if not self.offload_to_cpu and self.model is not None and list(self.model.parameters()):
+                dev = next(self.model.parameters()).device
+                tensor = tensor.to(dev)
+            self._shadow[k] = tensor

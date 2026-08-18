@@ -54,11 +54,21 @@ module Transformer
 include("transformer/transformer.jl")
 end
 
-include("compression.jl")
-include("inference.jl")
-include("gpu.jl")
+module Compression
+include("compression/compression.jl")
+end
 
-export Utils, Attention, Cache, Quantization, Optimization, JumpOptimization, FluxML, Transformer, Compression, Inference, GPU
+module Inference
+include("inference/inference.jl")
+end
+
+module GPU
+include("gpu/gpu.jl")
+end
+
+const JuMPOptimization = JumpOptimization
+
+export Utils, Attention, Cache, Quantization, Optimization, JumpOptimization, JuMPOptimization, FluxML, Transformer, Compression, Inference, GPU
 
 # Re-export submodules into top-level namespace
 using .Utils
@@ -74,7 +84,7 @@ using .Inference
 using .GPU
 
 # Attention Exports
-export AttentionConfig, d_model, scale
+export AttentionConfig, AttentionOutput, d_model, scale
 export attention_forward, flash_attention, MultiHeadAttention, RoPE, apply_rope!
 
 # Cache Exports
@@ -119,9 +129,30 @@ export parallel_map, parallel_reduce
 export random_normal, random_uniform, xavier_init, he_init
 export softmax, log_softmax, gelu, swish, sigmoid, layer_norm, rms_norm
 
-# Backward-compatibility aliases
+# Backward-compatibility wrappers
+function create_transformer(d_model::Int=768, n_heads::Int=12, d_ff::Int=3072; n_layers::Int=12, vocab_size::Int=32000, kwargs...)
+    config = TransformerConfig(d_model=d_model, n_heads=n_heads, n_layers=n_layers, d_ff=d_ff, vocab_size=vocab_size; kwargs...)
+    return Transformer(config)
+end
+
+function quantize_tensor(tensor::AbstractArray; bits::Int=8, symmetric::Bool=true)
+    if bits == 4
+        return quantize_int4(to_float32(tensor))
+    else
+        return quantize_int8(to_float32(tensor), symmetric=symmetric)
+    end
+end
+
+function dequantize_tensor(qtensor)
+    return dequantize(qtensor)
+end
+
 export quantize_tensor, dequantize_tensor, create_transformer
 
 const VERSION = "1.0.0"
+
+function __init__()
+    @info "TruthGPT.jl v$VERSION initialized"
+end
 
 end # module TruthGPT

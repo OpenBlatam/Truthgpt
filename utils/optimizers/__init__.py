@@ -1,10 +1,15 @@
 """
 Optimizer Utilities Module
 
-This module contains various optimizer utilities and optimization engines.
+Various optimizer utilities, engines, and optimization systems including
+hyper-speed, quantum, evolutionary, and neural optimization engines.
 """
 
 from __future__ import annotations
+
+from typing import Any, Dict, List
+
+from .._lazy_loader import create_lazy_module
 
 __all__ = [
     'HyperSpeedOptimizer',
@@ -20,64 +25,54 @@ __all__ = [
     'NextGenQuantumNeuralOptimizationEngine',
     'RevolutionaryQuantumDeepLearningSystem',
     'UltraQuantumOptimization',
+    'TruthGPTIntegratedOptimizer',
+    'list_available_optimizers',
+    'get_optimizer_info',
 ]
 
-_LAZY_IMPORTS = {
+_LAZY_IMPORTS: Dict[str, str] = {
     'HyperSpeedOptimizer': '..hyper_speed_optimizer',
-    'CuttingEdgeUniversalQuantumOptimizer': '..cutting_edge_universal_quantum_optimizer',
-    'UniversalQuantumOptimizer': '..universal_quantum_optimizer',
-    'NeuralEvolutionaryOptimizer': '..neural_evolutionary_optimizer',
-    'AdvancedAIOptimizer': '..advanced_ai_optimizer',
     'AutoPerformanceOptimizer': '..auto_performance_optimizer',
-    'UltraNeuralNetworkOptimizer': '..ultra_neural_network_optimizer',
+    'NeuralEvolutionaryOptimizer': '..neural_evolutionary_optimizer',
     'UltraAIOptimizer': '..ultra_ai_optimizer',
+    'AdvancedAIOptimizer': '..ultra_ai_optimizer',
     'UltraMachineLearningOptimizer': '..ultra_machine_learning_optimizer',
+    'UltraNeuralNetworkOptimizer': '..ultra_neural_network_optimizer',
     'NextGenOptimizationEngine': '..next_gen_optimization_engine',
-    'NextGenQuantumNeuralOptimizationEngine': '..next_gen_quantum_neural_optimization_engine',
-    'RevolutionaryQuantumDeepLearningSystem': '..revolutionary_quantum_deep_learning_system',
-    'UltraQuantumOptimization': '..ultra_quantum_optimization',
+    'CuttingEdgeUniversalQuantumOptimizer': '..quantum.cutting_edge_universal_quantum_optimizer',
+    'UniversalQuantumOptimizer': '..quantum.universal_quantum_optimizer',
+    'NextGenQuantumNeuralOptimizationEngine': '..quantum.next_gen_quantum_neural_optimization_engine',
+    'RevolutionaryQuantumDeepLearningSystem': '..quantum.revolutionary_quantum_deep_learning_system',
+    'UltraQuantumOptimization': '..quantum.ultra_quantum_optimization',
+    'TruthGPTIntegratedOptimizer': '..truthgpt_core',
 }
 
-_import_cache = {}
+_ALIASES: Dict[str, str] = {
+    'AdvancedAIOptimizer': 'UltraAIOptimizer',
+}
+
+_loader = create_lazy_module(
+    package_name=__name__,
+    lazy_imports=_LAZY_IMPORTS,
+    aliases=_ALIASES,
+    all_exports=__all__,
+    globals_dict=globals(),
+)
 
 
-def __getattr__(name: str):
-    """Lazy import system for optimizer utility modules."""
-    if name.startswith('_'):
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-    
-    if name not in _LAZY_IMPORTS:
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-    
-    if name in _import_cache:
-        return _import_cache[name]
-    
-    module_path = _LAZY_IMPORTS[name]
-    try:
-        module = __import__(module_path, fromlist=[name], level=2)
-        obj = getattr(module, name)
-        _import_cache[name] = obj
-        return obj
-    except (ImportError, AttributeError) as e:
-        raise AttributeError(
-            f"module '{__name__}' has no attribute '{name}'. "
-            f"Failed to import: {e}"
-        ) from e
+def __getattr__(name: str) -> Any:
+    return _loader.__getattr__(name)
 
 
-def list_available_optimizers() -> list[str]:
+def __dir__() -> List[str]:
+    return _loader.__dir__()
+
+
+def list_available_optimizers() -> List[str]:
     """List all available optimizer utilities."""
-    return list(_LAZY_IMPORTS.keys())
+    return _loader.list_components()
 
 
-def get_optimizer_info(optimizer_name: str) -> dict[str, any]:
+def get_optimizer_info(optimizer_name: str) -> Dict[str, Any]:
     """Get information about an optimizer utility."""
-    if optimizer_name not in _LAZY_IMPORTS:
-        raise ValueError(f"Unknown optimizer: {optimizer_name}")
-    
-    return {
-        'name': optimizer_name,
-        'module': _LAZY_IMPORTS[optimizer_name],
-        'available': optimizer_name in _import_cache or True,
-    }
-
+    return _loader.get_component_info(optimizer_name)

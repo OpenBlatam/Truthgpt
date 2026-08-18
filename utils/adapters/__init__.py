@@ -1,47 +1,61 @@
 """
 Adapters Module
 
-This module contains TruthGPT adapters and integration utilities.
+TruthGPT adapters, integration utilities, and enterprise connectors.
 """
 
 from __future__ import annotations
 
+from typing import Any, Dict, List
+
+from .._lazy_loader import create_lazy_module
+
 __all__ = [
     'TruthGPTAdapters',
+    'TruthGPTAdapter',
     'TruthGPTIntegration',
     'TruthGPTEnhancedUtils',
     'TruthGPTCore',
+    'EnterpriseTruthGPTAdapter',
+    'list_available_adapter_components',
+    'get_adapter_component_info',
 ]
 
-_LAZY_IMPORTS = {
-    'TruthGPTAdapters': '..truthgpt_adapters',
+_LAZY_IMPORTS: Dict[str, str] = {
+    'TruthGPTAdapters': '..enterprise_truthgpt_adapter',
+    'TruthGPTAdapter': '..adapters.truthgpt_adapters',
     'TruthGPTIntegration': '..truthgpt_integration',
     'TruthGPTEnhancedUtils': '..truthgpt_enhanced_utils',
     'TruthGPTCore': '..truthgpt_core',
+    'EnterpriseTruthGPTAdapter': '..enterprise_truthgpt_adapter',
 }
 
-_import_cache = {}
+_ALIASES: Dict[str, str] = {
+    'TruthGPTAdapters': 'EnterpriseTruthGPTAdapter',
+}
+
+_loader = create_lazy_module(
+    package_name=__name__,
+    lazy_imports=_LAZY_IMPORTS,
+    aliases=_ALIASES,
+    all_exports=__all__,
+    globals_dict=globals(),
+)
 
 
-def __getattr__(name: str):
-    """Lazy import system for adapter modules."""
-    if name.startswith('_'):
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-    
-    if name not in _LAZY_IMPORTS:
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-    
-    if name in _import_cache:
-        return _import_cache[name]
-    
-    module_path = _LAZY_IMPORTS[name]
-    try:
-        module = __import__(module_path, fromlist=[name], level=2)
-        obj = getattr(module, name)
-        _import_cache[name] = obj
-        return obj
-    except (ImportError, AttributeError) as e:
-        raise AttributeError(
-            f"module '{__name__}' has no attribute '{name}'. "
-            f"Failed to import: {e}"
-        ) from e
+def __getattr__(name: str) -> Any:
+    return _loader.__getattr__(name)
+
+
+def __dir__() -> List[str]:
+    return _loader.__dir__()
+
+
+def list_available_adapter_components() -> List[str]:
+    """List all available adapter components."""
+    return _loader.list_components()
+
+
+def get_adapter_component_info(component_name: str) -> Dict[str, Any]:
+    """Get information about an adapter component."""
+    return _loader.get_component_info(component_name)

@@ -17,7 +17,7 @@ include("flash.jl")
 include("multihead.jl")
 include("rope.jl")
 
-export AttentionConfig, d_model, scale
+export AttentionConfig, AttentionOutput, d_model, scale
 export attention_forward, flash_attention
 export MultiHeadAttention, forward
 export RoPE, apply_rope!

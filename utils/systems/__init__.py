@@ -1,10 +1,15 @@
 """
 System Utilities Module
 
-This module contains various system-level utilities and integration systems.
+System-level utilities, quantum deep learning, multiverse optimization,
+distributed systems, and integration frameworks.
 """
 
 from __future__ import annotations
+
+from typing import Any, Dict, List
+
+from .._lazy_loader import create_lazy_module
 
 __all__ = [
     'QuantumDeepLearningSystem',
@@ -13,57 +18,45 @@ __all__ = [
     'SyntheticMultiverseOptimizationSystem',
     'TensorFlowIntegrationSystem',
     'RevolutionaryQuantumDeepLearningSystem',
+    'list_available_systems',
+    'get_system_info',
 ]
 
-_LAZY_IMPORTS = {
-    'QuantumDeepLearningSystem': '..quantum_deep_learning_system',
-    'QuantumHybridAISystem': '..quantum_hybrid_ai_system',
-    'FederatedLearningSystem': '..federated_learning_system',
+_LAZY_IMPORTS: Dict[str, str] = {
+    'QuantumDeepLearningSystem': '..quantum.quantum_deep_learning_system',
+    'QuantumHybridAISystem': '..quantum.quantum_hybrid_ai_system',
+    'FederatedLearningSystem': '..modules.federated_learning',
     'SyntheticMultiverseOptimizationSystem': '..synthetic_multiverse_optimization_system',
     'TensorFlowIntegrationSystem': '..tensorflow_integration_system',
-    'RevolutionaryQuantumDeepLearningSystem': '..revolutionary_quantum_deep_learning_system',
+    'RevolutionaryQuantumDeepLearningSystem': '..quantum.revolutionary_quantum_deep_learning_system',
 }
 
-_import_cache = {}
+_ALIASES: Dict[str, str] = {
+    'FederatedLearningSystem': 'TruthGPTFederatedManager',
+}
+
+_loader = create_lazy_module(
+    package_name=__name__,
+    lazy_imports=_LAZY_IMPORTS,
+    aliases=_ALIASES,
+    all_exports=__all__,
+    globals_dict=globals(),
+)
 
 
-def __getattr__(name: str):
-    """Lazy import system for system utility modules."""
-    if name.startswith('_'):
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-    
-    if name not in _LAZY_IMPORTS:
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-    
-    if name in _import_cache:
-        return _import_cache[name]
-    
-    module_path = _LAZY_IMPORTS[name]
-    try:
-        module = __import__(module_path, fromlist=[name], level=2)
-        obj = getattr(module, name)
-        _import_cache[name] = obj
-        return obj
-    except (ImportError, AttributeError) as e:
-        raise AttributeError(
-            f"module '{__name__}' has no attribute '{name}'. "
-            f"Failed to import: {e}"
-        ) from e
+def __getattr__(name: str) -> Any:
+    return _loader.__getattr__(name)
 
 
-def list_available_systems() -> list[str]:
+def __dir__() -> List[str]:
+    return _loader.__dir__()
+
+
+def list_available_systems() -> List[str]:
     """List all available system utilities."""
-    return list(_LAZY_IMPORTS.keys())
+    return _loader.list_components()
 
 
-def get_system_info(system_name: str) -> dict[str, any]:
+def get_system_info(system_name: str) -> Dict[str, Any]:
     """Get information about a system utility."""
-    if system_name not in _LAZY_IMPORTS:
-        raise ValueError(f"Unknown system: {system_name}")
-    
-    return {
-        'name': system_name,
-        'module': _LAZY_IMPORTS[system_name],
-        'available': system_name in _import_cache or True,
-    }
-
+    return _loader.get_component_info(system_name)

@@ -10,11 +10,11 @@ Input dimension, symmetry, bounds, and variable type validation.
 Validate dimensions for linear programming problem.
 """
 function validate_linear_problem_dimensions(
-    c::Vector{Float64},
-    A::Matrix{Float64},
-    b::Vector{Float64},
-    lb::Vector{Float64},
-    ub::Vector{Float64}
+    c::AbstractVector{<:Real},
+    A::AbstractMatrix{<:Real},
+    b::AbstractVector{<:Real},
+    lb::AbstractVector{<:Real},
+    ub::AbstractVector{<:Real}
 )
     n = length(c)
     
@@ -60,7 +60,7 @@ end
 
 Validate quadratic coefficient matrix.
 """
-function validate_quadratic_matrix(Q::Matrix{Float64}, n::Int)
+function validate_quadratic_matrix(Q::AbstractMatrix{<:Real}, n::Int)
     if size(Q) != (n, n)
         throw(DimensionMismatch(
             "Quadratic matrix Q must be $n×$n, got $(size(Q))"
@@ -80,7 +80,7 @@ end
 
 Validate integer variable indices.
 """
-function validate_integer_variables(integer_vars::Vector{Int}, n::Int)
+function validate_integer_variables(integer_vars::AbstractVector{<:Integer}, n::Int)
     if !isempty(integer_vars)
         invalid_indices = filter(idx -> idx < 1 || idx > n, integer_vars)
         if !isempty(invalid_indices)
@@ -101,12 +101,12 @@ end
 Validate inputs for quadratic programming problem.
 """
 function validate_quadratic_inputs(
-    Q::Matrix{Float64},
-    c::Vector{Float64},
-    A::Matrix{Float64},
-    b::Vector{Float64},
-    lb::Vector{Float64},
-    ub::Vector{Float64}
+    Q::AbstractMatrix{<:Real},
+    c::AbstractVector{<:Real},
+    A::AbstractMatrix{<:Real},
+    b::AbstractVector{<:Real},
+    lb::AbstractVector{<:Real},
+    ub::AbstractVector{<:Real}
 )
     n = length(c)
     
@@ -126,10 +126,10 @@ end
 Validate inputs for mixed-integer programming problem.
 """
 function validate_mip_inputs(
-    c::Vector{Float64},
-    A::Matrix{Float64},
-    b::Vector{Float64},
-    integer_vars::Vector{Int}
+    c::AbstractVector{<:Real},
+    A::AbstractMatrix{<:Real},
+    b::AbstractVector{<:Real},
+    integer_vars::AbstractVector{<:Integer}
 )
     n = length(c)
     
@@ -154,3 +154,4 @@ function validate_mip_inputs(
     
     return n
 end
+

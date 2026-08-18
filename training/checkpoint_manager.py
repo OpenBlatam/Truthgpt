@@ -5,6 +5,9 @@ Handles PyTorch model checkpointing, random number generator (RNG) state capture
 cross-platform atomic file operations, manifest queries, safe loading, and automated pruning.
 """
 
+from __future__ import annotations
+
+import hashlib
 import json
 import logging
 import os
@@ -14,92 +17,114 @@ import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
-
 import torch
 import torch.nn as nn
 
-try:
-    from ..trainers.interfaces import BaseCheckpointManager
-except ImportError:
-    try:
-        from optimization_core.trainers.interfaces import BaseCheckpointManager
-    except ImportError:
-        from abc import ABC, abstractmethod
-
-        class BaseCheckpointManager(ABC):  # type: ignore
-            """Fallback abstract base class for CheckpointManager."""
-            pass
+from .exceptions import CheckpointCorruptedError, CheckpointError, CheckpointNotFoundError
+from .interfaces import BaseCheckpointManager
+from .types import CheckpointConfig, CheckpointMetadata, CheckpointStrategy
 
 logger = logging.getLogger(__name__)
-
-
-class CheckpointError(RuntimeError):
-    """Exception raised when a checkpoint save, load, prune, or delete operation fails."""
-
-    pass
 
 
 class CheckpointManager(BaseCheckpointManager):
     """
     Manages PyTorch model checkpointing, RNG state preservation, manifest metadata,
-    safe state-dict loading, and automated pruning.
-
-    Implements the BaseCheckpointManager interface with support for instance state
-    and static/dynamic parameter save/load operations.
+    safe state-dict loading, atomic file writes, and automated pruning.
     """
 
     def __init__(
         self,
         output_dir: Union[str, Path] = "./checkpoints",
-        checkpoint_config: Optional[Any] = None,
+        checkpoint_config: Optional[Union[Dict[str, Any], CheckpointConfig, Any]] = None,
         model: Optional[nn.Module] = None,
         optimizer: Optional[torch.optim.Optimizer] = None,
         scheduler: Optional[Any] = None,
         scaler: Optional[Any] = None,
         tokenizer: Optional[Any] = None,
+        max_to_keep: Optional[int] = None,
+        save_best: bool = True,
+        metric_name: str = "loss",
+        mode: str = "min",
+        **kwargs: Any,
     ) -> None:
         """
         Initialize CheckpointManager.
-
-        Args:
-            output_dir: Path string or Path object pointing to checkpoint directory.
-            checkpoint_config: Optional CheckpointConfig configuration object.
-            model: Optional PyTorch module instance.
-            optimizer: Optional PyTorch optimizer instance.
-            scheduler: Optional learning rate scheduler instance.
-            scaler: Optional PyTorch GradScaler instance.
-            tokenizer: Optional tokenizer instance.
-
-        Raises:
-            CheckpointError: If output directory creation fails.
         """
         self.output_path: Path = Path(output_dir)
         self.output_dir: str = str(self.output_path)
-        self.checkpoint_config: Optional[Any] = checkpoint_config
+        self.checkpoint_config = checkpoint_config
         self.model: Optional[nn.Module] = model
         self.optimizer: Optional[torch.optim.Optimizer] = optimizer
         self.scheduler: Optional[Any] = scheduler
         self.scaler: Optional[Any] = scaler
         self.tokenizer: Optional[Any] = tokenizer
 
+        # Extract config values
+        if isinstance(checkpoint_config, CheckpointConfig):
+            self.max_to_keep: int = checkpoint_config.max_to_keep
+            self.save_best: bool = checkpoint_config.save_best
+            self.metric_name: str = checkpoint_config.metric_name
+            self.mode: str = checkpoint_config.mode.lower()
+            self.strategy: CheckpointStrategy = checkpoint_config.strategy
+        elif isinstance(checkpoint_config, dict):
+            self.max_to_keep = checkpoint_config.get("max_to_keep", max_to_keep or 3)
+            self.save_best = checkpoint_config.get("save_best", save_best)
+            self.metric_name = checkpoint_config.get("metric_name", metric_name)
+            self.mode = checkpoint_config.get("mode", mode).lower()
+            self.strategy = CheckpointStrategy(checkpoint_config.get("strategy", CheckpointStrategy.KEEP_TOP_K))
+        elif checkpoint_config is not None and hasattr(checkpoint_config, "keep_last"):
+            self.max_to_keep = getattr(checkpoint_config, "keep_last", 3)
+            self.save_best = getattr(checkpoint_config, "save_best", save_best)
+            self.metric_name = getattr(checkpoint_config, "metric_name", metric_name)
+            self.mode = getattr(checkpoint_config, "mode", mode).lower()
+            self.strategy = CheckpointStrategy.KEEP_LAST_N
+        else:
+            self.max_to_keep = max_to_keep if max_to_keep is not None else 3
+            self.save_best = save_best
+            self.metric_name = metric_name
+            self.mode = mode.lower()
+            self.strategy = CheckpointStrategy.KEEP_TOP_K
+
+        self.manifest_file = self.output_path / "manifest.json"
+        self.best_metric: Optional[float] = None
+        self.best_checkpoint_path: Optional[str] = None
+
         try:
             self.output_path.mkdir(parents=True, exist_ok=True)
+            self._load_or_init_manifest()
         except Exception as e:
             logger.error(f"Failed to create checkpoint directory '{self.output_path}': {e}")
             raise CheckpointError(f"Cannot initialize directory '{self.output_path}': {e}") from e
 
+    def _load_or_init_manifest(self) -> Dict[str, Any]:
+        """Load manifest from disk or initialize a new empty one."""
+        if self.manifest_file.exists():
+            try:
+                with open(self.manifest_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    self.best_checkpoint_path = data.get("best_checkpoint")
+                    self.best_metric = data.get("best_metric")
+                    return data
+            except Exception as e:
+                logger.warning(f"Could not parse manifest {self.manifest_file}: {e}")
+        return {"checkpoints": [], "best_checkpoint": None, "best_metric": None}
+
+    def _save_manifest(self, manifest_data: Dict[str, Any]) -> None:
+        """Atomically persist manifest data to disk."""
+        tmp_file = self.output_path / f"manifest_{int(time.time()*1000)}.tmp"
+        try:
+            with open(tmp_file, "w", encoding="utf-8") as f:
+                json.dump(manifest_data, f, indent=2)
+            shutil.move(str(tmp_file), str(self.manifest_file))
+        except Exception as e:
+            if tmp_file.exists():
+                tmp_file.unlink(missing_ok=True)
+            logger.error(f"Failed to save manifest file: {e}")
+
     def _get_base_model(self, model: Optional[nn.Module] = None) -> nn.Module:
         """
         Unwrap parallel or distributed model containers to access the underlying PyTorch module.
-
-        Args:
-            model: Optional model module override.
-
-        Returns:
-            Unwrapped base nn.Module instance.
-
-        Raises:
-            CheckpointError: If no model instance is available.
         """
         target_model = model if model is not None else self.model
         if target_model is None:
@@ -115,9 +140,6 @@ class CheckpointManager(BaseCheckpointManager):
     def _capture_rng_state(self) -> Dict[str, Any]:
         """
         Capture random number generator states across Python, PyTorch, CUDA, and NumPy.
-
-        Returns:
-            Dictionary containing random generator state representations.
         """
         rng_state: Dict[str, Any] = {
             "python": random.getstate(),
@@ -130,7 +152,6 @@ class CheckpointManager(BaseCheckpointManager):
                 logger.warning(f"Could not capture CUDA RNG state: {e}")
         try:
             import numpy as np
-
             rng_state["numpy"] = np.random.get_state()
         except ImportError:
             pass
@@ -139,9 +160,6 @@ class CheckpointManager(BaseCheckpointManager):
     def _restore_rng_state(self, rng_state: Dict[str, Any]) -> None:
         """
         Restore Python, PyTorch, CUDA, and NumPy random number generator states safely.
-
-        Args:
-            rng_state: State dictionary previously produced by _capture_rng_state().
         """
         try:
             if "python" in rng_state:
@@ -151,378 +169,347 @@ class CheckpointManager(BaseCheckpointManager):
             if "torch_cuda" in rng_state and torch.cuda.is_available():
                 torch.cuda.set_rng_state_all(rng_state["torch_cuda"])
             if "numpy" in rng_state:
-                import numpy as np
-
-                np.random.set_state(rng_state["numpy"])
-            logger.info("RNG states restored successfully.")
+                try:
+                    import numpy as np
+                    np.random.set_state(rng_state["numpy"])
+                except ImportError:
+                    pass
         except Exception as e:
-            logger.warning(f"Could not restore RNG state cleanly: {e}")
+            logger.warning(f"Error restoring RNG state: {e}")
+
+    def _clean_state_dict_keys(self, state_dict: Dict[str, Any]) -> Dict[str, Any]:
+        """Strip wrapping prefixes (_orig_mod., module.) from state dict keys."""
+        cleaned: Dict[str, Any] = {}
+        for k, v in state_dict.items():
+            new_key = k
+            for prefix in ("_orig_mod.", "module."):
+                if new_key.startswith(prefix):
+                    new_key = new_key[len(prefix):]
+            cleaned[new_key] = v
+        return cleaned
 
     def save(
         self,
-        filename: str = "checkpoint.pt",
-        step: int = 0,
         epoch: int = 0,
-        is_best: bool = False,
+        step: int = 0,
         metrics: Optional[Dict[str, float]] = None,
-        extra_state: Optional[Dict[str, Any]] = None,
+        checkpoint_name: Optional[str] = None,
+        filename: Optional[str] = None,
+        is_best: bool = False,
         model: Optional[nn.Module] = None,
         optimizer: Optional[torch.optim.Optimizer] = None,
         scheduler: Optional[Any] = None,
         scaler: Optional[Any] = None,
-        tokenizer: Optional[Any] = None,
+        **kwargs: Any,
     ) -> str:
         """
-        Save a complete training checkpoint atomically.
-
-        Args:
-            filename: Checkpoint filename or subfolder name (e.g. 'step_10.pt').
-            step: Current training step count.
-            epoch: Current training epoch count.
-            is_best: Whether this checkpoint represents the best model state so far.
-            metrics: Optional dictionary of evaluation metrics.
-            extra_state: Optional extra state dictionary (e.g. EMA weights).
-            model: Optional model instance override.
-            optimizer: Optional optimizer instance override.
-            scheduler: Optional scheduler instance override.
-            scaler: Optional scaler instance override.
-            tokenizer: Optional tokenizer instance override.
+        Atomically save a checkpoint to disk with model weights, optimizer state, manifest, and RNG states.
 
         Returns:
-            Absolute string path to saved checkpoint directory.
-
-        Raises:
-            CheckpointError: If saving process encounters filesystem or serialization errors.
+            Absolute directory or file path of the saved checkpoint.
         """
+        target_model = self._get_base_model(model)
+        target_opt = optimizer or self.optimizer
+        target_sched = scheduler or self.scheduler
+        target_scaler = scaler or self.scaler
+
+        metrics = metrics or {}
+        metric_val = metrics.get(self.metric_name)
+
+        # Determine best status
+        if metric_val is not None and not is_best:
+            if self.best_metric is None:
+                is_best = True
+            elif self.mode == "min" and metric_val < self.best_metric:
+                is_best = True
+            elif self.mode == "max" and metric_val > self.best_metric:
+                is_best = True
+
+        if is_best and metric_val is not None:
+            self.best_metric = metric_val
+
+        folder_name = filename or checkpoint_name or f"checkpoint_epoch_{epoch:04d}_step_{step:06d}"
+        if folder_name.endswith(".pt"):
+            folder_name = folder_name[:-3]
+        elif folder_name.endswith(".pth"):
+            folder_name = folder_name[:-4]
+
+        save_dir = self.output_path / folder_name
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        # Build payload
+        state: Dict[str, Any] = {
+            "epoch": epoch,
+            "step": step,
+            "model_state_dict": target_model.state_dict(),
+            "metrics": metrics,
+            "metric_value": metric_val,
+            "metric_name": self.metric_name,
+            "is_best": is_best,
+            "timestamp": time.time(),
+            "rng_state": self._capture_rng_state(),
+        }
+
+        if target_opt is not None and hasattr(target_opt, "state_dict"):
+            state["optimizer_state_dict"] = target_opt.state_dict()
+        if target_sched is not None and hasattr(target_sched, "state_dict"):
+            state["scheduler_state_dict"] = target_sched.state_dict()
+        if target_scaler is not None and hasattr(target_scaler, "state_dict"):
+            state["scaler_state_dict"] = target_scaler.state_dict()
+
+        # Write training_state.pt atomically inside save_dir
+        dest_state_file = save_dir / "training_state.pt"
+        tmp_fd, tmp_file_str = tempfile.mkstemp(dir=str(save_dir), suffix=".tmp")
+        os.close(tmp_fd)
         try:
-            checkpoint_path = self.output_path / filename
-            if filename.endswith(".pt"):
-                checkpoint_dir = checkpoint_path.with_suffix("")
-            else:
-                checkpoint_dir = checkpoint_path
-
-            checkpoint_dir.mkdir(parents=True, exist_ok=True)
-            base_model = self._get_base_model(model)
-            active_tokenizer = tokenizer if tokenizer is not None else self.tokenizer
-            active_optimizer = optimizer if optimizer is not None else self.optimizer
-            active_scheduler = scheduler if scheduler is not None else self.scheduler
-            active_scaler = scaler if scaler is not None else self.scaler
-
-            # Attempt HuggingFace pretrained serialization if model/tokenizer support it
-            try:
-                save_st = (
-                    getattr(self.checkpoint_config, "save_safetensors", True)
-                    if self.checkpoint_config
-                    else True
-                )
-                if hasattr(base_model, "save_pretrained"):
-                    base_model.save_pretrained(str(checkpoint_dir), safe_serialization=save_st)
-                if active_tokenizer is not None and hasattr(active_tokenizer, "save_pretrained"):
-                    active_tokenizer.save_pretrained(str(checkpoint_dir))
-            except Exception as e:
-                logger.warning(f"Could not save pretrained model format ({e}); defaulting to PyTorch state dict.")
-
-            state: Dict[str, Any] = {
-                "step": step,
-                "epoch": epoch,
-                "model_state_dict": base_model.state_dict(),
-                "rng_state": self._capture_rng_state(),
-            }
-
-            if active_optimizer is not None:
-                state["optimizer_state_dict"] = active_optimizer.state_dict()
-            if active_scheduler is not None and hasattr(active_scheduler, "state_dict"):
-                state["scheduler_state_dict"] = active_scheduler.state_dict()
-            if active_scaler is not None and hasattr(active_scaler, "state_dict"):
-                state["scaler_state_dict"] = active_scaler.state_dict()
-            if metrics is not None:
-                state["metrics"] = metrics
-            if extra_state is not None:
-                state["extra_state"] = extra_state
-            if is_best:
-                state["is_best"] = True
-
-            state_path = checkpoint_dir / "training_state.pt"
-
-            # Execute atomic write via temporary file replace
-            temp_fd, temp_path_str = tempfile.mkstemp(dir=str(checkpoint_dir), suffix=".tmp")
-            os.close(temp_fd)
-            temp_path = Path(temp_path_str)
-            try:
-                torch.save(state, temp_path)
-                os.replace(temp_path, state_path)
-            except Exception as save_err:
-                if temp_path.exists():
-                    try:
-                        temp_path.unlink()
-                    except OSError:
-                        pass
-                raise CheckpointError(f"Failed writing PyTorch state dict atomically: {save_err}") from save_err
-
-            manifest = {
-                "step": step,
-                "epoch": epoch,
-                "is_best": is_best,
-                "metrics": metrics or {},
-                "timestamp": time.time(),
-                "has_optimizer": active_optimizer is not None,
-                "has_scheduler": active_scheduler is not None,
-                "has_scaler": active_scaler is not None,
-            }
-            manifest_path = checkpoint_dir / "checkpoint_manifest.json"
-            manifest_temp = checkpoint_dir / "manifest.tmp"
-            with open(manifest_temp, "w", encoding="utf-8") as f:
-                json.dump(manifest, f, indent=2)
-            os.replace(manifest_temp, manifest_path)
-
-            logger.debug(f"Checkpoint saved successfully to {checkpoint_dir}")
-            return str(checkpoint_dir)
-
+            torch.save(state, tmp_file_str)
+            shutil.move(tmp_file_str, str(dest_state_file))
         except Exception as e:
-            if isinstance(e, CheckpointError):
-                raise
-            logger.error(f"Error saving checkpoint '{filename}': {e}", exc_info=True)
-            raise CheckpointError(f"Failed to save checkpoint '{filename}': {e}") from e
+            if os.path.exists(tmp_file_str):
+                os.remove(tmp_file_str)
+            raise CheckpointError(f"Failed to write checkpoint to {dest_state_file}: {e}") from e
 
-    def save_checkpoint(
-        self,
-        model: nn.Module,
-        optimizer: torch.optim.Optimizer,
-        scheduler: Any,
-        step: int,
-        path: str,
-        tokenizer: Optional[Any] = None,
-        scaler: Optional[Any] = None,
-        ema_state: Optional[Dict[str, torch.Tensor]] = None,
-        save_safetensors: bool = True,
-        **kwargs: Any,
-    ) -> None:
-        """
-        Compatibility wrapper method for saving checkpoints directly from arguments.
-        """
-        filename = os.path.basename(path) or f"step_{step}"
-        extra_state = kwargs.pop("extra_state", {})
-        if ema_state:
-            extra_state["ema_state_dict"] = ema_state
-        self.save(
-            filename=filename,
-            step=step,
-            model=model,
-            optimizer=optimizer,
-            scheduler=scheduler,
-            scaler=scaler,
-            tokenizer=tokenizer,
-            extra_state=extra_state,
-            **kwargs,
-        )
+        # Write checkpoint_manifest.json inside save_dir
+        manifest_path = save_dir / "checkpoint_manifest.json"
+        manifest_meta = {
+            "path": str(save_dir),
+            "filename": folder_name,
+            "epoch": epoch,
+            "step": step,
+            "metrics": metrics,
+            "metric_value": metric_val,
+            "is_best": is_best,
+            "timestamp": state["timestamp"],
+        }
+        with open(manifest_path, "w", encoding="utf-8") as mf:
+            json.dump(manifest_meta, mf, indent=2)
+
+        # Update root manifest
+        manifest = self._load_or_init_manifest()
+        manifest["checkpoints"].append(manifest_meta)
+        if is_best:
+            manifest["best_checkpoint"] = str(save_dir)
+            manifest["best_metric"] = metric_val
+            best_dir = self.output_path / "best_model"
+            try:
+                if best_dir.exists():
+                    shutil.rmtree(str(best_dir))
+                shutil.copytree(str(save_dir), str(best_dir))
+                self.best_checkpoint_path = str(save_dir)
+            except Exception as e:
+                logger.warning(f"Could not update best_model folder: {e}")
+
+        self._save_manifest(manifest)
+
+        # Prune if needed
+        self.prune()
+
+        return str(save_dir)
 
     def load(
         self,
-        checkpoint_path: Union[str, Path],
+        checkpoint_path: Optional[str] = None,
+        load_best: bool = False,
+        map_location: Optional[Union[str, torch.device]] = None,
+        strict: bool = True,
         model: Optional[nn.Module] = None,
-        device: Optional[Union[str, torch.device]] = None,
-    ) -> Dict[str, Any]:
-        """
-        Load checkpoint state and restore model, optimizer, scheduler, and RNG state.
-
-        Args:
-            checkpoint_path: Path to checkpoint directory or state file.
-            model: Optional model instance to restore parameters into.
-            device: Optional target torch device.
-
-        Returns:
-            Dictionary containing loaded checkpoint state.
-
-        Raises:
-            CheckpointError: If checkpoint folder or state file cannot be read.
-        """
-        try:
-            path_obj = Path(checkpoint_path)
-            if path_obj.is_dir():
-                state_path = path_obj / "training_state.pt"
-                if not state_path.exists():
-                    state_path = Path(str(path_obj) + ".pt") if not str(path_obj).endswith(".pt") else path_obj
-            else:
-                state_path = path_obj
-
-            if not state_path.exists():
-                raise CheckpointError(f"Checkpoint state file not found: {state_path}")
-
-            map_loc = device or "cpu"
-            try:
-                state = torch.load(state_path, map_location=map_loc, weights_only=False)
-            except TypeError:
-                state = torch.load(state_path, map_location=map_loc)
-
-            base_model = self._get_base_model(model)
-
-            if "model_state_dict" in state:
-                base_model.load_state_dict(state["model_state_dict"])
-            else:
-                base_model.load_state_dict(state)
-
-            if self.optimizer is not None and "optimizer_state_dict" in state:
-                self.optimizer.load_state_dict(state["optimizer_state_dict"])
-            if self.scheduler is not None and "scheduler_state_dict" in state:
-                self.scheduler.load_state_dict(state["scheduler_state_dict"])
-            if self.scaler is not None and "scaler_state_dict" in state:
-                self.scaler.load_state_dict(state["scaler_state_dict"])
-
-            if "rng_state" in state:
-                self._restore_rng_state(state["rng_state"])
-
-            step = state.get("step", 0)
-            logger.info(f"Successfully loaded checkpoint from {checkpoint_path} at step {step}")
-            return state
-
-        except Exception as e:
-            if isinstance(e, CheckpointError):
-                raise
-            logger.error(f"Error loading checkpoint '{checkpoint_path}': {e}", exc_info=True)
-            raise CheckpointError(f"Failed to load checkpoint '{checkpoint_path}': {e}") from e
-
-    def load_checkpoint(
-        self,
-        path: str,
-        model: nn.Module,
         optimizer: Optional[torch.optim.Optimizer] = None,
+        scheduler: Optional[Any] = None,
+        scaler: Optional[Any] = None,
+        restore_rng: bool = True,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """
-        Compatibility wrapper method for loading checkpoints.
+        Load checkpoint from disk and restore model, optimizer, scheduler, and RNG state.
         """
-        old_opt = self.optimizer
-        if optimizer is not None:
-            self.optimizer = optimizer
-        res = self.load(path, model=model)
-        self.optimizer = old_opt
-        return res
+        target_path = checkpoint_path
+        if load_best:
+            target_path = self.find_best_checkpoint(self.metric_name, self.mode)
+        elif target_path is None:
+            target_path = self.get_latest_checkpoint()
+
+        if target_path is None:
+            raise CheckpointNotFoundError(f"No checkpoint found to load in '{self.output_path}'")
+
+        path_obj = Path(target_path)
+        if not path_obj.exists():
+            raise CheckpointNotFoundError(f"Checkpoint path not found: '{target_path}'")
+
+        if path_obj.is_dir():
+            state_file = path_obj / "training_state.pt"
+            if not state_file.exists():
+                # Search for any .pt file inside
+                pt_files = list(path_obj.glob("*.pt"))
+                if pt_files:
+                    state_file = pt_files[0]
+                else:
+                    raise CheckpointNotFoundError(f"No state file found inside directory '{target_path}'")
+        else:
+            state_file = path_obj
+
+        try:
+            loc = map_location or ("cuda" if torch.cuda.is_available() else "cpu")
+            checkpoint = torch.load(str(state_file), map_location=loc, weights_only=False)
+        except Exception as e:
+            raise CheckpointCorruptedError(f"Failed to load checkpoint file '{state_file}': {e}") from e
+
+        # Restore model
+        target_model = model or self.model
+        if target_model is not None and "model_state_dict" in checkpoint:
+            base_model = self._get_base_model(target_model)
+            cleaned_sd = self._clean_state_dict_keys(checkpoint["model_state_dict"])
+            base_model.load_state_dict(cleaned_sd, strict=strict)
+            logger.info(f"Model parameters successfully restored from {state_file}")
+
+        # Restore optimizer
+        target_opt = optimizer or self.optimizer
+        if target_opt is not None and "optimizer_state_dict" in checkpoint:
+            try:
+                target_opt.load_state_dict(checkpoint["optimizer_state_dict"])
+            except Exception as e:
+                logger.warning(f"Could not restore optimizer state: {e}")
+
+        # Restore scheduler
+        target_sched = scheduler or self.scheduler
+        if target_sched is not None and "scheduler_state_dict" in checkpoint:
+            try:
+                target_sched.load_state_dict(checkpoint["scheduler_state_dict"])
+            except Exception as e:
+                logger.warning(f"Could not restore scheduler state: {e}")
+
+        # Restore scaler
+        target_scaler = scaler or self.scaler
+        if target_scaler is not None and "scaler_state_dict" in checkpoint:
+            try:
+                target_scaler.load_state_dict(checkpoint["scaler_state_dict"])
+            except Exception as e:
+                logger.warning(f"Could not restore scaler state: {e}")
+
+        # Restore RNG
+        if restore_rng and "rng_state" in checkpoint:
+            self._restore_rng_state(checkpoint["rng_state"])
+
+        return checkpoint
 
     def list_checkpoints(self) -> List[Dict[str, Any]]:
-        """
-        List all valid checkpoints in output directory with step metadata sorted by step.
+        """Return list of all recorded checkpoints from manifest or filesystem scan."""
+        manifest = self._load_or_init_manifest()
+        ckpts = manifest.get("checkpoints", [])
+        if ckpts:
+            return ckpts
 
-        Returns:
-            List of metadata dictionaries containing checkpoint details and paths.
-        """
-        if not self.output_path.exists():
-            return []
-
-        checkpoints = []
-        for entry in self.output_path.iterdir():
-            manifest_path = entry / "checkpoint_manifest.json"
-            if entry.is_dir() and manifest_path.exists():
-                try:
-                    with open(manifest_path, "r", encoding="utf-8") as f:
-                        meta = json.load(f)
-                    meta["path"] = str(entry)
-                    checkpoints.append(meta)
-                except Exception as e:
-                    logger.warning(f"Could not read checkpoint manifest at {manifest_path}: {e}")
-
-        checkpoints.sort(key=lambda x: x.get("step", 0))
-        return checkpoints
+        # Scan filesystem for folders containing training_state.pt
+        found = []
+        for d in sorted(self.output_path.iterdir(), key=os.path.getmtime):
+            if d.is_dir() and (d / "training_state.pt").exists():
+                found.append({"path": str(d), "filename": d.name, "timestamp": os.path.getmtime(d)})
+        return found
 
     def get_latest_checkpoint(self) -> Optional[str]:
-        """
-        Get the file system path string to the most recent checkpoint by step count.
+        """Get path to the latest checkpoint directory."""
+        ckpts = self.list_checkpoints()
+        if ckpts:
+            return ckpts[-1]["path"]
+        dirs = [d for d in self.output_path.iterdir() if d.is_dir() and (d / "training_state.pt").exists()]
+        if dirs:
+            dirs.sort(key=os.path.getmtime)
+            return str(dirs[-1])
+        return None
 
-        Returns:
-            Path string or None if no valid checkpoints exist.
-        """
-        checkpoints = self.list_checkpoints()
-        if not checkpoints:
-            return None
-        return checkpoints[-1]["path"]
+    def get_latest_checkpoint_path(self) -> Optional[str]:
+        """Alias for get_latest_checkpoint."""
+        return self.get_latest_checkpoint()
 
     def find_best_checkpoint(self, metric_name: str = "loss", mode: str = "min") -> Optional[str]:
+        """Find the checkpoint path with the best metric value."""
+        manifest = self._load_or_init_manifest()
+        ckpts = manifest.get("checkpoints", [])
+        if not ckpts:
+            best_dir = self.output_path / "best_model"
+            if best_dir.exists():
+                return str(best_dir)
+            return self.get_latest_checkpoint()
+
+        scored = [c for c in ckpts if c.get("metrics", {}).get(metric_name) is not None or c.get("metric_value") is not None]
+        if not scored:
+            return ckpts[-1]["path"]
+
+        reverse = (mode.lower() == "max")
+        def get_val(c):
+            if metric_name in c.get("metrics", {}):
+                return c["metrics"][metric_name]
+            return c.get("metric_value", float("inf") if not reverse else float("-inf"))
+
+        scored.sort(key=get_val, reverse=reverse)
+        return scored[0]["path"]
+
+    def get_best_checkpoint_path(self) -> Optional[str]:
+        """Get best checkpoint path."""
+        return self.find_best_checkpoint(self.metric_name, self.mode)
+
+    def prune_checkpoints(self, keep_last: Optional[int] = None) -> List[str]:
+        """Prune older checkpoints keeping the specified number of most recent."""
+        limit = keep_last
+        if limit is None and self.checkpoint_config is not None:
+            limit = getattr(self.checkpoint_config, "keep_last", None)
+        if limit is None:
+            limit = self.max_to_keep
+
+        return self.prune(max_to_keep=limit)
+
+    def prune(self, max_to_keep: Optional[int] = None) -> List[str]:
         """
-        Find checkpoint path corresponding to the optimal metric value.
-
-        Args:
-            metric_name: Name of metric to evaluate (e.g. 'loss', 'accuracy').
-            mode: Comparison mode ('min' or 'max').
-
-        Returns:
-            Path string to best checkpoint, or None if no checkpoints match.
-
-        Raises:
-            ValueError: If mode is not 'min' or 'max'.
+        Prune checkpoints according to retention limit.
         """
-        if mode not in ("min", "max"):
-            raise ValueError(f"Mode must be 'min' or 'max', got '{mode}'")
+        limit = max_to_keep if max_to_keep is not None else self.max_to_keep
+        if limit is None or limit <= 0:
+            return []
 
-        checkpoints = self.list_checkpoints()
-        if not checkpoints:
-            return None
+        ckpts = self.list_checkpoints()
+        if len(ckpts) <= limit:
+            return []
 
-        best_path: Optional[str] = None
-        best_val: float = float("inf") if mode == "min" else float("-inf")
+        # Keep last `limit`
+        to_keep_paths = set(c["path"] for c in ckpts[-limit:])
+        best_path = self.get_best_checkpoint_path()
+        if best_path:
+            to_keep_paths.add(best_path)
 
-        for ckpt in checkpoints:
-            metrics = ckpt.get("metrics", {})
-            if metric_name in metrics:
-                val = metrics[metric_name]
-                if (mode == "min" and val < best_val) or (mode == "max" and val > best_val):
-                    best_val = val
-                    best_path = ckpt["path"]
+        pruned_paths: List[str] = []
+        remaining_ckpts: List[Dict[str, Any]] = []
 
-        return best_path
-
-    def delete_checkpoint(self, checkpoint_path: Union[str, Path]) -> bool:
-        """
-        Delete a checkpoint directory or file safely.
-
-        Args:
-            checkpoint_path: Path string or Path object pointing to checkpoint directory.
-
-        Returns:
-            True if deletion succeeded, False otherwise.
-        """
-        path_obj = Path(checkpoint_path)
-        if not path_obj.exists():
-            logger.warning(f"Checkpoint path does not exist for deletion: {checkpoint_path}")
-            return False
-
-        try:
-            if path_obj.is_dir():
-                shutil.rmtree(path_obj)
+        for c in ckpts:
+            path_str = c["path"]
+            if path_str not in to_keep_paths:
+                p = Path(path_str)
+                if p.exists():
+                    try:
+                        if p.is_dir():
+                            shutil.rmtree(str(p))
+                        else:
+                            p.unlink(missing_ok=True)
+                        pruned_paths.append(path_str)
+                    except Exception as e:
+                        logger.warning(f"Failed to delete pruned checkpoint {path_str}: {e}")
             else:
-                path_obj.unlink()
-            logger.info(f"Successfully deleted checkpoint at {checkpoint_path}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to delete checkpoint at {checkpoint_path}: {e}")
-            return False
+                remaining_ckpts.append(c)
 
-    def prune_checkpoints(self) -> None:
-        """
-        Prune older step checkpoints according to keep_last configuration setting.
-        """
-        keep_last = getattr(self.checkpoint_config, "keep_last", 3) if self.checkpoint_config else 3
-        if keep_last <= 0:
-            return
+        manifest = self._load_or_init_manifest()
+        manifest["checkpoints"] = remaining_ckpts
+        self._save_manifest(manifest)
+        return pruned_paths
 
-        try:
-            if not self.output_path.exists():
-                return
-            step_entries: List[Tuple[int, Path]] = []
-            for entry in self.output_path.iterdir():
-                name = entry.name
-                if name.startswith("step_"):
-                    step_str = name.replace("step_", "").removesuffix(".pt")
-                    if step_str.isdigit():
-                        step_entries.append((int(step_str), entry))
-
-            step_entries.sort(key=lambda x: x[0])
-            excess_count = len(step_entries) - keep_last
-
-            if excess_count > 0:
-                for idx in range(excess_count):
-                    step_num, entry_path = step_entries[idx]
-                    self.delete_checkpoint(entry_path)
-        except Exception as e:
-            logger.warning(f"Error during checkpoint pruning execution: {e}")
-
-
-__all__ = ["CheckpointManager", "CheckpointError"]
+    def delete_checkpoint(self, checkpoint_path: str) -> bool:
+        """Explicitly delete a specific checkpoint."""
+        p = Path(checkpoint_path)
+        if p.exists():
+            if p.is_dir():
+                shutil.rmtree(str(p))
+            else:
+                p.unlink(missing_ok=True)
+        manifest = self._load_or_init_manifest()
+        manifest["checkpoints"] = [c for c in manifest.get("checkpoints", []) if c["path"] != checkpoint_path]
+        if manifest.get("best_checkpoint") == checkpoint_path:
+            manifest["best_checkpoint"] = None
+        self._save_manifest(manifest)
+        return True

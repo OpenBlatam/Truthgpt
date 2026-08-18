@@ -40,4 +40,13 @@ using Test
         @test size(Q_rot) == size(Q)
         @test size(K_rot) == size(K)
     end
+    
+    @testset "AttentionOutput" begin
+        out_tensor = randn(Float32, batch, heads, seq_len, head_dim)
+        attn_out = TruthGPT.Attention.AttentionOutput(out_tensor, nothing)
+        @test size(attn_out.output) == (batch, heads, seq_len, head_dim)
+        @test attn_out.weights === nothing
+    end
 end
+
+

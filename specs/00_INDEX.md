@@ -19,9 +19,9 @@ This directory contains the complete specifications for the `optimization_core` 
 
 ### 3. Native Backends
 - **[08_RUST_CORE_SPEC.md](08_RUST_CORE_SPEC.md)** - Rust Native Implementation (PyO3, KV Cache, Compression)
+- **[11_JULIA_CORE_SPEC.md](11_JULIA_CORE_SPEC.md)** - Julia Native Implementation (JuMP, Flux, FlashAttention)
 - **`09_CPP_CORE_SPEC.md`** - C++ Native Implementation (FlashAttention, CUDA Kernels) *[Pending]*
 - **`10_GO_CORE_SPEC.md`** - Go Native Implementation (HTTP/gRPC Microservices) *[Pending]*
-- **`11_JULIA_CORE_SPEC.md`** - Julia Native Implementation *[Pending]*
 - **`12_SCALA_CORE_SPEC.md`** - Scala Native Implementation *[Pending]*
 - **`13_ELIXIR_CORE_SPEC.md`** - Elixir Native Implementation *[Pending]*
 
@@ -75,13 +75,13 @@ This directory contains the complete specifications for the `optimization_core` 
 - ✅ [05_INFERENCE_ENGINES_SPEC.md](05_INFERENCE_ENGINES_SPEC.md) - Inference Engine Implementations
 - ✅ [07_POLYGLOT_CORE_SPEC.md](07_POLYGLOT_CORE_SPEC.md) - Polyglot Router
 - ✅ [08_RUST_CORE_SPEC.md](08_RUST_CORE_SPEC.md) - Rust Extension Backend
+- ✅ [11_JULIA_CORE_SPEC.md](11_JULIA_CORE_SPEC.md) - Julia Backend
 
 ### Pending Specs ⏳
 - ⏳ [03_MODULAR_DESIGN_SPEC.md](03_MODULAR_DESIGN_SPEC.md) - Modular Design
 - ⏳ [06_DATA_PROCESSING_SPEC.md](06_DATA_PROCESSING_SPEC.md) - Polars Processing
 - ⏳ `09_CPP_CORE_SPEC.md` - C++ Backend
 - ⏳ `10_GO_CORE_SPEC.md` - Go Backend
-- ⏳ `11_JULIA_CORE_SPEC.md` - Julia Backend
 - ⏳ `12_SCALA_CORE_SPEC.md` - Scala Backend
 - ⏳ `13_ELIXIR_CORE_SPEC.md` - Elixir Backend
 - ⏳ `14_UTILS_SPEC.md` - Shared Utilities

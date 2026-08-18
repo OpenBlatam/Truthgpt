@@ -1,52 +1,77 @@
 """
 Monitoring Utilities Module
 
-This module contains utilities for monitoring training, visualizing results,
-and tracking experiments.
+Real-time training telemetry, alerting, observability, and dashboard monitors.
 """
 
 from __future__ import annotations
+
+from typing import Any, Dict, List
+
+from .._lazy_loader import create_lazy_module
 
 __all__ = [
     'MonitorTraining',
     'RealTimePerformanceMonitor',
     'TruthGPTMonitoring',
     'VisualizeTraining',
+    'visualize_checkpoints',
+    'summarize_run',
     'CompareRuns',
+    'compare_runs',
+    'get_run_info',
     'ExperimentTracker',
+    'MonitoringUtils',
+    'Observability',
+    'list_available_monitoring_components',
+    'get_monitoring_component_info',
 ]
 
-_LAZY_IMPORTS = {
-    'MonitorTraining': '..monitor_training',
-    'RealTimePerformanceMonitor': '..real_time_performance_monitor',
+_LAZY_IMPORTS: Dict[str, str] = {
+    'MonitorTraining': '.monitor_training',
+    'monitor_training': '.monitor_training',
+    'RealTimePerformanceMonitor': '.realtime_monitor',
+    'MonitoringUtils': '.monitoring_utils',
+    'Observability': '.observability',
+    # These still reference parent-level files that haven't been moved
     'TruthGPTMonitoring': '..truthgpt_monitoring',
     'VisualizeTraining': '..visualize_training',
+    'visualize_checkpoints': '..visualize_training',
+    'summarize_run': '..visualize_training',
     'CompareRuns': '..compare_runs',
+    'compare_runs': '..compare_runs',
+    'get_run_info': '..compare_runs',
     'ExperimentTracker': '..experiment_tracker',
 }
 
-_import_cache = {}
+_ALIASES: Dict[str, str] = {
+    'MonitorTraining': 'get_gpu_stats',
+    'VisualizeTraining': 'visualize_checkpoints',
+    'CompareRuns': 'compare_runs',
+}
+
+_loader = create_lazy_module(
+    package_name=__name__,
+    lazy_imports=_LAZY_IMPORTS,
+    aliases=_ALIASES,
+    all_exports=__all__,
+    globals_dict=globals(),
+)
 
 
-def __getattr__(name: str):
-    """Lazy import system for monitoring utility modules."""
-    if name.startswith('_'):
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-    
-    if name not in _LAZY_IMPORTS:
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-    
-    if name in _import_cache:
-        return _import_cache[name]
-    
-    module_path = _LAZY_IMPORTS[name]
-    try:
-        module = __import__(module_path, fromlist=[name], level=2)
-        obj = getattr(module, name)
-        _import_cache[name] = obj
-        return obj
-    except (ImportError, AttributeError) as e:
-        raise AttributeError(
-            f"module '{__name__}' has no attribute '{name}'. "
-            f"Failed to import: {e}"
-        ) from e
+def __getattr__(name: str) -> Any:
+    return _loader.__getattr__(name)
+
+
+def __dir__() -> List[str]:
+    return _loader.__dir__()
+
+
+def list_available_monitoring_components() -> List[str]:
+    """List all available monitoring components."""
+    return _loader.list_components()
+
+
+def get_monitoring_component_info(component_name: str) -> Dict[str, Any]:
+    """Get information about a monitoring component."""
+    return _loader.get_component_info(component_name)

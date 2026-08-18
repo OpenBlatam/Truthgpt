@@ -5,8 +5,9 @@ Data Conversion Utilities
 """
     to_float32(data)
 
-Convert any numeric array to Float32.
+Convert any numeric array or scalar to Float32.
 """
+to_float32(x::Number) = Float32(x)
 function to_float32(data::AbstractArray{T}) where T <: Number
     return convert(Array{Float32}, data)
 end
@@ -14,11 +15,13 @@ end
 """
     to_float16(data)
 
-Convert any numeric array to Float16.
+Convert any numeric array or scalar to Float16.
 """
+to_float16(x::Number) = Float16(x)
 function to_float16(data::AbstractArray{T}) where T <: Number
     return convert(Array{Float16}, data)
 end
+
 
 """
     to_bfloat16(data)

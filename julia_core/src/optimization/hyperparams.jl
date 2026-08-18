@@ -22,11 +22,12 @@ Optimize hyperparameters using specified method.
 function optimize_hyperparams(
     loss_fn::Function,
     bounds::HyperparamBounds;
-    method::Symbol = METHOD_BAYESIAN,
+    method::Union{Symbol, AbstractString} = METHOD_BAYESIAN,
     max_iters::Int = 100,
     seed::Int = 42
 )
-    validate_optimization_inputs(loss_fn, bounds, method, max_iters)
+    sym_method = Symbol(method)
+    validate_optimization_inputs(loss_fn, bounds, sym_method, max_iters)
     
     rng = MersenneTwister(seed)
     
@@ -35,7 +36,8 @@ function optimize_hyperparams(
     history = Vector{Float64}(undef, max_iters)
     
     for iteration in 1:max_iters
-        params = sample_params(bounds, method, iteration, max_iters, rng)
+        params = sample_params(bounds, sym_method, iteration, max_iters, rng)
+
         
         try
             loss = loss_fn(params)

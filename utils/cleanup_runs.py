@@ -153,6 +153,17 @@ def main():
         cleanup_checkpoints(args.runs_dir, args.keep_checkpoints, dry_run)
 
 
+# Aliases
+cleanup_runs = cleanup_old_runs
+
+__all__ = [
+    "get_run_size",
+    "cleanup_old_runs",
+    "cleanup_checkpoints",
+    "cleanup_runs",
+]
+
+
 if __name__ == "__main__":
     main()
 

@@ -15,12 +15,13 @@ using Random
 using Statistics
 
 include("constants.jl")
+include("types.jl")
 include("timing.jl")
 include("memory.jl")
-include("conversion.jl")
+include("conversions.jl")
 include("parallel.jl")
 include("random.jl")
-include("numerical.jl")
+include("math.jl")
 
 export @timed_block, benchmark, format_time, format_bytes, memory_info
 export to_float32, to_float16, to_bfloat16, from_bfloat16

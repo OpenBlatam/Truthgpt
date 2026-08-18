@@ -1,82 +1,121 @@
 """
 AtomMem - Learnable Dynamic Agentic Memory with Atomic Memory Operations
+========================================================================
 Based on "AtomMem: Learnable Dynamic Agentic Memory with Atomic Memory
 Operation" (arXiv:2601.08323v2, Jan 2026)
 
-Source (Google Scholar): https://scholar.google.com/scholar?q=AtomMem+Learnable+Dynamic+Agentic+Memory+Atomic+Memory+Operation
-
 Key idea:
-Naive agent memory keeps appending observations, which bloats context with
-duplicates and stale facts. AtomMem decomposes memory management into a small set
-of *atomic* operations - ADD, UPDATE, DELETE, NOOP - and learns a policy (SFT+RL)
-that, for each incoming observation, picks the operation that keeps the store
-compact, fresh, and non-redundant. The atomic decomposition makes the policy easy
-to supervise and the memory state fully reconstructible from an operation log.
-
-This implementation is a dependency-light, deterministic stand-in for the learned
-policy: it decides the atomic op from bag-of-words similarity between the incoming
-observation and the existing memory, so it runs without a trained model. The
-operation log is recorded so the store can be replayed.
+---------
+Decomposes memory management into atomic CRUD operations (ADD, UPDATE, DELETE, NOOP)
+chosen per observation by a similarity-driven policy, keeping memory fresh and compact.
 """
 
+from __future__ import annotations
+
+import logging
 import math
 import re
 from typing import Any, Dict, List, Optional
 
+from .base import BasePaperModule, PaperCategory, PaperMetadata, PaperResult
+from .config import AtomicMemoryConfig
+from .exceptions import PaperValidationError
+
+logger = logging.getLogger(__name__)
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 
 
-class AtomicAgenticMemory:
+class AtomicAgenticMemory(BasePaperModule):
     """
     Maintains a compact agent memory via atomic CRUD operations chosen per
     incoming observation by a similarity-driven policy.
     """
 
-    def __init__(self, dup_threshold: float = 0.85, update_threshold: float = 0.45):
-        # >= dup_threshold      -> near-duplicate            -> NOOP
-        # [update, dup)         -> same topic, new detail    -> UPDATE (merge)
-        # < update_threshold    -> novel                     -> ADD
-        self.dup_threshold = dup_threshold
-        self.update_threshold = update_threshold
+    metadata = PaperMetadata(
+        paper_id="atomic_agentic_memory",
+        paper_name="AtomMem: Learnable Dynamic Agentic Memory with Atomic Memory Operation",
+        category=PaperCategory.MULTI_AGENT_MEMORY,
+        arxiv_id="2601.08323v2",
+        year=2026,
+        authors=["AtomMem Authors"],
+        key_techniques=["Atomic Operations", "ADD UPDATE DELETE NOOP", "Operation Log Replay"],
+        speedup=1.6,
+        description="Decomposes agent memory management into atomic CRUD operations to prevent context bloat.",
+        scholar_query="AtomMem Learnable Dynamic Agentic Memory Atomic Memory Operation",
+    )
+
+    def __init__(
+        self,
+        dup_threshold: float = 0.85,
+        update_threshold: float = 0.45,
+        config: Optional[AtomicMemoryConfig] = None,
+    ) -> None:
+        super().__init__()
+        if config is not None:
+            config.validate()
+            self.config = config
+        else:
+            self.config = AtomicMemoryConfig(
+                dup_threshold=dup_threshold,
+                update_threshold=update_threshold,
+            )
+            self.config.validate()
+
+        self.dup_threshold = self.config.dup_threshold
+        self.update_threshold = self.config.update_threshold
+        self.max_entries = self.config.max_entries
         self._store: List[Dict[str, Any]] = []
         self._log: List[Dict[str, Any]] = []
         self._next_id = 0
 
     @staticmethod
     def _vectorize(text: str) -> Dict[str, int]:
+        """Convert input string into bag-of-words token frequency vector."""
         vec: Dict[str, int] = {}
-        for tok in _TOKEN_RE.findall((text or "").lower()):
+        if not text:
+            return vec
+        for tok in _TOKEN_RE.findall(str(text).lower()):
             vec[tok] = vec.get(tok, 0) + 1
         return vec
 
     @classmethod
     def _cosine(cls, a: Dict[str, int], b: Dict[str, int]) -> float:
+        """Compute cosine similarity between two word frequency vectors."""
         if not a or not b:
             return 0.0
         common = set(a) & set(b)
+        if not common:
+            return 0.0
         dot = sum(a[t] * b[t] for t in common)
         na = math.sqrt(sum(v * v for v in a.values()))
         nb = math.sqrt(sum(v * v for v in b.values()))
-        if na == 0 or nb == 0:
+        if na == 0.0 or nb == 0.0:
             return 0.0
         return dot / (na * nb)
 
     def _best_match(self, vec: Dict[str, int]) -> Optional[Dict[str, Any]]:
+        """Find the item in memory store with highest cosine similarity to input vec."""
         best, best_sim = None, 0.0
         for item in self._store:
             sim = self._cosine(vec, item["_vec"])
             if sim > best_sim:
                 best, best_sim = item, sim
         if best is not None:
-            best = {**best, "_sim": best_sim}
-        return best
+            return {**best, "_sim": best_sim}
+        return None
 
-    def decide_op(self, observation: str) -> Dict[str, Any]:
-        """Pick the atomic operation for an observation without mutating state."""
+    def decide_op(self, observation: str) -> PaperResult:
+        """
+        Pick the atomic operation for an observation without mutating memory state.
+        """
+        if not isinstance(observation, str):
+            observation = str(observation or "")
+
         vec = self._vectorize(observation)
         match = self._best_match(vec)
         if match is None:
-            return {"op": "ADD", "target_id": None, "similarity": 0.0}
+            return PaperResult({"op": "ADD", "target_id": None, "similarity": 0.0})
+
         sim = match["_sim"]
         if sim >= self.dup_threshold:
             op = "NOOP"
@@ -84,10 +123,16 @@ class AtomicAgenticMemory:
             op = "UPDATE"
         else:
             op = "ADD"
-        return {"op": op, "target_id": match["id"], "similarity": round(sim, 4)}
 
-    def ingest(self, observation: str) -> Dict[str, Any]:
-        """Decide and apply the atomic op for one observation."""
+        return PaperResult({"op": op, "target_id": match["id"], "similarity": round(sim, 4)})
+
+    def ingest(self, observation: str) -> PaperResult:
+        """
+        Decide and apply the atomic operation for one observation.
+        """
+        if not isinstance(observation, str):
+            observation = str(observation or "")
+
         decision = self.decide_op(observation)
         op = decision["op"]
         vec = self._vectorize(observation)
@@ -97,37 +142,103 @@ class AtomicAgenticMemory:
             self._store.append(item)
             self._next_id += 1
             decision["target_id"] = item["id"]
+
+            if self.max_entries and len(self._store) > self.max_entries:
+                min_idx = min(range(len(self._store)), key=lambda i: self._store[i]["hits"])
+                evicted = self._store.pop(min_idx)
+                self._log.append({"op": "DELETE", "target_id": evicted["id"], "similarity": 0.0, "reason": "capacity"})
         elif op == "UPDATE":
             for item in self._store:
                 if item["id"] == decision["target_id"]:
-                    # Merge: keep the longer/more informative content, bump hits.
                     if len(observation) > len(item["content"]):
                         item["content"] = observation
                     for t, c in vec.items():
                         item["_vec"][t] = item["_vec"].get(t, 0) + c
                     item["hits"] += 1
                     break
-        # NOOP: drop redundant observation entirely.
 
-        self._log.append(decision)
+        self._log.append(decision.to_dict() if isinstance(decision, PaperResult) else decision)
         return decision
 
-    def process(self, observations: List[str]) -> Dict[str, Any]:
-        """Ingest a batch of observations and report the operation profile."""
+    def process(self, observations: List[str]) -> PaperResult:
+        """
+        Ingest a batch of observations and report the operation profile.
+        """
+        if observations is None:
+            observations = []
+
         counts = {"ADD": 0, "UPDATE": 0, "DELETE": 0, "NOOP": 0}
         for obs in observations:
-            counts[self.ingest(obs)["op"]] += 1
+            res = self.ingest(obs)
+            counts[res["op"]] += 1
+
         ingested = len(observations)
         retained = len(self._store)
-        compression = round(1.0 - retained / ingested, 4) if ingested else 0.0
-        return {
+        compression = round(1.0 - (retained / ingested), 4) if ingested > 0 else 0.0
+
+        return PaperResult({
             "op_counts": counts,
             "observations_ingested": ingested,
             "memory_size": retained,
             "compression_ratio": compression,
             "redundancy_dropped": counts["NOOP"],
-        }
+        })
+
+    def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        """
+        Search memory store for entries matching query by cosine similarity.
+        """
+        if not query or not self._store:
+            return []
+
+        q_vec = self._vectorize(query)
+        scored = []
+        for item in self._store:
+            sim = self._cosine(q_vec, item["_vec"])
+            scored.append({"id": item["id"], "content": item["content"], "hits": item["hits"], "similarity": round(sim, 4)})
+
+        scored.sort(key=lambda x: x["similarity"], reverse=True)
+        return scored[: max(1, top_k)]
 
     def snapshot(self) -> List[Dict[str, Any]]:
-        """Current memory contents (without internal vectors)."""
+        """Return clean snapshot of current memory contents."""
         return [{"id": i["id"], "content": i["content"], "hits": i["hits"]} for i in self._store]
+
+    def reset(self) -> None:
+        """Reset memory store and operation log to empty initial state."""
+        self._store.clear()
+        self._log.clear()
+        self._next_id = 0
+
+    def execute(
+        self,
+        observations: Optional[List[str]] = None,
+        observation: Optional[str] = None,
+        **kwargs: Any,
+    ) -> PaperResult:
+        """Execute atomic memory operations."""
+        if observation is not None:
+            return self.ingest(observation)
+        obs_list = observations if observations is not None else kwargs.get(
+            "observations",
+            [
+                "User requested sales report for Q1 2026",
+                "User requested sales report for Q1 2026 in PDF format",
+                "Server responded with status code 200",
+                "Database backup completed at midnight",
+            ],
+        )
+        return self.process(obs_list)
+
+    def get_summary(self) -> Dict[str, Any]:
+        """Return operational summary."""
+        return {
+            "algorithm": self.__class__.__name__,
+            "dup_threshold": self.dup_threshold,
+            "update_threshold": self.update_threshold,
+            "memory_size": len(self._store),
+            "log_entries": len(self._log),
+        }
+
+
+__all__ = ["AtomicAgenticMemory"]

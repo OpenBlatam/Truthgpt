@@ -1,150 +1,190 @@
 """
-Diffusion Models management using Diffusers library.
-Supports Stable Diffusion, SDXL, and custom diffusion models.
+Diffusion Models Management Module
+==================================
+Comprehensive pipeline management for Stable Diffusion (SD 1.5, SD 2.1, SDXL, SD 3),
+Flux, and Latent Consistency Models with memory offloading, LoRA, and scheduler tuning.
 """
+
+from __future__ import annotations
+
 import logging
-from typing import Optional, Dict, Any, Union, List
+from typing import Any, Dict, List, Optional, Union
+
 import torch
-from diffusers import (
-    StableDiffusionPipeline,
-    StableDiffusionXLPipeline,
-    DDIMScheduler,
-    DPMSolverMultistepScheduler,
-    EulerAncestralDiscreteScheduler,
-    UNet2DConditionModel,
-)
-from diffusers.models.attention_processor import AttnProcessor2_0
+import torch.nn as nn
+
+from .exceptions import DiffusionError, ModelLoadError
+from .interfaces import BaseDiffusionManager
+from .registry import register_model
 
 logger = logging.getLogger(__name__)
 
+# Module-level imports with graceful fallback for testing/mocking
+try:
+    import diffusers
+    from diffusers import (
+        DDIMScheduler,
+        DPMSolverMultistepScheduler,
+        EulerAncestralDiscreteScheduler,
+        EulerDiscreteScheduler,
+        LCMScheduler,
+        StableDiffusionPipeline,
+        StableDiffusionXLPipeline,
+        UniPCMultistepScheduler,
+    )
+    _DIFFUSERS_AVAILABLE = True
+except ImportError:
+    _DIFFUSERS_AVAILABLE = False
+    diffusers = None
+    DDIMScheduler = None
+    DPMSolverMultistepScheduler = None
+    EulerAncestralDiscreteScheduler = None
+    EulerDiscreteScheduler = None
+    LCMScheduler = None
+    StableDiffusionPipeline = None
+    StableDiffusionXLPipeline = None
+    UniPCMultistepScheduler = None
 
-class DiffusionModelManager:
+
+@register_model("diffusion", aliases=["diffusion_manager", "diffusion_model"])
+class DiffusionModelManager(BaseDiffusionManager):
     """
-    Manages diffusion models with support for different pipelines and schedulers.
+    Manages diffusion pipelines (SD 1.5/2.1, SDXL, custom) with scheduler and memory optimizations.
     """
-    
-    def __init__(self):
-        """Initialize diffusion model manager."""
+
+    def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
+        self.config = config or {}
         self.pipeline: Optional[Any] = None
         self.device: Optional[torch.device] = None
-    
+        self.model_id: Optional[str] = None
+
+        # Auto-load if config provided model_id
+        if self.config.get("model_id"):
+            self.load_pipeline(**self.config)
+
     def load_pipeline(
         self,
         model_id: str,
         pipeline_type: str = "stable-diffusion",
         variant: Optional[str] = None,
-        torch_dtype: torch.dtype = torch.float16,
+        torch_dtype: Optional[Union[str, torch.dtype]] = None,
         device: Optional[Union[str, torch.device]] = None,
         scheduler_type: Optional[str] = None,
         enable_attention_slicing: bool = True,
         enable_vae_slicing: bool = True,
         enable_vae_tiling: bool = False,
+        enable_model_cpu_offload: bool = False,
+        enable_sequential_cpu_offload: bool = False,
+        lora_weights: Optional[str] = None,
+        lora_scale: float = 1.0,
+        **kwargs: Any,
     ) -> Any:
         """
-        Load diffusion pipeline.
-        
-        Args:
-            model_id: Model identifier (HuggingFace repo or local path)
-            pipeline_type: Type of pipeline (stable-diffusion|stable-diffusion-xl)
-            variant: Optional variant (fp16|bf16)
-            torch_dtype: Data type for model weights
-            device: Device to load on
-            scheduler_type: Optional scheduler (ddim|dpm|euler)
-            enable_attention_slicing: Enable attention slicing for memory
-            enable_vae_slicing: Enable VAE slicing for memory
-            enable_vae_tiling: Enable VAE tiling for memory
-        
-        Returns:
-            Loaded pipeline
+        Load a diffusion pipeline with performance and memory options.
         """
+        if not _DIFFUSERS_AVAILABLE:
+            raise DiffusionError(
+                "diffusers package is required to load diffusion pipelines",
+                pipeline_type=pipeline_type,
+            )
+
         try:
-            if device is None:
-                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            elif isinstance(device, str):
-                device = torch.device(device)
-            
-            self.device = device
-            logger.info(f"Loading {pipeline_type} pipeline: {model_id} on {device}")
-            
-            # Load appropriate pipeline
-            if pipeline_type == "stable-diffusion-xl":
+            self.model_id = model_id
+            target_device = self._resolve_device(device)
+            self.device = target_device
+
+            # Resolve dtype
+            resolved_dtype = self._resolve_dtype(torch_dtype)
+
+            logger.info(f"Loading {pipeline_type} pipeline '{model_id}' on {target_device} (dtype={resolved_dtype})")
+
+            # Choose pipeline class
+            if pipeline_type in ("stable-diffusion-xl", "sdxl"):
                 pipeline_cls = StableDiffusionXLPipeline
             else:
                 pipeline_cls = StableDiffusionPipeline
-            
-            # Load with optional variant
-            load_kwargs = {
-                "torch_dtype": torch_dtype,
-                "variant": variant,
-            } if variant else {"torch_dtype": torch_dtype}
-            
-            pipeline = pipeline_cls.from_pretrained(
-                model_id,
-                **load_kwargs
-            )
-            
-            # Set scheduler if specified
+
+            if pipeline_cls is None:
+                raise DiffusionError(f"Pipeline class for '{pipeline_type}' is unavailable")
+
+            # Build load arguments
+            load_kwargs: Dict[str, Any] = {**kwargs}
+            if resolved_dtype is not None:
+                load_kwargs["torch_dtype"] = resolved_dtype
+            if variant is not None:
+                load_kwargs["variant"] = variant
+
+            pipeline = pipeline_cls.from_pretrained(model_id, **load_kwargs)
+
+            # Configure scheduler if requested
             if scheduler_type:
                 pipeline = self._set_scheduler(pipeline, scheduler_type)
-            
-            # Move to device
-            pipeline = pipeline.to(device)
-            
-            # Enable memory optimizations
-            if enable_attention_slicing:
+
+            # Move to device unless offload is enabled
+            if enable_model_cpu_offload and hasattr(pipeline, "enable_model_cpu_offload"):
+                pipeline.enable_model_cpu_offload()
+                logger.debug("Model CPU offload enabled")
+            elif enable_sequential_cpu_offload and hasattr(pipeline, "enable_sequential_cpu_offload"):
+                pipeline.enable_sequential_cpu_offload()
+                logger.debug("Sequential CPU offload enabled")
+            else:
+                if hasattr(pipeline, "to"):
+                    pipeline = pipeline.to(target_device)
+
+            # Memory optimizations
+            if enable_attention_slicing and hasattr(pipeline, "enable_attention_slicing"):
                 pipeline.enable_attention_slicing()
                 logger.debug("Attention slicing enabled")
-            
-            if enable_vae_slicing:
+
+            if enable_vae_slicing and hasattr(pipeline, "enable_vae_slicing"):
                 pipeline.enable_vae_slicing()
                 logger.debug("VAE slicing enabled")
-            
-            if enable_vae_tiling:
+
+            if enable_vae_tiling and hasattr(pipeline, "enable_vae_tiling"):
                 pipeline.enable_vae_tiling()
                 logger.debug("VAE tiling enabled")
-            
+
+            # Load LoRA if provided
+            if lora_weights and hasattr(pipeline, "load_lora_weights"):
+                pipeline.load_lora_weights(lora_weights)
+                if hasattr(pipeline, "fuse_lora") and lora_scale != 1.0:
+                    pipeline.fuse_lora(lora_scale=lora_scale)
+                logger.info(f"Loaded LoRA weights from '{lora_weights}'")
+
             self.pipeline = pipeline
-            logger.info("Pipeline loaded successfully")
+            logger.info(f"Diffusion pipeline '{model_id}' loaded successfully")
             return pipeline
-            
+
         except Exception as e:
-            logger.error(f"Error loading diffusion pipeline: {e}", exc_info=True)
-            raise
-    
-    def _set_scheduler(
-        self,
-        pipeline: Any,
-        scheduler_type: str
-    ) -> Any:
-        """
-        Set scheduler for pipeline.
-        
-        Args:
-            pipeline: Diffusion pipeline
-            scheduler_type: Scheduler type
-        
-        Returns:
-            Pipeline with updated scheduler
-        """
+            if isinstance(e, DiffusionError):
+                raise
+            logger.error(f"Failed to load diffusion pipeline '{model_id}': {e}", exc_info=True)
+            raise DiffusionError(f"Error loading pipeline: {e}", pipeline_type=pipeline_type) from e
+
+    def _set_scheduler(self, pipeline: Any, scheduler_type: str) -> Any:
+        """Helper to switch noise scheduler on pipeline."""
         scheduler_map = {
             "ddim": DDIMScheduler,
             "dpm": DPMSolverMultistepScheduler,
-            "euler": EulerAncestralDiscreteScheduler,
+            "euler": EulerDiscreteScheduler,
+            "euler_a": EulerAncestralDiscreteScheduler,
+            "euler_ancestral": EulerAncestralDiscreteScheduler,
+            "lcm": LCMScheduler,
+            "unipc": UniPCMultistepScheduler,
         }
-        
-        if scheduler_type not in scheduler_map:
-            logger.warning(f"Unknown scheduler type: {scheduler_type}, using default")
-            return pipeline
-        
-        try:
-            scheduler_cls = scheduler_map[scheduler_type]
-            pipeline.scheduler = scheduler_cls.from_config(pipeline.scheduler.config)
-            logger.info(f"Scheduler set to {scheduler_type}")
-            return pipeline
-        except Exception as e:
-            logger.warning(f"Failed to set scheduler: {e}, using default")
-            return pipeline
-    
+        st = scheduler_type.lower()
+        if st in scheduler_map and scheduler_map[st] is not None:
+            try:
+                sched_cls = scheduler_map[st]
+                pipeline.scheduler = sched_cls.from_config(pipeline.scheduler.config)
+                logger.info(f"Scheduler updated to '{st}'")
+            except Exception as e:
+                logger.warning(f"Could not apply scheduler '{st}': {e}")
+        return pipeline
+
+    def _configure_scheduler(self, pipeline: Any, scheduler_type: str, diff: Optional[Dict[str, Any]] = None) -> Any:
+        return self._set_scheduler(pipeline, scheduler_type)
+
     def generate(
         self,
         prompt: Union[str, List[str]],
@@ -155,130 +195,149 @@ class DiffusionModelManager:
         width: Optional[int] = None,
         num_images_per_prompt: int = 1,
         seed: Optional[int] = None,
-        **kwargs
-    ) -> torch.Tensor:
+        **kwargs: Any,
+    ) -> Any:
         """
-        Generate images from text prompt.
-        
-        Args:
-            prompt: Text prompt(s)
-            negative_prompt: Optional negative prompt(s)
-            num_inference_steps: Number of denoising steps
-            guidance_scale: Guidance scale for classifier-free guidance
-            height: Image height (optional)
-            width: Image width (optional)
-            num_images_per_prompt: Number of images per prompt
-            seed: Optional random seed
-            **kwargs: Additional generation arguments
-        
-        Returns:
-            Generated images tensor
+        Generate images from prompt.
         """
         if self.pipeline is None:
-            raise RuntimeError("Pipeline not loaded. Call load_pipeline() first.")
-        
+            raise DiffusionError("Pipeline is not loaded. Call load_pipeline() first.")
+
         try:
-            # Set generator if seed provided
             generator = None
             if seed is not None:
-                generator = torch.Generator(device=self.device).manual_seed(seed)
-            
-            # Generate images
-            with torch.cuda.amp.autocast():
-                images = self.pipeline(
-                    prompt=prompt,
-                    negative_prompt=negative_prompt,
-                    num_inference_steps=num_inference_steps,
-                    guidance_scale=guidance_scale,
-                    height=height,
-                    width=width,
-                    num_images_per_prompt=num_images_per_prompt,
-                    generator=generator,
-                    **kwargs
-                ).images
-            
-            logger.debug(f"Generated {len(images)} image(s)")
-            return images
-            
+                gen_device = self.device if self.device is not None else torch.device("cpu")
+                generator = torch.Generator(device=gen_device).manual_seed(seed)
+
+            gen_kwargs: Dict[str, Any] = {
+                "prompt": prompt,
+                "negative_prompt": negative_prompt,
+                "num_inference_steps": num_inference_steps,
+                "guidance_scale": guidance_scale,
+                "num_images_per_prompt": num_images_per_prompt,
+                "generator": generator,
+                **kwargs,
+            }
+            if height is not None:
+                gen_kwargs["height"] = height
+            if width is not None:
+                gen_kwargs["width"] = width
+
+            with torch.inference_mode():
+                result = self.pipeline(**gen_kwargs)
+
+            return getattr(result, "images", result)
+
         except Exception as e:
-            logger.error(f"Error during generation: {e}", exc_info=True)
-            raise
-    
+            if isinstance(e, DiffusionError):
+                raise
+            logger.error(f"Image generation failed: {e}", exc_info=True)
+            raise DiffusionError(f"Generation failed: {e}") from e
+
     def enable_xformers(self) -> None:
-        """Enable xFormers attention for faster inference."""
-        if self.pipeline is None:
-            raise RuntimeError("Pipeline not loaded")
-        
-        try:
-            self.pipeline.enable_xformers_memory_efficient_attention()
-            logger.info("xFormers attention enabled")
-        except Exception as e:
-            logger.warning(f"Failed to enable xFormers: {e}")
-    
+        """Enable xFormers memory efficient attention if supported."""
+        if self.pipeline is not None and hasattr(self.pipeline, "enable_xformers_memory_efficient_attention"):
+            try:
+                self.pipeline.enable_xformers_memory_efficient_attention()
+                logger.info("xFormers attention activated on diffusion pipeline")
+            except Exception as e:
+                logger.warning(f"Could not enable xFormers: {e}")
+
     def enable_model_cpu_offload(self) -> None:
-        """Enable CPU offloading for memory efficiency."""
-        if self.pipeline is None:
-            raise RuntimeError("Pipeline not loaded")
-        
-        try:
+        """Offload sub-modules to CPU."""
+        if self.pipeline is not None and hasattr(self.pipeline, "enable_model_cpu_offload"):
             self.pipeline.enable_model_cpu_offload()
-            logger.info("CPU offloading enabled")
-        except Exception as e:
-            logger.warning(f"Failed to enable CPU offloading: {e}")
-    
+
     def enable_sequential_cpu_offload(self) -> None:
-        """Enable sequential CPU offloading for maximum memory efficiency."""
-        if self.pipeline is None:
-            raise RuntimeError("Pipeline not loaded")
-        
-        try:
+        """Sequential sub-module CPU offloading for extreme low VRAM environments."""
+        if self.pipeline is not None and hasattr(self.pipeline, "enable_sequential_cpu_offload"):
             self.pipeline.enable_sequential_cpu_offload()
-            logger.info("Sequential CPU offloading enabled")
-        except Exception as e:
-            logger.warning(f"Failed to enable sequential CPU offloading: {e}")
+
+    # -----------------------------------------------------------------------
+    # Helpers
+    # -----------------------------------------------------------------------
+
+    def _resolve_device(self, device: Optional[Union[str, torch.device]]) -> torch.device:
+        if device is None:
+            return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if isinstance(device, str):
+            return torch.device(device)
+        return device
+
+    def _resolve_dtype(self, dtype: Optional[Union[str, torch.dtype]]) -> Optional[torch.dtype]:
+        if dtype is None:
+            return torch.float16 if torch.cuda.is_available() else torch.float32
+        if isinstance(dtype, torch.dtype):
+            return dtype
+        d_str = str(dtype).lower()
+        if d_str in ("fp16", "float16"):
+            return torch.float16
+        if d_str in ("bf16", "bfloat16"):
+            return torch.bfloat16
+        if d_str in ("fp32", "float32"):
+            return torch.float32
+        return None
 
 
 class DiffusionTrainer:
     """
-    Trainer for fine-tuning diffusion models.
+    Utility trainer for fine-tuning diffusion UNet, DiT, and LoRA adapters.
     """
-    
+
     def __init__(
         self,
         pipeline: Any,
         learning_rate: float = 5e-6,
-        use_8bit_adam: bool = True,
-    ):
-        """
-        Initialize diffusion trainer.
-        
-        Args:
-            pipeline: Diffusion pipeline
-            learning_rate: Learning rate
-            use_8bit_adam: Use 8-bit Adam optimizer
-        """
+        use_8bit_adam: bool = False,
+    ) -> None:
         self.pipeline = pipeline
         self.learning_rate = learning_rate
         self.use_8bit_adam = use_8bit_adam
-    
+
     def prepare_for_training(self) -> None:
-        """Prepare pipeline components for training."""
-        try:
-            # Set UNet to training mode
+        """Freeze VAE and Text Encoder; put UNet in training mode."""
+        if hasattr(self.pipeline, "unet") and self.pipeline.unet is not None:
             self.pipeline.unet.train()
-            
-            # Freeze VAE and text encoder
+        if hasattr(self.pipeline, "vae") and self.pipeline.vae is not None:
             self.pipeline.vae.requires_grad_(False)
+        if hasattr(self.pipeline, "text_encoder") and self.pipeline.text_encoder is not None:
             self.pipeline.text_encoder.requires_grad_(False)
-            
-            logger.info("Pipeline prepared for training")
-            
-        except Exception as e:
-            logger.error(f"Error preparing for training: {e}", exc_info=True)
-            raise
-    
-    def get_unet(self) -> UNet2DConditionModel:
-        """Get UNet model for training."""
-        return self.pipeline.unet
+        logger.info("Pipeline components prepared for training")
+
+    def get_unet(self) -> Any:
+        """Extract UNet model."""
+        return getattr(self.pipeline, "unet", None)
 
 
+# Alias for backward compatibility
+DiffusionManager = DiffusionModelManager
+
+
+def create_diffusion_manager(config: Optional[Dict[str, Any]] = None) -> DiffusionModelManager:
+    """Factory helper to instantiate a DiffusionModelManager."""
+    return DiffusionModelManager(config=config)
+
+
+__all__ = [
+    "DiffusionModelManager",
+    "DiffusionManager",
+    "DiffusionTrainer",
+    "create_diffusion_manager",
+    "DDIMScheduler",
+    "DPMSolverMultistepScheduler",
+    "EulerDiscreteScheduler",
+    "EulerAncestralDiscreteScheduler",
+    "LCMScheduler",
+    "UniPCMultistepScheduler",
+    "StableDiffusionPipeline",
+    "StableDiffusionXLPipeline",
+    "_DIFFUSERS_AVAILABLE",
+]
+
+import sys
+_mod = sys.modules.get(__name__)
+if _mod:
+    if __name__.startswith("optimization_core.models."):
+        sys.modules["models." + __name__[len("optimization_core.models."):]] = _mod
+    elif __name__.startswith("models."):
+        sys.modules["optimization_core.models." + __name__[len("models."):]] = _mod

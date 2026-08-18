@@ -3,8 +3,11 @@ Training Loop Module
 ====================
 Separated from trainer for modularity and clean execution.
 Handles forward pass, backward pass, gradient accumulation, gradient clipping,
-mixed-precision training (AMP), learning rate extraction, and early stopping evaluation.
+mixed-precision training (AMP), learning rate extraction, callback execution,
+and early stopping evaluation.
 """
+
+from __future__ import annotations
 
 import logging
 import time
@@ -18,90 +21,88 @@ try:
 except ImportError:
     from torch.cuda.amp import GradScaler, autocast  # type: ignore
 
-try:
-    from ..trainers.interfaces import BaseTrainer
-except ImportError:
-    try:
-        from optimization_core.trainers.interfaces import BaseTrainer
-    except ImportError:
-        from abc import ABC, abstractmethod
-
-        class BaseTrainer(ABC):  # type: ignore
-            """Fallback abstract base class for Trainer."""
-
-            @abstractmethod
-            def train(self) -> None:
-                pass
-
-            @abstractmethod
-            def evaluate(self) -> Dict[str, float]:
-                pass
-
-            @abstractmethod
-            def generate(self, prompt: str, **kwargs: Any) -> str:
-                pass
+from .callbacks import CallbackHandler
+from .exceptions import EarlyStoppingTriggered, TrainingConfigurationError, TrainingError
+from .interfaces import BaseCallback, BaseTrainingLoop
+from .types import EarlyStoppingConfig, PrecisionType, StepResult, TrainingLoopConfig
 
 logger = logging.getLogger(__name__)
 
 
-class TrainingError(RuntimeError):
-    """Exception raised when a training step or loop execution fails."""
-
-    pass
-
-
-class TrainingLoop(BaseTrainer):
+class TrainingLoop(BaseTrainingLoop):
     """
-    Modular training loop implementation.
-    Handles forward pass, backward pass, gradient accumulation, clipping, AMP, and optimization.
-    Implements BaseTrainer interface.
+    Modular, high-performance PyTorch training loop implementation.
+    Handles forward pass, backward pass, gradient accumulation, gradient norm/val clipping,
+    automatic mixed-precision (AMP), learning rate extraction, and callback events.
     """
 
     def __init__(
         self,
         use_amp: bool = False,
-        amp_dtype: Optional[torch.dtype] = None,
+        amp_dtype: Optional[Union[str, torch.dtype]] = None,
         max_grad_norm: float = 1.0,
         max_grad_val: Optional[float] = None,
         grad_accum_steps: int = 1,
+        callbacks: Optional[List[BaseCallback]] = None,
+        config: Optional[Union[Dict[str, Any], TrainingLoopConfig]] = None,
+        **kwargs: Any,
     ) -> None:
         """
         Initialize TrainingLoop.
 
         Args:
-            use_amp: Use automatic mixed precision (AMP).
-            amp_dtype: AMP dtype (e.g. torch.float16 or torch.bfloat16).
+            use_amp: Enable automatic mixed precision (AMP).
+            amp_dtype: AMP torch.dtype or string ("fp16", "bf16").
             max_grad_norm: Maximum gradient norm for clipping (> 0).
-            max_grad_val: Optional maximum gradient absolute value for clipping.
-            grad_accum_steps: Gradient accumulation steps (must be >= 1).
-
-        Raises:
-            ValueError: If grad_accum_steps < 1 or max_grad_norm <= 0.
+            max_grad_val: Optional maximum absolute value for clipping.
+            grad_accum_steps: Number of steps to accumulate gradients over (>= 1).
+            callbacks: Optional list of lifecycle callbacks.
+            config: Optional TrainingLoopConfig instance or dictionary.
         """
+        if config is not None:
+            if isinstance(config, TrainingLoopConfig):
+                use_amp = config.use_amp
+                amp_dtype = config.amp_dtype
+                max_grad_norm = config.max_grad_norm
+                max_grad_val = config.max_grad_val
+                grad_accum_steps = config.grad_accum_steps
+            elif isinstance(config, dict):
+                use_amp = config.get("use_amp", use_amp)
+                amp_dtype = config.get("amp_dtype", amp_dtype)
+                max_grad_norm = config.get("max_grad_norm", max_grad_norm)
+                max_grad_val = config.get("max_grad_val", max_grad_val)
+                grad_accum_steps = config.get("grad_accum_steps", grad_accum_steps)
+
         if grad_accum_steps < 1:
             raise ValueError(f"grad_accum_steps must be at least 1, got {grad_accum_steps}")
         if max_grad_norm <= 0:
             raise ValueError(f"max_grad_norm must be positive, got {max_grad_norm}")
 
         self.use_amp: bool = use_amp
-        self.amp_dtype: Optional[torch.dtype] = amp_dtype
+        if isinstance(amp_dtype, str):
+            self.amp_dtype: Optional[torch.dtype] = PrecisionType.to_torch_dtype(amp_dtype)
+        else:
+            self.amp_dtype = amp_dtype
+
         self.max_grad_norm: float = max_grad_norm
         self.max_grad_val: Optional[float] = max_grad_val
         self.grad_accum_steps: int = grad_accum_steps
 
+        # Callbacks
+        self.callback_handler = CallbackHandler(callbacks or [])
+
         # Internal state tracking for early stopping
         self.best_metric: Optional[float] = None
         self.bad_epochs: int = 0
+        self.total_steps: int = 0
+
+    def add_callback(self, callback: BaseCallback) -> None:
+        """Register an additional lifecycle callback."""
+        self.callback_handler.add_callback(callback)
 
     def _get_autocast_context(self, model: Optional[nn.Module] = None) -> Any:
         """
         Obtain device-appropriate autocast context manager.
-
-        Args:
-            model: Optional PyTorch model to infer device from.
-
-        Returns:
-            Autocast context manager.
         """
         if not self.use_amp:
             return autocast("cpu", enabled=False)
@@ -122,20 +123,13 @@ class TrainingLoop(BaseTrainer):
     def _extract_loss(self, outputs: Any) -> torch.Tensor:
         """
         Extract scalar loss tensor cleanly from various model output types.
-
-        Args:
-            outputs: Output from model forward pass (dict, dataclass, or Tensor).
-
-        Returns:
-            Extracted single scalar/tensor loss.
-
-        Raises:
-            TrainingError: If loss tensor cannot be extracted.
         """
         if hasattr(outputs, "loss") and getattr(outputs, "loss") is not None:
             raw_loss = getattr(outputs, "loss")
         elif isinstance(outputs, dict) and "loss" in outputs:
             raw_loss = outputs["loss"]
+        elif isinstance(outputs, (tuple, list)) and len(outputs) > 0 and isinstance(outputs[0], torch.Tensor):
+            raw_loss = outputs[0]
         elif isinstance(outputs, torch.Tensor):
             raw_loss = outputs
         else:
@@ -149,27 +143,28 @@ class TrainingLoop(BaseTrainer):
 
         return raw_loss
 
-    def _clip_gradients(self, model: nn.Module) -> None:
+    def _clip_gradients(self, model: nn.Module) -> float:
         """
         Apply gradient norm and gradient value clipping to model parameters.
-
-        Args:
-            model: PyTorch model module.
+        Returns total gradient norm before clipping.
         """
         model_for_clipping = (
             model.module if isinstance(model, (nn.DataParallel, nn.parallel.DistributedDataParallel))
             else model
         )
 
+        total_norm = 0.0
         if hasattr(model_for_clipping, "parameters"):
             params: List[nn.Parameter] = [p for p in model_for_clipping.parameters() if p.grad is not None]
             if not params:
-                return
+                return 0.0
 
             if self.max_grad_norm > 0:
-                nn.utils.clip_grad_norm_(params, self.max_grad_norm)
+                total_norm = float(nn.utils.clip_grad_norm_(params, self.max_grad_norm))
             if self.max_grad_val is not None and self.max_grad_val > 0:
                 nn.utils.clip_grad_value_(params, self.max_grad_val)
+
+        return total_norm
 
     def train_step(
         self,
@@ -177,24 +172,22 @@ class TrainingLoop(BaseTrainer):
         batch: Union[Dict[str, torch.Tensor], torch.Tensor, Any],
         optimizer: torch.optim.Optimizer,
         scaler: GradScaler,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """
         Perform a single training step including forward, backward, accumulation, and optimizer update.
 
         Args:
-            model: PyTorch module to train.
-            batch: Input batch (dict, tensor, list, tuple, etc.).
+            model: PyTorch module.
+            batch: Input batch.
             optimizer: Optimizer instance.
-            scaler: GradScaler instance for mixed precision.
-            **kwargs: Additional arguments (e.g. step count).
+            scaler: GradScaler for mixed precision.
+            **kwargs: Extra arguments (e.g. step index).
 
         Returns:
-            Dictionary with step metrics ('loss', 'skipped').
-
-        Raises:
-            TrainingError: If training step fails.
+            Dictionary with step metrics ('loss', 'skipped', 'grad_norm').
         """
+        step_start_time = time.perf_counter()
         try:
             with self._get_autocast_context(model):
                 if isinstance(batch, dict):
@@ -211,24 +204,29 @@ class TrainingLoop(BaseTrainer):
             if not torch.isfinite(loss):
                 logger.warning(f"Non-finite loss encountered during training step: {loss.item()}")
                 optimizer.zero_grad(set_to_none=True)
-                return {"loss": float("inf"), "skipped": True}
+                return {"loss": float("inf"), "skipped": True, "grad_norm": 0.0}
 
             # Backward pass with gradient scaling
             scaler.scale(loss).backward()
 
             # Perform optimizer step on accumulation boundaries
             step = kwargs.get("step", 1)
+            grad_norm = 0.0
             if step % self.grad_accum_steps == 0:
                 scaler.unscale_(optimizer)
-                self._clip_gradients(model)
+                grad_norm = self._clip_gradients(model)
                 scaler.step(optimizer)
                 scaler.update()
                 optimizer.zero_grad(set_to_none=True)
 
+            step_time = (time.perf_counter() - step_start_time) * 1000.0
             unscaled_loss_val = float((loss * self.grad_accum_steps).item())
+
             return {
                 "loss": unscaled_loss_val,
                 "skipped": False,
+                "grad_norm": grad_norm,
+                "step_time_ms": step_time,
             }
         except Exception as e:
             if isinstance(e, TrainingError):
@@ -245,29 +243,28 @@ class TrainingLoop(BaseTrainer):
         scaler: Optional[GradScaler] = None,
         step_callback: Optional[Callable[..., Any]] = None,
         epoch_callback: Optional[Callable[..., Any]] = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """
         Train model for one full epoch over train_loader dataset.
-
-        Args:
-            model: Model to train.
-            train_loader: Training data loader.
-            optimizer: Optimizer instance.
-            scheduler: Optional learning rate scheduler.
-            scaler: Optional GradScaler instance.
-            step_callback: Optional callback called after each training step.
-            epoch_callback: Optional callback called upon epoch completion.
-            **kwargs: Additional keyword arguments.
-
-        Returns:
-            Dictionary containing epoch metrics ('loss', 'num_steps', 'elapsed_time').
         """
         if scaler is None:
             try:
-                scaler = GradScaler('cuda', enabled=self.use_amp)
+                scaler = GradScaler("cuda", enabled=self.use_amp)
             except Exception:
                 scaler = GradScaler(enabled=self.use_amp)
+
+        epoch_idx = kwargs.get("epoch", 1)
+        state: Dict[str, Any] = {
+            "model": model,
+            "optimizer": optimizer,
+            "scheduler": scheduler,
+            "scaler": scaler,
+            "epoch": epoch_idx,
+            "should_stop": False,
+        }
+
+        self.callback_handler.on_epoch_begin(epoch_idx, state)
 
         model.train()
         total_loss = 0.0
@@ -275,6 +272,12 @@ class TrainingLoop(BaseTrainer):
         start_time = time.perf_counter()
 
         for step, batch in enumerate(train_loader, start=1):
+            self.total_steps += 1
+            state["step"] = self.total_steps
+            state["epoch_step"] = step
+
+            self.callback_handler.on_step_begin(self.total_steps, state)
+
             try:
                 step_metrics = self.train_step(
                     model=model,
@@ -282,7 +285,7 @@ class TrainingLoop(BaseTrainer):
                     optimizer=optimizer,
                     scaler=scaler,
                     step=step,
-                    **kwargs
+                    **kwargs,
                 )
 
                 if step_metrics.get("skipped", False):
@@ -305,14 +308,23 @@ class TrainingLoop(BaseTrainer):
                 elif optimizer is not None and len(optimizer.param_groups) > 0:
                     current_lr = optimizer.param_groups[0].get("lr")
 
+                step_metrics["lr"] = current_lr
+                state["step_metrics"] = step_metrics
+                state["current_lr"] = current_lr
+
+                self.callback_handler.on_step_end(self.total_steps, state)
+
                 if step_callback:
                     step_callback(
                         step=step,
                         metrics=step_metrics,
-                        learning_rate=current_lr
+                        learning_rate=current_lr,
                     )
 
             except Exception as e:
+                self.callback_handler.on_exception(e, state)
+                if isinstance(e, EarlyStoppingTriggered):
+                    raise
                 logger.error(f"Error in training step {step}: {e}", exc_info=True)
                 optimizer.zero_grad(set_to_none=True)
                 continue
@@ -321,10 +333,15 @@ class TrainingLoop(BaseTrainer):
         avg_loss = total_loss / max(1, num_steps)
 
         epoch_result = {
+            "epoch": epoch_idx,
             "loss": avg_loss,
             "num_steps": num_steps,
             "elapsed_time": elapsed,
+            "steps_per_sec": num_steps / max(0.001, elapsed),
         }
+
+        state["epoch_metrics"] = epoch_result
+        self.callback_handler.on_epoch_end(epoch_idx, state)
 
         if epoch_callback:
             epoch_callback(metrics=epoch_result)
@@ -332,7 +349,7 @@ class TrainingLoop(BaseTrainer):
         return epoch_result
 
     def train(self, *args: Any, **kwargs: Any) -> Any:
-        """Standard train execution for BaseTrainer interface compliance."""
+        """Standard train execution for BaseTrainingLoop / BaseTrainer compliance."""
         model = kwargs.get("model")
         train_loader = kwargs.get("train_loader")
         optimizer = kwargs.get("optimizer")
@@ -345,13 +362,13 @@ class TrainingLoop(BaseTrainer):
                 optimizer=optimizer,
                 scheduler=scheduler,
                 scaler=scaler,
-                **kwargs
+                **kwargs,
             )
         logger.warning("train() called without required arguments (model, train_loader, optimizer).")
         return None
 
     def evaluate(self, *args: Any, **kwargs: Any) -> Dict[str, float]:
-        """Evaluate model performance for BaseTrainer interface compliance."""
+        """Evaluate model performance for BaseTrainingLoop compliance."""
         model = kwargs.get("model")
         data_loader = kwargs.get("data_loader") or kwargs.get("val_loader")
         device = kwargs.get("device")
@@ -362,7 +379,7 @@ class TrainingLoop(BaseTrainer):
         return {}
 
     def generate(self, prompt: str, **kwargs: Any) -> str:
-        """Generate text stub for BaseTrainer interface compliance."""
+        """Generate text stub for compatibility."""
         return prompt
 
     def reset_early_stopping(self) -> None:
@@ -378,33 +395,20 @@ class TrainingLoop(BaseTrainer):
         mode: str = "min",
         min_delta: float = 0.0,
         bad_epochs: int = 0,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> bool:
         """
         Determine if training should stop early based on metric performance.
-
-        Args:
-            current_metric: Current metric value.
-            best_metric: Best metric value seen so far.
-            patience: Early stopping patience (max allowed non-improving epochs).
-            mode: Metric comparison mode ("min" for loss, "max" for accuracy/F1).
-            min_delta: Minimum metric change to count as genuine improvement.
-            bad_epochs: Number of consecutive non-improving epochs so far.
-            **kwargs: Additional arguments.
-
-        Returns:
-            True if bad_epochs >= patience, indicating early stopping.
         """
-        is_improved = False
+        mode = mode.lower()
         if mode == "min":
             is_improved = current_metric < (best_metric - min_delta)
         elif mode == "max":
             is_improved = current_metric > (best_metric + min_delta)
+        else:
+            is_improved = False
 
         if is_improved:
             return False
 
         return bad_epochs >= patience
-
-
-__all__ = ["TrainingLoop", "TrainingError"]

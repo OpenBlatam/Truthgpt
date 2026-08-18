@@ -1,10 +1,14 @@
 """
 Training Utilities Module
 
-This module contains utilities for training, evaluation, and optimization.
+Training, evaluation, optimization pipelines, and parallel training utilities.
 """
 
 from __future__ import annotations
+
+from typing import Any, Dict, List
+
+from .._lazy_loader import create_lazy_module
 
 __all__ = [
     'TruthGPTTrainingUtils',
@@ -12,40 +16,50 @@ __all__ = [
     'TruthGPTOptimizationUtils',
     'TruthGPTEvaluationUtils',
     'TruthGPTAdvancedEvaluation',
+    'ParallelTraining',
+    'list_available_training_components',
+    'get_training_component_info',
 ]
 
-_LAZY_IMPORTS = {
-    'TruthGPTTrainingUtils': '..truthgpt_training_utils',
-    'TruthGPTAdvancedTraining': '..truthgpt_advanced_training',
-    'TruthGPTOptimizationUtils': '..truthgpt_optimization_utils',
-    'TruthGPTEvaluationUtils': '..truthgpt_evaluation_utils',
-    'TruthGPTAdvancedEvaluation': '..truthgpt_advanced_evaluation',
+_LAZY_IMPORTS: Dict[str, str] = {
+    'TruthGPTTrainingUtils': '.training_utils',
+    'TruthGPTAdvancedTraining': '.advanced_training',
+    'TruthGPTOptimizationUtils': '.optimization_utils',
+    'TruthGPTEvaluationUtils': '.evaluation_utils',
+    'TruthGPTAdvancedEvaluation': '.advanced_evaluation',
+    'ParallelTraining': '.parallel_training',
 }
 
-_import_cache = {}
+_ALIASES: Dict[str, str] = {
+    'TruthGPTTrainingUtils': 'TruthGPTTrainer',
+    'TruthGPTAdvancedTraining': 'TruthGPTAdvancedTrainer',
+    'TruthGPTOptimizationUtils': 'TruthGPTIntegratedOptimizer',
+    'TruthGPTEvaluationUtils': 'TruthGPTEvaluator',
+    'TruthGPTAdvancedEvaluation': 'TruthGPTAdvancedEvaluator',
+}
+
+_loader = create_lazy_module(
+    package_name=__name__,
+    lazy_imports=_LAZY_IMPORTS,
+    aliases=_ALIASES,
+    all_exports=__all__,
+    globals_dict=globals(),
+)
 
 
-def __getattr__(name: str):
-    """Lazy import system for training utility modules."""
-    if name.startswith('_'):
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-    
-    if name not in _LAZY_IMPORTS:
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-    
-    if name in _import_cache:
-        return _import_cache[name]
-    
-    module_path = _LAZY_IMPORTS[name]
-    try:
-        module = __import__(module_path, fromlist=[name], level=2)
-        obj = getattr(module, name)
-        _import_cache[name] = obj
-        return obj
-    except (ImportError, AttributeError) as e:
-        raise AttributeError(
-            f"module '{__name__}' has no attribute '{name}'. "
-            f"Failed to import: {e}"
-        ) from e
+def __getattr__(name: str) -> Any:
+    return _loader.__getattr__(name)
 
 
+def __dir__() -> List[str]:
+    return _loader.__dir__()
+
+
+def list_available_training_components() -> List[str]:
+    """List all available training utility components."""
+    return _loader.list_components()
+
+
+def get_training_component_info(component_name: str) -> Dict[str, Any]:
+    """Get information about a training component."""
+    return _loader.get_component_info(component_name)

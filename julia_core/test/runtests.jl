@@ -20,10 +20,12 @@ using TruthGPT
     include("test_quantization.jl")
     include("test_optimization.jl")
     include("test_jump.jl")
+    include("test_jump_optimization.jl")
     include("test_flux_ml.jl")
     include("test_transformer.jl")
     include("test_compression.jl")
     include("test_inference.jl")
     
     @info "All TruthGPT tests completed successfully!"
+
 end

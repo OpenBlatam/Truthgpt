@@ -3,7 +3,12 @@ TensorFlow Integration System - Complete Optimization Framework
 Integrates all TensorFlow optimizations for maximum performance and efficiency
 """
 
-import tensorflow as tf
+try:
+    import tensorflow as tf
+    _TF_AVAILABLE = True
+except ImportError:
+    tf = None
+    _TF_AVAILABLE = False
 import numpy as np
 from typing import Dict, Any, List, Optional, Tuple, Union, Callable
 from dataclasses import dataclass, field

@@ -50,18 +50,19 @@ end
 Create HyperparamBounds with keyword arguments and default ranges.
 """
 function HyperparamBounds(;
-    lr_range::Tuple{Float64, Float64} = (DEFAULT_LR_MIN, DEFAULT_LR_MAX),
-    batch_range::Tuple{Int, Int} = (DEFAULT_BATCH_MIN, DEFAULT_BATCH_MAX),
-    dropout_range::Tuple{Float64, Float64} = (DEFAULT_DROPOUT_MIN, DEFAULT_DROPOUT_MAX),
-    warmup_range::Tuple{Int, Int} = (DEFAULT_WARMUP_MIN, DEFAULT_WARMUP_MAX)
+    lr_range::Tuple{Real, Real} = (DEFAULT_LR_MIN, DEFAULT_LR_MAX),
+    batch_range::Tuple{Integer, Integer} = (DEFAULT_BATCH_MIN, DEFAULT_BATCH_MAX),
+    dropout_range::Tuple{Real, Real} = (DEFAULT_DROPOUT_MIN, DEFAULT_DROPOUT_MAX),
+    warmup_range::Tuple{Integer, Integer} = (DEFAULT_WARMUP_MIN, DEFAULT_WARMUP_MAX)
 )
     HyperparamBounds(
-        lr_range[1], lr_range[2],
-        batch_range[1], batch_range[2],
-        dropout_range[1], dropout_range[2],
-        warmup_range[1], warmup_range[2]
+        Float64(lr_range[1]), Float64(lr_range[2]),
+        Int(batch_range[1]), Int(batch_range[2]),
+        Float64(dropout_range[1]), Float64(dropout_range[2]),
+        Int(warmup_range[1]), Int(warmup_range[2])
     )
 end
+
 
 """
     OptimizationResult

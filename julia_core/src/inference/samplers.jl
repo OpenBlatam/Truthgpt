@@ -75,3 +75,41 @@ end
 function sample_nucleus(sampler::TokenSampler, logits::Vector{T}, p::T=T(0.9)) where T<:AbstractFloat
     return sample_topp(sampler, logits, p)
 end
+
+function sample_nucleus(
+    sampler::TokenSampler,
+    logits::Vector{T},
+    config::GenerationConfig
+) where T<:AbstractFloat
+    scaled_logits = copy(logits)
+    if config.temperature != 1.0f0 && config.temperature > 0.0f0
+        scaled_logits ./= config.temperature
+    end
+    
+    if config.top_k > 0
+        return sample_topk(sampler, scaled_logits, config.top_k)
+    elseif config.top_p < 1.0f0
+        return sample_topp(sampler, scaled_logits, T(config.top_p))
+    else
+        probs = copy(scaled_logits)
+        softmax!(probs)
+        return wsample(sampler.rng, 1:length(probs), probs)
+    end
+end
+
+function wsample(rng::AbstractRNG, items, weights)
+    total_w = sum(weights)
+    if total_w <= 0
+        return items[rand(rng, 1:length(items))]
+    end
+    r = rand(rng) * total_w
+    cumsum_val = zero(eltype(weights))
+    for (item, w) in zip(items, weights)
+        cumsum_val += w
+        if cumsum_val >= r
+            return item
+        end
+    end
+    return items[end]
+end
+

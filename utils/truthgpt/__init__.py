@@ -1,10 +1,15 @@
 """
 TruthGPT Utilities Module
 
-This module contains TruthGPT-specific utilities and components.
+TruthGPT-specific optimizers, configuration, integrated adapters,
+enhanced utilities, integration, and monitoring components.
 """
 
 from __future__ import annotations
+
+from typing import Any, Dict, List
+
+from .._lazy_loader import create_lazy_module
 
 __all__ = [
     'OptimizationLevel',
@@ -24,74 +29,72 @@ __all__ = [
     'create_truthgpt_optimizer',
     'quick_truthgpt_optimization',
     'truthgpt_optimization_context',
+    'TruthGPTEnhancedUtils',
+    'TruthGPTIntegration',
+    'TruthGPTMonitoring',
+    'TruthGPTTrainingUtils',
+    'TruthGPTEvaluationUtils',
+    'list_available_truthgpt_components',
+    'get_truthgpt_component_info',
 ]
 
-_LAZY_IMPORTS = {
-    # Core components from truthgpt_core
-    'OptimizationLevel': '..truthgpt_core',
-    'DeviceType': '..truthgpt_core',
-    'PrecisionType': '..truthgpt_core',
-    'TruthGPTConfig': '..truthgpt_core',
-    'BaseTruthGPTOptimizer': '..truthgpt_core',
-    'TruthGPTDeviceManager': '..truthgpt_core',
-    'TruthGPTPrecisionManager': '..truthgpt_core',
-    'TruthGPTMemoryManager': '..truthgpt_core',
-    'TruthGPTPerformanceManager': '..truthgpt_core',
-    'TruthGPTAttentionOptimizer': '..truthgpt_core',
-    'TruthGPTQuantizationOptimizer': '..truthgpt_core',
-    'TruthGPTPruningOptimizer': '..truthgpt_core',
-    'TruthGPTIntegratedOptimizer': '..truthgpt_core',
-    'create_truthgpt_config': '..truthgpt_core',
-    'create_truthgpt_optimizer': '..truthgpt_core',
-    'quick_truthgpt_optimization': '..truthgpt_core',
-    'truthgpt_optimization_context': '..truthgpt_core',
+_LAZY_IMPORTS: Dict[str, str] = {
+    # Core — now local
+    'OptimizationLevel': '.core',
+    'DeviceType': '.core',
+    'PrecisionType': '.core',
+    'TruthGPTConfig': '.core',
+    'BaseTruthGPTOptimizer': '.core',
+    'TruthGPTDeviceManager': '.core',
+    'TruthGPTPrecisionManager': '.core',
+    'TruthGPTMemoryManager': '.core',
+    'TruthGPTPerformanceManager': '.core',
+    'TruthGPTAttentionOptimizer': '.core',
+    'TruthGPTQuantizationOptimizer': '.core',
+    'TruthGPTPruningOptimizer': '.core',
+    'TruthGPTIntegratedOptimizer': '.core',
+    'create_truthgpt_config': '.core',
+    'create_truthgpt_optimizer': '.core',
+    'quick_truthgpt_optimization': '.core',
+    'truthgpt_optimization_context': '.core',
+    # Enhanced utils — now local
+    'TruthGPTEnhancedUtils': '.enhanced_utils',
+    # Integration — now local
+    'TruthGPTIntegration': '.integration',
+    # Monitoring — now local
+    'TruthGPTMonitoring': '.monitoring',
+    # Training/Eval — reference training subpackage
+    'TruthGPTTrainingUtils': '..training.training_utils',
+    'TruthGPTEvaluationUtils': '..training.evaluation_utils',
 }
 
-_import_cache = {}
+_ALIASES: Dict[str, str] = {
+    'TruthGPTTrainingUtils': 'TruthGPTTrainer',
+    'TruthGPTEvaluationUtils': 'TruthGPTEvaluator',
+}
+
+_loader = create_lazy_module(
+    package_name=__name__,
+    lazy_imports=_LAZY_IMPORTS,
+    aliases=_ALIASES,
+    all_exports=__all__,
+    globals_dict=globals(),
+)
 
 
-def __getattr__(name: str):
-    """Lazy import system for TruthGPT utility modules."""
-    if name.startswith('_'):
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-    
-    if name not in _LAZY_IMPORTS:
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-    
-    if name in _import_cache:
-        return _import_cache[name]
-    
-    module_path = _LAZY_IMPORTS[name]
-    try:
-        import importlib
-        module = importlib.import_module(module_path, __package__)
-        if hasattr(module, name):
-            obj = getattr(module, name)
-            _import_cache[name] = obj
-            return obj
-        _import_cache[name] = module
-        return module
-    except (ImportError, AttributeError) as e:
-
-        raise AttributeError(
-            f"module '{__name__}' has no attribute '{name}'. "
-            f"Failed to import: {e}"
-        ) from e
+def __getattr__(name: str) -> Any:
+    return _loader.__getattr__(name)
 
 
-def list_available_truthgpt_components() -> list[str]:
+def __dir__() -> List[str]:
+    return _loader.__dir__()
+
+
+def list_available_truthgpt_components() -> List[str]:
     """List all available TruthGPT components."""
-    return list(_LAZY_IMPORTS.keys())
+    return _loader.list_components()
 
 
-def get_truthgpt_component_info(component_name: str) -> dict[str, any]:
+def get_truthgpt_component_info(component_name: str) -> Dict[str, Any]:
     """Get information about a TruthGPT component."""
-    if component_name not in _LAZY_IMPORTS:
-        raise ValueError(f"Unknown TruthGPT component: {component_name}")
-    
-    return {
-        'name': component_name,
-        'module': _LAZY_IMPORTS[component_name],
-        'available': component_name in _import_cache or True,
-    }
-
+    return _loader.get_component_info(component_name)
