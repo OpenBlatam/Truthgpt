@@ -30,6 +30,13 @@ __all__ = [
     'quick_truthgpt_optimization',
     'truthgpt_optimization_context',
     'TruthGPTEnhancedUtils',
+    'TruthGPTEnhancedConfig',
+    'TruthGPTEnhancedManager',
+    'create_enhanced_truthgpt_manager',
+    'quick_enhanced_truthgpt_optimization',
+    'enhanced_truthgpt_optimization_context',
+    'quick_truthgpt_setup',
+    'complete_truthgpt_workflow',
     'TruthGPTIntegration',
     'TruthGPTMonitoring',
     'TruthGPTTrainingUtils',
@@ -59,6 +66,13 @@ _LAZY_IMPORTS: Dict[str, str] = {
     'truthgpt_optimization_context': '.core',
     # Enhanced utils — now local
     'TruthGPTEnhancedUtils': '.enhanced_utils',
+    'TruthGPTEnhancedConfig': '.enhanced_utils',
+    'TruthGPTEnhancedManager': '.enhanced_utils',
+    'create_enhanced_truthgpt_manager': '.enhanced_utils',
+    'quick_enhanced_truthgpt_optimization': '.enhanced_utils',
+    'enhanced_truthgpt_optimization_context': '.enhanced_utils',
+    'quick_truthgpt_setup': '.enhanced_utils',
+    'complete_truthgpt_workflow': '.enhanced_utils',
     # Integration — now local
     'TruthGPTIntegration': '.integration',
     # Monitoring — now local
@@ -71,7 +85,9 @@ _LAZY_IMPORTS: Dict[str, str] = {
 _ALIASES: Dict[str, str] = {
     'TruthGPTTrainingUtils': 'TruthGPTTrainer',
     'TruthGPTEvaluationUtils': 'TruthGPTEvaluator',
+    'TruthGPTEnhancedUtils': 'TruthGPTEnhancedManager',
 }
+
 
 _loader = create_lazy_module(
     package_name=__name__,

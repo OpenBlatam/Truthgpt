@@ -48,6 +48,9 @@ class Callback(BaseCallback):
     def on_save(self, state: Dict[str, Any]) -> None:
         pass
 
+    def on_exception(self, exception: Exception, state: Dict[str, Any]) -> None:
+        pass
+
 
 class PrintLogger(Callback):
     """Console print logger for formatting step and evaluation statistics."""
@@ -404,6 +407,22 @@ class CallbackHandler:
     def on_save(self, state: Dict[str, Any]) -> None:
         self._dispatch("on_save", state)
 
+    def on_exception(self, exception: Exception, state: Optional[Dict[str, Any]] = None) -> None:
+        state = state or {}
+        for cb in self.callbacks:
+            try:
+                method = getattr(cb, "on_exception", None)
+                if method and callable(method):
+                    try:
+                        method(exception, state)
+                    except TypeError:
+                        try:
+                            method(state)
+                        except TypeError:
+                            pass
+            except Exception as e:
+                logger.debug(f"Callback on_exception error ({type(cb).__name__}): {e}")
+
 
 __all__ = [
     "Callback",
@@ -417,3 +436,11 @@ __all__ = [
     "TensorBoardLogger",
     "CallbackHandler",
 ]
+
+import sys
+_mod = sys.modules.get(__name__)
+if _mod:
+    if __name__.startswith("optimization_core.trainers."):
+        sys.modules["trainers." + __name__[len("optimization_core.trainers."):]] = _mod
+    elif __name__.startswith("trainers."):
+        sys.modules["optimization_core.trainers." + __name__[len("trainers."):]] = _mod

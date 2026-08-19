@@ -36,9 +36,15 @@ import warnings
 from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
 import yaml
-import tqdm
-from transformers import AutoTokenizer, AutoModel
-from diffusers import StableDiffusionPipeline
+try:
+    from transformers import AutoTokenizer, AutoModel
+except ImportError:
+    AutoTokenizer, AutoModel = None, None
+
+try:
+    from diffusers import StableDiffusionPipeline
+except ImportError:
+    StableDiffusionPipeline = None
 
 # Configure logging
 logging.basicConfig(
@@ -668,6 +674,35 @@ def example_cuda_optimization():
     print(f"⚡ Mixed Precision: {stats['mixed_precision']}")
     
     return optimized_model
+
+
+# Export aliases and backward-compatibility shims
+CUDAOptimizations = CudaKernelOptimizer
+
+
+class OptimizedLayerNorm(nn.Module):
+    """Optimized LayerNorm module."""
+
+    def __init__(self, normalized_shape: Union[int, List[int], torch.Size], eps: float = 1e-5, elementwise_affine: bool = True, **kwargs: Any):
+        super().__init__()
+        self.norm = nn.LayerNorm(normalized_shape, eps=eps, elementwise_affine=elementwise_affine)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.norm(x)
+
+
+class OptimizedRMSNorm(nn.Module):
+    """Optimized Root Mean Square Layer Normalization module."""
+
+    def __init__(self, dim: int = 512, eps: float = 1e-6, **kwargs: Any):
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(dim))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        norm_x = torch.mean(x * x, dim=-1, keepdim=True)
+        return x * torch.rsqrt(norm_x + self.eps) * self.weight
+
 
 if __name__ == "__main__":
     # Run example

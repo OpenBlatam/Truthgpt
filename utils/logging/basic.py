@@ -79,8 +79,8 @@ class TrainingLogger:
     Specialized logger for training workflows with structured metrics.
     """
     
-    def __init__(self, logger: logging.Logger):
-        self.logger = logger
+    def __init__(self, logger: Optional[logging.Logger] = None):
+        self.logger = logger or logging.getLogger("trainers.training")
     
     def log_step(
         self,

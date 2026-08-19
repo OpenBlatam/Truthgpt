@@ -146,8 +146,12 @@ class TestTruthGPTAdvancedTrainer:
         optimizer = trainer.setup_optimizer(simple_model)
         scheduler = trainer.setup_scheduler(optimizer, 100)
         
-        assert scheduler is not None
-        assert isinstance(scheduler, optim.lr_scheduler._LRScheduler)
+        scheduler_classes = (
+            getattr(optim.lr_scheduler, "LRScheduler", optim.lr_scheduler._LRScheduler),
+            optim.lr_scheduler._LRScheduler,
+        )
+        assert isinstance(scheduler, scheduler_classes)
+
     
     def test_compute_loss(self, trainer, simple_model):
         """Test loss computation."""

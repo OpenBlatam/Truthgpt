@@ -183,6 +183,18 @@ class KernelFusionOptimizer:
             'fusion_types': fusion_types
         }
 
-def create_kernel_fusion_optimizer(config: Dict[str, Any]) -> KernelFusionOptimizer:
+def create_kernel_fusion_optimizer(config: Optional[Dict[str, Any]] = None) -> KernelFusionOptimizer:
     """Create kernel fusion optimizer from configuration."""
     return KernelFusionOptimizer()
+
+
+# Alias for backward compatibility
+KernelFusion = KernelFusionOptimizer
+
+__all__ = [
+    'FusedLayerNormLinear',
+    'FusedAttentionMLP',
+    'KernelFusionOptimizer',
+    'KernelFusion',
+    'create_kernel_fusion_optimizer',
+]

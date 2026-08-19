@@ -1,2 +1,8 @@
 """Backward compatibility — moved to utils.truthgpt.core"""
-from .truthgpt.core import *  # noqa: F401,F403
+try:
+    from .truthgpt.core import *  # noqa: F401,F403
+except (ImportError, ValueError):
+    try:
+        from truthgpt.core import *  # noqa: F401,F403
+    except (ImportError, ValueError):
+        from utils.truthgpt.core import *  # noqa: F401,F403

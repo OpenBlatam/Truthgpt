@@ -578,6 +578,97 @@ class TestConsolidatedAdapters(unittest.TestCase):
         print("[OK] TrainingAdapter inheritance verified")
 
 
+class TestUtilsSubsystem(unittest.TestCase):
+    """Tests for the refactored modular utils subsystem."""
+
+    def test_utils_init_exports(self):
+        """Verify that core utilities, types, and workflows are exported from optimization_core.utils."""
+        import optimization_core.utils as utils
+        
+        expected = [
+            "DeviceType", "OptimizationLevel", "PrecisionType",
+            "BaseUtility", "UtilityRegistry", "get_utility_registry",
+            "UtilityPipelineBuilder", "UtilityPipeline",
+            "CircuitBreaker", "CircuitState", "CircuitBreakerOpenError",
+            "TruthGPTEnhancedConfig", "TruthGPTEnhancedManager",
+            "create_enhanced_truthgpt_manager", "quick_enhanced_truthgpt_optimization",
+            "quick_truthgpt_setup", "complete_truthgpt_workflow",
+            "quick_truthgpt_training", "quick_truthgpt_evaluation",
+            "list_available_utility_modules", "get_utility_module_info",
+        ]
+        for item in expected:
+            with self.subTest(item=item):
+                self.assertTrue(hasattr(utils, item), f"utils is missing {item}")
+        print("\n[OK] optimization_core.utils exports verified")
+
+    def test_utils_registry_and_pipeline(self):
+        """Verify registry and pipeline builder functionality."""
+        from optimization_core.utils import (
+            BaseUtility,
+            UtilityRegistry,
+            UtilityPipelineBuilder,
+            OptimizationLevel,
+        )
+
+        class EchoUtility(BaseUtility):
+            def __init__(self):
+                super().__init__(name="echo", version="1.0.0")
+
+            def execute(self, payload=None, **kwargs):
+                return {"result": payload, "status": "echoed"}
+
+            def get_health_status(self):
+                return {"status": "healthy"}
+
+        registry = UtilityRegistry()
+        util = EchoUtility()
+        registry.register(util, category="testing", priority=10)
+        
+        self.assertTrue(registry.has("echo"))
+        retrieved = registry.get("echo")
+        self.assertEqual(retrieved.name, "echo")
+
+        pipeline = (
+            UtilityPipelineBuilder()
+            .with_name("test_pipeline")
+            .with_optimization_level(OptimizationLevel.BALANCED)
+            .add_step(util)
+            .build()
+        )
+        res = pipeline.execute(payload="hello world")
+        self.assertIsNotNone(res)
+        print("[OK] utils registry and pipeline verified")
+
+    def test_utils_discovery(self):
+        """Verify submodule discovery functions."""
+        from optimization_core.utils import list_available_utility_modules
+        modules = list_available_utility_modules()
+        self.assertIsInstance(modules, list)
+        self.assertIn("memory", modules)
+        self.assertIn("gpu", modules)
+        self.assertIn("truthgpt", modules)
+        self.assertIn("enterprise", modules)
+        print("[OK] utils discovery verified")
+
+    def test_utils_backward_compatibility_shims(self):
+        """Verify backward compatibility shim modules in utils."""
+        import optimization_core.utils.truthgpt_enhanced_utils as t_enhanced
+        import optimization_core.utils.truthgpt_advanced_training as t_training
+        import optimization_core.utils.truthgpt_advanced_evaluation as t_evaluation
+        import optimization_core.utils.gpu_utils as gpu_u
+        import optimization_core.utils.memory_utils as mem_u
+        import optimization_core.utils.enterprise_auth as ent_auth
+
+        self.assertIsNotNone(t_enhanced.TruthGPTEnhancedConfig)
+        self.assertIsNotNone(t_training.TruthGPTAdvancedTrainer)
+        self.assertIsNotNone(t_evaluation.TruthGPTAdvancedEvaluator)
+        self.assertIsNotNone(gpu_u.GPUUtils)
+        self.assertIsNotNone(mem_u.MemoryUtils)
+        self.assertIsNotNone(ent_auth.EnterpriseAuth)
+        print("[OK] utils backward compatibility shims verified")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 

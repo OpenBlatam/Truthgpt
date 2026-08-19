@@ -31,12 +31,14 @@ from .model_manager import ModelManager
 from .optimizer_manager import OptimizerManager
 from .data_manager import DataManager
 from .ema_manager import EMAManager
-from .evaluator import Evaluator
+from .evaluator import Evaluator, get_autocast_context
 from .checkpoint_manager import CheckpointManager
 from .callbacks import Callback, CallbackHandler
 from .interfaces import BaseTrainer
 from .types import StepState, EvalMetrics, TrainerState
 from .exceptions import TrainerError
+from .profiler import TrainingProfiler
+from .metrics_tracker import MetricTracker
 
 try:
     from utils.logging_utils import TrainingLogger
@@ -114,6 +116,9 @@ class GenericTrainer(BaseTrainer):
         self.callbacks = self.callback_handler.callbacks
         self.data_options = data_options or {}
         self.state = TrainerState()
+        self.state.max_steps = getattr(cfg.training, "max_steps", None)
+        self.profiler = TrainingProfiler(enabled=bool(getattr(cfg.hardware, "use_profiler", False)))
+        self.metric_tracker = MetricTracker()
 
         # 1. Device resolution
         self.device = self._resolve_device(cfg.hardware.device)
@@ -183,6 +188,9 @@ class GenericTrainer(BaseTrainer):
             tokenizer=self.tokenizer,
         )
 
+        # 8. Profiler and Metrics tracker
+        self.profiler = TrainingProfiler(enabled=getattr(cfg.hardware, "use_profiler", False))
+        self.metrics_tracker = MetricTracker()
         self.training_logger = TrainingLogger(logger)
 
     def _resolve_device(self, target: str) -> torch.device:
@@ -236,7 +244,7 @@ class GenericTrainer(BaseTrainer):
         else:
             batch = batch.to(self.device, non_blocking=True)
 
-        with autocast(enabled=self._use_amp(), dtype=self._amp_dtype()):
+        with get_autocast_context(self.device.type, enabled=self._use_amp(), dtype=self._amp_dtype()):
             if isinstance(batch, dict):
                 outputs = self.model(**batch)
             elif isinstance(batch, (list, tuple)):
@@ -311,9 +319,9 @@ class GenericTrainer(BaseTrainer):
 
     def train(self) -> None:
         """Execute complete training loop with deconstructed steps and full event hooks."""
-        self.state.is_training = True
-        self.state.start_time = time.time()
+        self.state.mark_training()
         self.state.global_step = self._try_resume()
+        self.profiler.start()
 
         self.callback_handler.on_train_begin({
             "config": self.cfg,
@@ -328,6 +336,9 @@ class GenericTrainer(BaseTrainer):
 
         try:
             for epoch in range(self.cfg.training.epochs):
+                if self.state.should_stop_by_max_steps:
+                    break
+
                 self.state.epoch = epoch + 1
                 self.callback_handler.on_epoch_begin(self.state.epoch, {"global_step": self.state.global_step})
 
@@ -339,6 +350,11 @@ class GenericTrainer(BaseTrainer):
                 logger.info(f"Starting epoch {self.state.epoch}/{self.cfg.training.epochs}")
 
                 for step, batch in enumerate(self.train_loader, start=1):
+                    if self.state.should_stop_by_max_steps:
+                        logger.info(f"Max steps limit reached ({self.state.max_steps}). Stopping training.")
+                        break
+
+                    step_t0 = self.profiler.step_start()
                     self.callback_handler.on_step_begin(step, {
                         "global_step": self.state.global_step,
                         "epoch": self.state.epoch,
@@ -358,20 +374,28 @@ class GenericTrainer(BaseTrainer):
                             self.state.global_step += 1
                             step_count += 1
 
-                        running_loss += scaled_loss.detach().item()
+                        loss_val = scaled_loss.detach().item()
+                        running_loss += loss_val
+                        self.metric_tracker.update("loss", loss_val)
 
+                        batch_tokens = 0
                         if isinstance(batch, dict):
                             if "attention_mask" in batch:
-                                tokens_accum += int(batch["attention_mask"].sum().item())
+                                batch_tokens = int(batch["attention_mask"].sum().item())
                             elif "input_ids" in batch:
-                                tokens_accum += int(batch["input_ids"].numel())
+                                batch_tokens = int(batch["input_ids"].numel())
+                        tokens_accum += batch_tokens
+
+                        prof_metrics = self.profiler.step_end(step_t0, num_tokens=batch_tokens)
 
                         step_state = {
                             "global_step": self.state.global_step,
                             "step": step,
                             "epoch": self.state.epoch,
-                            "loss": scaled_loss.detach().item(),
+                            "loss": loss_val,
                         }
+                        if prof_metrics:
+                            step_state.update(prof_metrics)
                         self.callback_handler.on_step_end(step, step_state)
 
                         # Logging interval
@@ -380,6 +404,8 @@ class GenericTrainer(BaseTrainer):
                             elapsed = max(1e-6, time.perf_counter() - epoch_start)
                             tps = tokens_accum / elapsed if tokens_accum > 0 else 0.0
                             current_lr = self.optimizer_manager.get_lr()
+                            self.metric_tracker.update("learning_rate", current_lr)
+                            self.metric_tracker.update("tokens_per_sec", tps)
 
                             self.training_logger.log_step(
                                 step=self.state.global_step,
@@ -410,6 +436,8 @@ class GenericTrainer(BaseTrainer):
                             val_loss = eval_metrics.get("loss", float("inf"))
                             ppl = eval_metrics.get("perplexity", float("inf"))
                             metric_val = self.evaluator.select_best_metric(eval_metrics)
+                            self.metric_tracker.update("val_loss", val_loss)
+                            self.metric_tracker.update("perplexity", ppl)
 
                             improved = metric_val < (self.state.best_val_loss if self.cfg.training.select_best_by in ("loss",) else self.state.best_metric)
                             self.training_logger.log_eval(
@@ -461,19 +489,29 @@ class GenericTrainer(BaseTrainer):
             self.callback_handler.on_save({"path": final_saved, "step": self.state.global_step})
             logger.info("Training process completed successfully.")
 
-            self.state.end_time = time.time()
-            self.callback_handler.on_train_end({
+            self.state.mark_completed()
+            train_end_payload = {
                 "global_step": self.state.global_step,
                 "best_metric": self.state.best_metric,
                 "elapsed_seconds": self.state.elapsed_seconds(),
-            })
+                "metrics_summary": self.metric_tracker.summary(),
+            }
+            if self.profiler.enabled:
+                train_end_payload["profiling"] = self.profiler.summary()
+            self.callback_handler.on_train_end(train_end_payload)
 
         except KeyboardInterrupt:
             logger.warning("Training interrupted by user.")
+            self.state.mark_failed("Interrupted by user")
             self.checkpoint_manager.save("last.pt", step=self.state.global_step)
             raise
         except Exception as e:
             logger.error(f"Unhandled error in training loop: {e}", exc_info=True)
+            self.state.mark_failed(str(e))
+            self.callback_handler.on_exception(e, {
+                "global_step": self.state.global_step,
+                "epoch": self.state.epoch,
+            })
             self.checkpoint_manager.save("last.pt", step=self.state.global_step)
             raise TrainerError(f"Training loop failed: {e}") from e
         finally:
@@ -520,7 +558,7 @@ class GenericTrainer(BaseTrainer):
         self.model.eval()
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
 
-        with autocast(enabled=self._use_amp(), dtype=self._amp_dtype()):
+        with get_autocast_context(self.device.type, enabled=self._use_amp(), dtype=self._amp_dtype()):
             output_ids = self.model.generate(
                 **inputs,
                 max_new_tokens=max_new_tokens,
@@ -537,4 +575,12 @@ class GenericTrainer(BaseTrainer):
         return text
 
 
-__all__ = ["GenericTrainer", "TrainerConfig", "set_seed"]
+__all__ = ["GenericTrainer", "TrainerConfig", "set_seed", "TrainingLogger"]
+
+import sys
+_mod = sys.modules.get(__name__)
+if _mod:
+    if __name__.startswith("optimization_core.trainers."):
+        sys.modules["trainers." + __name__[len("optimization_core.trainers."):]] = _mod
+    elif __name__.startswith("trainers."):
+        sys.modules["optimization_core.trainers." + __name__[len("trainers."):]] = _mod

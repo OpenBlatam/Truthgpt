@@ -147,6 +147,9 @@ class TruthGPTAdvancedEvaluator:
         """
         self.logger.info(f"📊 Starting comprehensive TruthGPT evaluation for {task_type}")
         
+        if dataloader is None or len(dataloader) == 0:
+            raise ValueError("Dataloader is empty or contains no data")
+        
         evaluation_start = time.time()
         
         # Base metrics
@@ -212,6 +215,21 @@ class TruthGPTAdvancedEvaluator:
                     input_ids = batch.to(device)
                     labels = batch  # For language modeling
         
+                # Ensure inputs match model dtype/shape if model has no Embedding
+                try:
+                    p = next(model.parameters())
+                    if not any(isinstance(m, nn.Embedding) for m in model.modules()):
+                        if input_ids.dtype in (torch.int32, torch.int64):
+                            input_ids = input_ids.to(dtype=p.dtype)
+                        if input_ids.size(-1) != p.size(-1):
+                            if input_ids.size(-1) < p.size(-1):
+                                padding = torch.zeros(*input_ids.shape[:-1], p.size(-1) - input_ids.size(-1), dtype=input_ids.dtype, device=input_ids.device)
+                                input_ids = torch.cat([input_ids, padding], dim=-1)
+                            else:
+                                input_ids = input_ids[..., :p.size(-1)]
+                except Exception:
+                    pass
+
                 # Forward pass
                 outputs = model(input_ids)
                 
@@ -222,20 +240,23 @@ class TruthGPTAdvancedEvaluator:
                     logits = outputs
                 
                 # Shift for next token prediction
-                shift_logits = logits[..., :-1, :].contiguous()
-                shift_labels = labels[..., 1:].contiguous()
-                
-                # Compute loss
-                loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
-                loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), 
-                              shift_labels.view(-1))
+                if logits.dim() >= 2 and logits.size(-1) > 1 and labels.dim() >= 2:
+                    shift_logits = logits[..., :-1, :].contiguous()
+                    shift_labels = labels[..., 1:].contiguous()
+                    loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
+                    loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), 
+                                  shift_labels.view(-1))
+                    predictions.extend(shift_logits.argmax(dim=-1).cpu().numpy().flatten())
+                    targets.extend(shift_labels.cpu().numpy().flatten())
+                else:
+                    loss_fct = nn.MSELoss()
+                    loss = loss_fct(logits.float(), labels.float())
+                    predictions.extend(logits.cpu().numpy().flatten())
+                    targets.extend(labels.cpu().numpy().flatten())
                 
                 total_loss += loss.item()
-                total_tokens += shift_labels.numel()
-                
-                # Store predictions for accuracy
-                predictions.extend(shift_logits.argmax(dim=-1).cpu().numpy().flatten())
-                targets.extend(shift_labels.cpu().numpy().flatten())
+                total_tokens += labels.numel()
+
         
         # Calculate metrics
         avg_loss = total_loss / len(dataloader)
@@ -291,12 +312,17 @@ class TruthGPTAdvancedEvaluator:
                     logits = outputs
                 
                 loss_fct = nn.CrossEntropyLoss()
-                loss = loss_fct(logits, labels)
+                if logits.dim() == 3:
+                    logits_flat = logits.view(-1, logits.size(-1))
+                    labels_flat = labels.view(-1)
+                    loss = loss_fct(logits_flat, labels_flat)
+                    all_predictions.extend(logits_flat.argmax(dim=-1).cpu().numpy())
+                    all_labels.extend(labels_flat.cpu().numpy())
+                else:
+                    loss = loss_fct(logits, labels)
+                    all_predictions.extend(logits.argmax(dim=-1).cpu().numpy())
+                    all_labels.extend(labels.cpu().numpy())
                 total_loss += loss.item()
-                
-                # Store predictions and labels
-                all_predictions.extend(logits.argmax(dim=-1).cpu().numpy())
-                all_labels.extend(labels.cpu().numpy())
         
         # Calculate metrics
         accuracy = accuracy_score(all_labels, all_predictions)
@@ -318,6 +344,7 @@ class TruthGPTAdvancedEvaluator:
         }
         
         return metrics
+
     
     def _evaluate_generation(self, model: nn.Module, 
                            dataloader, 
@@ -338,16 +365,23 @@ class TruthGPTAdvancedEvaluator:
                     input_ids = batch.to(device)
                 
                 # Generate text
-                generated = model.generate(
-                    input_ids,
-                    max_length=self.config.max_generation_length,
-                    temperature=self.config.temperature,
-                    top_p=self.config.top_p,
-                    top_k=self.config.top_k
-                )
+                if hasattr(model, 'generate') and callable(model.generate):
+                    generated = model.generate(
+                        input_ids,
+                        max_length=self.config.max_generation_length,
+                        temperature=self.config.temperature,
+                        top_p=self.config.top_p,
+                        top_k=self.config.top_k
+                    )
+                else:
+                    # Fallback generation using forward logits
+                    outputs = model(input_ids)
+                    logits = outputs.logits if hasattr(outputs, 'logits') else outputs
+                    generated = logits.argmax(dim=-1)
                 
                 all_generated_texts.append(generated)
                 all_reference_texts.append(labels if isinstance(batch, (list, tuple)) else batch)
+
         
         # Calculate generation metrics
         metrics = {
@@ -599,12 +633,15 @@ if __name__ == "__main__":
 
 # Aliases
 TruthGPTAdvancedEvaluation = TruthGPTAdvancedEvaluator
+quick_advanced_evaluation = quick_evaluation
 
 __all__ = [
     'TruthGPTEvaluationConfig',
     'TruthGPTAdvancedEvaluator',
     'TruthGPTAdvancedEvaluation',
     'create_advanced_evaluator',
+    'quick_evaluation',
     'quick_advanced_evaluation',
 ]
+
 

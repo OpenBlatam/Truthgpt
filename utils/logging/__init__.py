@@ -1,12 +1,13 @@
 """
 Logging Utilities Package
+=========================
 
 Unified logging utilities consolidating basic structured logging
 and advanced logging with JSON formatting, rotation, and context.
 
 Basic logging (from .basic):
     - setup_logger() — basic console+file logger
-    - get_logger() — get or create logger
+    - get_logger() / getLogger() — get or create logger
     - TrainingLogger — training-specific structured logger
 
 Advanced logging (from .advanced):
@@ -19,6 +20,7 @@ Advanced logging (from .advanced):
 
 from __future__ import annotations
 
+import logging as _std_logging
 from typing import Any, Dict, List
 
 from .._lazy_loader import create_lazy_module
@@ -27,6 +29,7 @@ __all__ = [
     # Basic
     'setup_logger',
     'get_logger',
+    'getLogger',
     'TrainingLogger',
     # Advanced
     'JSONFormatter',
@@ -42,6 +45,7 @@ _LAZY_IMPORTS: Dict[str, str] = {
     # Basic logging
     'setup_logger': '.basic',
     'get_logger': '.basic',
+    'getLogger': '.basic',
     'TrainingLogger': '.basic',
     # Advanced logging
     'JSONFormatter': '.advanced',
@@ -51,15 +55,25 @@ _LAZY_IMPORTS: Dict[str, str] = {
     'is_main_process': '.advanced',
 }
 
+_ALIASES: Dict[str, str] = {
+    'getLogger': 'get_logger',
+}
+
 _loader = create_lazy_module(
     package_name=__name__,
     lazy_imports=_LAZY_IMPORTS,
+    aliases=_ALIASES,
     all_exports=__all__,
     globals_dict=globals(),
 )
 
 
 def __getattr__(name: str) -> Any:
+    if name == "getLogger":
+        try:
+            return _loader.__getattr__("get_logger")
+        except Exception:
+            return _std_logging.getLogger
     return _loader.__getattr__(name)
 
 

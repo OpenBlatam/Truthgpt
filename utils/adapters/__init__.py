@@ -22,16 +22,18 @@ __all__ = [
 ]
 
 _LAZY_IMPORTS: Dict[str, str] = {
-    'TruthGPTAdapters': '..enterprise_truthgpt_adapter',
-    'TruthGPTAdapter': '..adapters.truthgpt_adapters',
-    'TruthGPTIntegration': '..truthgpt_integration',
-    'TruthGPTEnhancedUtils': '..truthgpt_enhanced_utils',
-    'TruthGPTCore': '..truthgpt_core',
-    'EnterpriseTruthGPTAdapter': '..enterprise_truthgpt_adapter',
+    'TruthGPTAdapters': '..enterprise.truthgpt_adapter',
+    'TruthGPTAdapter': '..enterprise.truthgpt_adapter',
+    'TruthGPTIntegration': '..truthgpt.integration',
+    'TruthGPTEnhancedUtils': '..truthgpt.enhanced_utils',
+    'TruthGPTCore': '..truthgpt.core',
+    'EnterpriseTruthGPTAdapter': '..enterprise.truthgpt_adapter',
 }
 
 _ALIASES: Dict[str, str] = {
     'TruthGPTAdapters': 'EnterpriseTruthGPTAdapter',
+    'TruthGPTAdapter': 'EnterpriseTruthGPTAdapter',
+    'TruthGPTIntegration': 'TruthGPTIntegrationManager',
 }
 
 _loader = create_lazy_module(

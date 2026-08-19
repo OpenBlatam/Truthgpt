@@ -43,7 +43,7 @@ This document outlines the architectural enhancements, structural updates, and r
 
 ## 📊 Current Roadmap Status
 
-### Documented Specifications (9/25)
+### Documented Specifications (10/25)
 
 1. ✅ [00_INDEX.md](00_INDEX.md) - Specifications Index
 2. ✅ [01_ARCHITECTURE_SPEC.md](01_ARCHITECTURE_SPEC.md) - System Macro Architecture
@@ -55,15 +55,15 @@ This document outlines the architectural enhancements, structural updates, and r
 8. ✅ [07_POLYGLOT_CORE_SPEC.md](07_POLYGLOT_CORE_SPEC.md) - Polyglot Routing Engine
 9. ✅ [08_RUST_CORE_SPEC.md](08_RUST_CORE_SPEC.md) - Rust Extension Backend
 10. ✅ [11_JULIA_CORE_SPEC.md](11_JULIA_CORE_SPEC.md) - Julia Native Implementation
-11. ✅ [SPEC_TEMPLATE.md](SPEC_TEMPLATE.md) - Spec Template Guidelines
-12. ✅ [README.md](README.md) - Spec Onboarding Guide
+11. ✅ [14_UTILS_SPEC.md](14_UTILS_SPEC.md) - Common Utilities Subsystem
+12. ✅ [SPEC_TEMPLATE.md](SPEC_TEMPLATE.md) - Spec Template Guidelines
+13. ✅ [README.md](README.md) - Spec Onboarding Guide
 
-### Pending Specifications (14/25)
+### Pending Specifications (13/25)
 
 **High Priority**:
 - ⏳ `09_CPP_CORE_SPEC.md` - C++ CUDA Kernels and FlashAttention Backend
 - ⏳ `10_GO_CORE_SPEC.md` - Go gRPC/HTTP Server
-- ⏳ `14_UTILS_SPEC.md` - Common Utilities and Event Bus
 - ⏳ `16_TESTING_SPEC.md` - Async Testing Guidelines
 
 **Medium Priority**:

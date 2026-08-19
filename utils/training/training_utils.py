@@ -483,8 +483,12 @@ def create_truthgpt_finetuner(config: TruthGPTTrainingConfig) -> TruthGPTFineTun
 def quick_truthgpt_training(model: nn.Module, train_loader, 
                           learning_rate: float = 1e-4,
                           num_epochs: int = 10,
-                          precision: str = "fp16") -> nn.Module:
+                          precision: str = "fp16",
+                          **kwargs) -> nn.Module:
     """Quick TruthGPT training setup."""
+    num_epochs = kwargs.get('max_epochs', kwargs.get('num_epochs', num_epochs))
+    learning_rate = kwargs.get('learning_rate', learning_rate)
+    precision = kwargs.get('precision', precision)
     config = TruthGPTTrainingConfig(
         learning_rate=learning_rate,
         max_epochs=num_epochs,
@@ -499,15 +503,23 @@ def quick_truthgpt_training(model: nn.Module, train_loader,
 
 # Context managers
 @contextmanager
-def truthgpt_training_context(model: nn.Module, train_loader, config: TruthGPTTrainingConfig):
+def truthgpt_training_context(model: nn.Module, train_loader, *args, **kwargs):
     """Context manager for TruthGPT training."""
-    trainer = create_truthgpt_trainer(config)
-    trainer.setup_training(model, train_loader)
-    try:
-        yield trainer
-    finally:
-        # Cleanup if needed
-        pass
+    if args and isinstance(args[0], TruthGPTTrainingConfig):
+        config = args[0]
+        trainer = create_truthgpt_trainer(config)
+        trainer.setup_training(model, train_loader)
+        try:
+            yield trainer
+        finally:
+            pass
+    else:
+        trained_model = quick_truthgpt_training(model, train_loader, *args, **kwargs)
+        try:
+            yield trained_model
+        finally:
+            pass
+
 
 # Example usage
 if __name__ == "__main__":

@@ -22,7 +22,7 @@ import warnings
 
 logger = logging.getLogger(__name__)
 
-class OptimizationLevel(Enum):
+class OptimizationLevel(str, Enum):
     """Optimization levels for TruthGPT."""
     BASIC = "basic"
     ADVANCED = "advanced"
@@ -35,13 +35,13 @@ class OptimizationLevel(Enum):
     INFINITE = "infinite"
     ULTIMATE = "ultimate"
 
-class DeviceType(Enum):
+class DeviceType(str, Enum):
     """Device types for TruthGPT."""
     CPU = "cpu"
     CUDA = "cuda"
     AUTO = "auto"
 
-class PrecisionType(Enum):
+class PrecisionType(str, Enum):
     """Precision types for TruthGPT."""
     FP32 = "fp32"
     FP16 = "fp16"

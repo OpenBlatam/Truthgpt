@@ -6,6 +6,7 @@ Fully backward compatible with property delegates and legacy flat config attribu
 """
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any
+import sys
 import json
 import os
 import logging
@@ -57,6 +58,7 @@ class TrainingConfig:
     log_interval: int = 50
     eval_interval: int = 500
     select_best_by: str = "loss"  # loss|ppl
+    max_steps: Optional[int] = None
 
     def __post_init__(self) -> None:
         self.validate()
@@ -75,6 +77,8 @@ class TrainingConfig:
             raise ConfigurationError(f"learning_rate must be positive, got {self.learning_rate}")
         if not (0.0 <= self.warmup_ratio <= 1.0):
             raise ConfigurationError(f"warmup_ratio must be in range [0.0, 1.0], got {self.warmup_ratio}")
+        if self.max_steps is not None and self.max_steps <= 0:
+            raise ConfigurationError(f"max_steps must be positive if specified, got {self.max_steps}")
         valid_precision = {"none", "fp16", "bf16"}
         if str(self.mixed_precision).lower() not in valid_precision:
             raise ConfigurationError(f"mixed_precision must be one of {valid_precision}, got '{self.mixed_precision}'")
@@ -223,6 +227,7 @@ class TrainerConfig:
             log_interval=training_dict.get("log_interval", config_dict.get("log_interval", 50)),
             eval_interval=training_dict.get("eval_interval", config_dict.get("eval_interval", 500)),
             select_best_by=config_dict.get("eval", {}).get("select_best_by", training_dict.get("select_best_by", config_dict.get("select_best_by", "loss"))),
+            max_steps=training_dict.get("max_steps", config_dict.get("max_steps")),
         )
 
         hardware_dict = config_dict.get("hardware", {})
@@ -304,6 +309,7 @@ class TrainerConfig:
                 "log_interval": self.training.log_interval,
                 "eval_interval": self.training.eval_interval,
                 "select_best_by": self.training.select_best_by,
+                "max_steps": self.training.max_steps,
             },
             "hardware": {
                 "device": self.hardware.device,
@@ -384,6 +390,14 @@ class TrainerConfig:
         return cls.from_dict(data)
 
     # Property delegates for flat backward compatibility
+    @property
+    def name_or_path(self) -> str:
+        return self.model.name_or_path
+
+    @name_or_path.setter
+    def name_or_path(self, value: str) -> None:
+        self.model.name_or_path = value
+
     @property
     def model_name(self) -> str:
         return self.model.name_or_path
@@ -543,6 +557,14 @@ class TrainerConfig:
     @select_best_by.setter
     def select_best_by(self, value: str) -> None:
         self.training.select_best_by = value
+
+    @property
+    def max_steps(self) -> Optional[int]:
+        return self.training.max_steps
+
+    @max_steps.setter
+    def max_steps(self, value: Optional[int]) -> None:
+        self.training.max_steps = value
 
     @property
     def device(self) -> str:
@@ -724,3 +746,10 @@ __all__ = [
     "EMAConfig",
     "TrainerConfig",
 ]
+
+_mod = sys.modules.get(__name__)
+if _mod:
+    if __name__.startswith("optimization_core.trainers."):
+        sys.modules["trainers." + __name__[len("optimization_core.trainers."):]] = _mod
+    elif __name__.startswith("trainers."):
+        sys.modules["optimization_core.trainers." + __name__[len("trainers."):]] = _mod

@@ -3,7 +3,8 @@ TruthGPT Optimization Core Utilities
 ====================================
 
 Unified, modular, enterprise-grade utilities for deep learning optimization,
-hardware management, metrics collection, distributed orchestration, and training tools.
+hardware management, metrics collection, distributed orchestration, resilience,
+and training tools.
 
 Submodules:
 - `truthgpt`: TruthGPT-specific optimizers, configuration, and integrated adapters
@@ -19,20 +20,25 @@ Submodules:
 - `quantum`: Quantum circuit simulation, VQE, QAOA, and deep learning engines
 - `training`: Advanced training utilities, evaluators, and optimization loops
 - `modules`: Polyglot compilation, optimization layers, and high-order modules
+- `logging`: Structured loggers, JSON formatters, and rotation handlers
+- `metrics`: Basic and advanced metrics collectors
 """
 
 from __future__ import annotations
 
 import contextlib
 import importlib
-import logging
+import logging as _std_logging
 import os
 import sys
 import time
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Type, Union
 
-# Version metadata
-__version__ = "4.5.0"
+# Version and author metadata
+__version__ = "2.0.0"
+__author__ = "TruthGPT Optimization Core Team"
+__description__ = "TruthGPT Optimization Core Utilities"
+
 
 # Module Aliasing across namespaces
 _mod = sys.modules.get(__name__)
@@ -61,6 +67,111 @@ _SUBMODULES: Dict[str, str] = {
     'metrics': '.metrics',
 }
 
+# Core types, interfaces, exceptions, registry, builder, and base
+from .types import (
+    OptimizationLevel,
+    DeviceType,
+    PrecisionType,
+    CudaKernelType,
+    LogLevel,
+    TrackerBackend,
+    CachePolicy,
+    UtilityCategory,
+    HardwareDevice,
+    ComputePrecision,
+    OptimizationStrategy,
+    HealthStatus,
+    CircuitState,
+    TaskStatus,
+    SerializationFormat,
+    UtilityMetadata,
+    HardwareInfo,
+    ExecutionStats,
+    BenchmarkResult,
+    SystemMetrics,
+    MemoryProfile,
+    CheckpointSummary,
+    RunInfo,
+    HealthReport,
+    CircuitBreakerConfig,
+    RetryConfig,
+    RateLimiterConfig,
+    ResilienceConfig,
+    TaskMetadata,
+    UtilityPipelineConfig,
+    UtilityConfig,
+)
+
+from .interfaces import (
+    BaseOptimizationModel,
+    BaseUtility,
+    BaseOptimizer,
+    BaseOptimizerUtility,
+    BaseManager,
+    BaseHardwareManager,
+    BaseTracker,
+    BaseMetricsCollector,
+    BaseTelemetryCollector,
+    BaseAdapter,
+    BaseSerializationHandler,
+    BaseLogger,
+    BaseResilienceHandler,
+    BaseConfigManager,
+    BaseTaskScheduler,
+)
+
+from .exceptions import (
+    UtilsError,
+    UtilityError,
+    UtilityNotFoundError,
+    UtilityConfigurationError,
+    UtilityExecutionError,
+    HardwareError,
+    HardwareUnavailableError,
+    CUDAKernelError,
+    MemoryOptimizationError,
+    AdapterError,
+    MonitoringError,
+    RegistryError,
+    BenchmarkError,
+    CheckpointError,
+    ResilienceError,
+    CircuitBreakerOpenError,
+    RateLimitExceededError,
+    MaxRetriesExceededError,
+    ValidationFailureError,
+    SerializationFailureError,
+    HealthCheckFailedError,
+    TaskExecutionError,
+)
+
+from .registry import (
+    UtilityRegistry,
+    UTILITY_REGISTRY,
+    register_utility,
+    create_utility,
+    list_available_utilities,
+    get_utility_info,
+    get_utility_class,
+    is_utility_available,
+)
+
+from .builder import (
+    UtilityPipeline,
+    UtilityPipelineBuilder,
+    create_utility_builder,
+)
+
+from .base import (
+    CudaResourceManager,
+    system_metrics_collector,
+)
+
+from .circuit_breaker import (
+    CircuitBreaker,
+    circuit_breaker,
+)
+
 # Direct imports for training tools to ensure functions take precedence over module names
 from .visualize_training import (
     visualize_checkpoints,
@@ -80,34 +191,18 @@ from .cleanup_runs import (
 
 # Lazy exports mapping (Symbol -> (Relative Module Path, Target Attribute Name))
 _LAZY_EXPORTS: Dict[str, Tuple[str, str]] = {
-    # Base utilities
-    'BaseOptimizationModel': ('.base', 'BaseOptimizationModel'),
-    'CudaResourceManager': ('.base', 'CudaResourceManager'),
-    'system_metrics_collector': ('.base', 'system_metrics_collector'),
     # Logging (via consolidated logging subpackage)
     'setup_logger': ('.logging.basic', 'setup_logger'),
     'get_logger': ('.logging.basic', 'get_logger'),
     'TrainingLogger': ('.logging.basic', 'TrainingLogger'),
-    # Visualization & Training Tools
-    'visualize_checkpoints': ('.visualize_training', 'visualize_checkpoints'),
-    'summarize_run': ('.visualize_training', 'summarize_run'),
-    'plot_loss_curves': ('.visualize_training', 'plot_loss_curves'),
-    'visualize_memory_profile': ('.visualize_training', 'visualize_memory_profile'),
-    'compare_runs': ('.compare_runs', 'compare_runs'),
-    'get_run_info': ('.compare_runs', 'get_run_info'),
+    # Training tools & Visualization
     'monitor_training': ('.monitor_training', 'get_gpu_stats'),
-    'cleanup_runs': ('.cleanup_runs', 'cleanup_runs'),
-    'cleanup_old_runs': ('.cleanup_runs', 'cleanup_old_runs'),
-    'cleanup_checkpoints': ('.cleanup_runs', 'cleanup_checkpoints'),
     # TruthGPT Core (via truthgpt subpackage)
     'TruthGPTConfig': ('.truthgpt.core', 'TruthGPTConfig'),
     'create_truthgpt_config': ('.truthgpt.core', 'create_truthgpt_config'),
     'create_truthgpt_optimizer': ('.truthgpt.core', 'create_truthgpt_optimizer'),
     'quick_truthgpt_optimization': ('.truthgpt.core', 'quick_truthgpt_optimization'),
     'truthgpt_optimization_context': ('.truthgpt.core', 'truthgpt_optimization_context'),
-    'OptimizationLevel': ('.truthgpt.core', 'OptimizationLevel'),
-    'DeviceType': ('.truthgpt.core', 'DeviceType'),
-    'PrecisionType': ('.truthgpt.core', 'PrecisionType'),
     'BaseTruthGPTOptimizer': ('.truthgpt.core', 'BaseTruthGPTOptimizer'),
     'TruthGPTDeviceManager': ('.truthgpt.core', 'TruthGPTDeviceManager'),
     'TruthGPTPrecisionManager': ('.truthgpt.core', 'TruthGPTPrecisionManager'),
@@ -139,10 +234,42 @@ _LAZY_EXPORTS: Dict[str, Tuple[str, str]] = {
     'EnterpriseMonitor': ('.enterprise.monitor', 'EnterpriseMonitor'),
     'EnterpriseMetrics': ('.enterprise.metrics', 'EnterpriseMetrics'),
     'EnterpriseCloudIntegration': ('.enterprise.cloud_integration', 'EnterpriseCloudIntegration'),
-    'EnterpriseTruthGPTAdapter': ('.enterprise.truthgpt_adapter', 'EnterpriseTruthGPTAdapter'),
+    # TruthGPT Enhanced & Workflows
+    'TruthGPTEnhancedConfig': ('.truthgpt.enhanced_utils', 'TruthGPTEnhancedConfig'),
+    'TruthGPTEnhancedManager': ('.truthgpt.enhanced_utils', 'TruthGPTEnhancedManager'),
+    'create_enhanced_truthgpt_manager': ('.truthgpt.enhanced_utils', 'create_enhanced_truthgpt_manager'),
+    'quick_enhanced_truthgpt_optimization': ('.truthgpt.enhanced_utils', 'quick_enhanced_truthgpt_optimization'),
+    'quick_truthgpt_optimization': ('.truthgpt.enhanced_utils', 'quick_truthgpt_optimization'),
+    'enhanced_truthgpt_optimization_context': ('.truthgpt.enhanced_utils', 'enhanced_truthgpt_optimization_context'),
+    'truthgpt_optimization_context': ('.truthgpt.enhanced_utils', 'truthgpt_optimization_context'),
+    'quick_truthgpt_setup': ('.truthgpt.enhanced_utils', 'quick_truthgpt_setup'),
+    'complete_truthgpt_workflow': ('.truthgpt.enhanced_utils', 'complete_truthgpt_workflow'),
+
+    # Training & Evaluation Workflows
+    'quick_truthgpt_training': ('.training.training_utils', 'quick_truthgpt_training'),
+    'truthgpt_training_context': ('.training.training_utils', 'truthgpt_training_context'),
+    'create_truthgpt_trainer': ('.training.training_utils', 'create_truthgpt_trainer'),
+    'create_truthgpt_finetuner': ('.training.training_utils', 'create_truthgpt_finetuner'),
+    'TruthGPTTrainingConfig': ('.training.advanced_training', 'TruthGPTTrainingConfig'),
+    'TruthGPTAdvancedTrainer': ('.training.advanced_training', 'TruthGPTAdvancedTrainer'),
+    'create_advanced_trainer': ('.training.advanced_training', 'create_advanced_trainer'),
+    'quick_advanced_training': ('.training.advanced_training', 'quick_advanced_training'),
+    'advanced_training_context': ('.training.advanced_training', 'advanced_training_context'),
+    'quick_truthgpt_evaluation': ('.training.evaluation_utils', 'quick_truthgpt_evaluation'),
+    'truthgpt_evaluation_context': ('.training.evaluation_utils', 'truthgpt_evaluation_context'),
+    'create_truthgpt_evaluator': ('.training.evaluation_utils', 'create_truthgpt_evaluator'),
+    'create_truthgpt_comparison': ('.training.evaluation_utils', 'create_truthgpt_comparison'),
+    'TruthGPTEvaluationConfig': ('.training.advanced_evaluation', 'TruthGPTEvaluationConfig'),
+    'TruthGPTAdvancedEvaluator': ('.training.advanced_evaluation', 'TruthGPTAdvancedEvaluator'),
+    'create_advanced_evaluator': ('.training.advanced_evaluation', 'create_advanced_evaluator'),
+    'quick_evaluation': ('.training.advanced_evaluation', 'quick_evaluation'),
+    'quick_advanced_evaluation': ('.training.advanced_evaluation', 'quick_advanced_evaluation'),
+    # Tasks & Concurrency
+    'TaskScheduler': ('.task_scheduler', 'TaskScheduler'),
     # Experiment & Metrics
     'ExperimentTracker': ('.experiment_tracker', 'ExperimentTracker'),
 }
+
 
 _import_cache: Dict[str, Any] = {}
 
@@ -199,7 +326,7 @@ def safe_run(fn: Callable[..., Any], *args: Any, default: Any = None, **kwargs: 
     try:
         return fn(*args, **kwargs)
     except Exception as e:
-        logging.getLogger(__name__).warning(f"safe_run encountered exception in {fn}: {e}")
+        _std_logging.getLogger(__name__).warning(f"safe_run encountered exception in {fn}: {e}")
         return default
 
 
@@ -264,6 +391,15 @@ def __getattr__(name: str) -> Any:
         except (ImportError, AttributeError) as e:
             raise AttributeError(f"module '{__name__}' could not import '{name}' from '{module_path}': {e}") from e
 
+    # Fallback: check registry
+    if UTILITY_REGISTRY.has(name):
+        try:
+            value = UTILITY_REGISTRY.get(name)
+            _import_cache[name] = value
+            return value
+        except Exception:
+            pass
+
     # Fallback: try direct module in package
     try:
         module = importlib.import_module(f".{name}", package=__name__)
@@ -280,6 +416,7 @@ def __dir__() -> List[str]:
     all_symbols = set(globals().keys())
     all_symbols.update(_SUBMODULES.keys())
     all_symbols.update(_LAZY_EXPORTS.keys())
+    all_symbols.update(UTILITY_REGISTRY.list_utilities())
     return sorted(all_symbols)
 
 
@@ -307,6 +444,11 @@ def list_all_utilities() -> Dict[str, List[str]]:
     """Return an overview dictionary mapping each submodule category to its available components."""
     categories: Dict[str, List[str]] = {
         "submodules": list_available_utility_modules(),
+        "registered": list_available_utilities(),
+        "types": ["OptimizationLevel", "DeviceType", "PrecisionType", "UtilityCategory", "HardwareDevice", "ComputePrecision", "HardwareInfo", "ExecutionStats", "HealthReport", "ResilienceConfig", "CircuitBreakerConfig", "RetryConfig", "RateLimiterConfig"],
+        "interfaces": ["BaseOptimizationModel", "BaseUtility", "BaseOptimizer", "BaseHardwareManager", "BaseResilienceHandler", "BaseTelemetryCollector", "BaseConfigManager", "BaseSerializationHandler", "BaseTaskScheduler"],
+        "exceptions": ["UtilsError", "UtilityError", "UtilityNotFoundError", "UtilityConfigurationError", "HardwareUnavailableError", "ResilienceError", "CircuitBreakerOpenError"],
+        "registry": ["UTILITY_REGISTRY", "register_utility", "create_utility", "list_available_utilities", "get_utility_info", "get_utility_class", "is_utility_available"],
         "base": ["BaseOptimizationModel", "CudaResourceManager", "system_metrics_collector", "format_bytes", "get_gpu_info", "get_memory_info", "timed_block", "safe_run", "benchmark_function"],
         "logging": ["setup_logger", "get_logger", "TrainingLogger"],
         "training_tools": ["visualize_checkpoints", "summarize_run", "plot_loss_curves", "visualize_memory_profile", "compare_runs", "get_run_info", "monitor_training", "cleanup_runs"],
@@ -335,8 +477,93 @@ __all__ = [
     "quantum",
     "training",
     "modules",
-    # Foundational base & helpers
+    "logging",
+    "metrics",
+    # Interfaces
     "BaseOptimizationModel",
+    "BaseUtility",
+    "BaseOptimizer",
+    "BaseOptimizerUtility",
+    "BaseManager",
+    "BaseHardwareManager",
+    "BaseTracker",
+    "BaseMetricsCollector",
+    "BaseTelemetryCollector",
+    "BaseAdapter",
+    "BaseSerializationHandler",
+    "BaseLogger",
+    "BaseResilienceHandler",
+    "BaseConfigManager",
+    "BaseTaskScheduler",
+    # Types & Enums
+    "OptimizationLevel",
+    "DeviceType",
+    "PrecisionType",
+    "CudaKernelType",
+    "LogLevel",
+    "TrackerBackend",
+    "CachePolicy",
+    "UtilityCategory",
+    "HardwareDevice",
+    "ComputePrecision",
+    "OptimizationStrategy",
+    "HealthStatus",
+    "CircuitState",
+    "TaskStatus",
+    "SerializationFormat",
+    "UtilityMetadata",
+    "HardwareInfo",
+    "ExecutionStats",
+    "BenchmarkResult",
+    "SystemMetrics",
+    "MemoryProfile",
+    "CheckpointSummary",
+    "RunInfo",
+    "HealthReport",
+    "CircuitBreakerConfig",
+    "RetryConfig",
+    "RateLimiterConfig",
+    "ResilienceConfig",
+    "TaskMetadata",
+    "UtilityPipelineConfig",
+    "UtilityConfig",
+    # Exceptions
+    "UtilsError",
+    "UtilityError",
+    "UtilityNotFoundError",
+    "UtilityConfigurationError",
+    "UtilityExecutionError",
+    "HardwareError",
+    "HardwareUnavailableError",
+    "CUDAKernelError",
+    "MemoryOptimizationError",
+    "AdapterError",
+    "MonitoringError",
+    "RegistryError",
+    "BenchmarkError",
+    "CheckpointError",
+    "ResilienceError",
+    "CircuitBreakerOpenError",
+    "RateLimitExceededError",
+    "MaxRetriesExceededError",
+    "ValidationFailureError",
+    "SerializationFailureError",
+    "HealthCheckFailedError",
+    "TaskExecutionError",
+    # Registry APIs
+    "UtilityRegistry",
+    "UTILITY_REGISTRY",
+    "register_utility",
+    "create_utility",
+    "list_available_utilities",
+    "get_utility_info",
+    "get_utility_class",
+    "is_utility_available",
+    # Builder APIs
+    "UtilityPipeline",
+    "UtilityPipelineBuilder",
+    "create_utility_builder",
+    # Foundational base & helpers
     "CudaResourceManager",
     "system_metrics_collector",
     "format_bytes",
@@ -345,6 +572,9 @@ __all__ = [
     "timed_block",
     "safe_run",
     "benchmark_function",
+    # Resilience
+    "CircuitBreaker",
+    "circuit_breaker",
     # Logging
     "setup_logger",
     "get_logger",
@@ -360,22 +590,45 @@ __all__ = [
     "cleanup_runs",
     "cleanup_old_runs",
     "cleanup_checkpoints",
-    # TruthGPT Core
+    # TruthGPT Core & Workflows
     "TruthGPTConfig",
     "create_truthgpt_config",
     "create_truthgpt_optimizer",
     "quick_truthgpt_optimization",
     "truthgpt_optimization_context",
-    "OptimizationLevel",
-    "DeviceType",
-    "PrecisionType",
     "BaseTruthGPTOptimizer",
     "TruthGPTDeviceManager",
     "TruthGPTPrecisionManager",
     "TruthGPTMemoryManager",
     "TruthGPTPerformanceManager",
     "TruthGPTIntegratedOptimizer",
+    "TruthGPTEnhancedConfig",
+    "TruthGPTEnhancedManager",
+    "create_enhanced_truthgpt_manager",
+    "quick_enhanced_truthgpt_optimization",
+    "enhanced_truthgpt_optimization_context",
+    "quick_truthgpt_setup",
+    "complete_truthgpt_workflow",
+    "quick_truthgpt_training",
+    "truthgpt_training_context",
+    "create_truthgpt_trainer",
+    "create_truthgpt_finetuner",
+    "TruthGPTTrainingConfig",
+    "TruthGPTAdvancedTrainer",
+    "create_advanced_trainer",
+    "quick_advanced_training",
+    "advanced_training_context",
+    "quick_truthgpt_evaluation",
+    "truthgpt_evaluation_context",
+    "create_truthgpt_evaluator",
+    "create_truthgpt_comparison",
+    "TruthGPTEvaluationConfig",
+    "TruthGPTAdvancedEvaluator",
+    "create_advanced_evaluator",
+    "quick_evaluation",
+    "quick_advanced_evaluation",
     # Memory
+
     "MemoryOptimizer",
     "MemoryOptimizationConfig",
     "create_memory_optimizer",
@@ -401,7 +654,9 @@ __all__ = [
     "EnterpriseMetrics",
     "EnterpriseCloudIntegration",
     "EnterpriseTruthGPTAdapter",
-    # Experiment
+    # Tasks & Concurrency
+    "TaskScheduler",
+    # Experiment & Metrics
     "ExperimentTracker",
     # Discovery APIs
     "list_available_utility_modules",

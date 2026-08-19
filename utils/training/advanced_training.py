@@ -246,14 +246,17 @@ class TruthGPTAdvancedTrainer:
     def _setup_logging(self):
         """Setup logging and monitoring."""
         # TensorBoard logging
-        if self.config.tensorboard_logging:
-            log_dir = Path(self.config.save_dir) / "tensorboard"
-            log_dir.mkdir(parents=True, exist_ok=True)
-            self.writer = SummaryWriter(log_dir=str(log_dir))
-            self.logger.info("📊 TensorBoard logging enabled")
+        if self.config.tensorboard_logging and _TENSORBOARD_AVAILABLE and SummaryWriter is not None:
+            try:
+                log_dir = Path(self.config.save_dir) / "tensorboard"
+                log_dir.mkdir(parents=True, exist_ok=True)
+                self.writer = SummaryWriter(log_dir=str(log_dir))
+                self.logger.info("📊 TensorBoard logging enabled")
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize TensorBoard: {e}")
         
         # Weights & Biases logging
-        if self.config.wandb_logging:
+        if self.config.wandb_logging and _WANDB_AVAILABLE and wandb is not None:
             try:
                 wandb.init(
                     project=self.config.wandb_project,
@@ -265,6 +268,7 @@ class TruthGPTAdvancedTrainer:
                 self.logger.info("🔬 Weights & Biases logging enabled")
             except Exception as e:
                 self.logger.warning(f"Failed to initialize W&B: {e}")
+
     
     def setup_model(self, model: nn.Module) -> nn.Module:
         """Setup model for training."""
@@ -491,6 +495,21 @@ class TruthGPTAdvancedTrainer:
             input_ids = batch
             labels = batch  # For language modeling, labels are the same as input_ids
         
+        # Ensure inputs match model dtype/shape if model starts with Linear
+        try:
+            p = next(model.parameters())
+            if not any(isinstance(m, nn.Embedding) for m in model.modules()):
+                if input_ids.dtype in (torch.int32, torch.int64):
+                    input_ids = input_ids.to(dtype=p.dtype)
+                if input_ids.size(-1) != p.size(-1):
+                    if input_ids.size(-1) < p.size(-1):
+                        padding = torch.zeros(*input_ids.shape[:-1], p.size(-1) - input_ids.size(-1), dtype=input_ids.dtype, device=input_ids.device)
+                        input_ids = torch.cat([input_ids, padding], dim=-1)
+                    else:
+                        input_ids = input_ids[..., :p.size(-1)]
+        except Exception:
+            pass
+
         # Forward pass
         outputs = model(input_ids)
         
@@ -501,14 +520,17 @@ class TruthGPTAdvancedTrainer:
             logits = outputs
         
         # Shift labels for next token prediction
-        shift_logits = logits[..., :-1, :].contiguous()
-        shift_labels = labels[..., 1:].contiguous()
-        
-        # Compute loss
-        loss_fct = nn.CrossEntropyLoss(label_smoothing=self.config.label_smoothing)
-        loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+        if logits.dim() >= 2 and logits.size(-1) > 1 and labels.dim() >= 2:
+            shift_logits = logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            loss_fct = nn.CrossEntropyLoss(label_smoothing=self.config.label_smoothing)
+            loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+        else:
+            loss_fct = nn.MSELoss()
+            loss = loss_fct(logits.float(), labels.float())
         
         return loss
+
     
     def _log_training_metrics(self, epoch: int, batch_idx: int, loss: float, lr: float):
         """Log training metrics."""
@@ -590,6 +612,9 @@ class TruthGPTAdvancedTrainer:
         """Complete training loop with advanced features."""
         self.logger.info("🚀 Starting TruthGPT training")
         
+        if train_dataloader is None or len(train_dataloader) == 0:
+            raise ValueError("train_dataloader is empty or contains no data")
+        
         # Setup model
         model = self.setup_model(model)
         
@@ -613,10 +638,9 @@ class TruthGPTAdvancedTrainer:
             train_metrics = self.train_epoch(model, train_dataloader, epoch)
             
             # Validation
-            if val_dataloader and epoch % (self.config.eval_interval // len(train_dataloader)) == 0:
+            if val_dataloader and epoch % max(1, (self.config.eval_interval // len(train_dataloader))) == 0:
                 self._eval_start_time = time.time()
                 val_metrics = self.evaluate(model, val_dataloader)
-                self.validation_metrics.update(val_metrics)
                 
                 # Log validation metrics
                 self._log_validation_metrics(epoch, val_metrics)
@@ -624,6 +648,7 @@ class TruthGPTAdvancedTrainer:
                 # Early stopping
                 if self.config.early_stopping:
                     if self._check_early_stopping(val_metrics):
+
                         self.logger.info(f"🛑 Early stopping at epoch {epoch}")
                         break
             

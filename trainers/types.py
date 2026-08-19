@@ -413,6 +413,10 @@ class TrainerState:
         """Transition to a new lifecycle stage."""
         self.stage = stage
 
+    def mark_ready(self) -> None:
+        """Mark trainer as ready for execution."""
+        self.stage = TrainerStage.READY
+
     def mark_training(self) -> None:
         """Mark training as started."""
         self.is_training = True
@@ -645,3 +649,10 @@ __all__ = [
     "ProfilingSummary",
     "TrainingMetrics",
 ]
+
+_mod = sys.modules.get(__name__)
+if _mod:
+    if __name__.startswith("optimization_core.trainers."):
+        sys.modules["trainers." + __name__[len("optimization_core.trainers."):]] = _mod
+    elif __name__.startswith("trainers."):
+        sys.modules["optimization_core.trainers." + __name__[len("trainers."):]] = _mod

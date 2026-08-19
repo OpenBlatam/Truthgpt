@@ -32,15 +32,27 @@ from truthgpt_advanced_evaluation import (
 )
 
 # Import package functions
-from __init__ import (
-    quick_truthgpt_setup,
-    quick_truthgpt_training,
-    quick_truthgpt_evaluation,
-    complete_truthgpt_workflow,
-    truthgpt_optimization_context,
-    truthgpt_training_context,
-    truthgpt_evaluation_context
-)
+try:
+    from utils import (
+        quick_truthgpt_setup,
+        quick_truthgpt_training,
+        quick_truthgpt_evaluation,
+        complete_truthgpt_workflow,
+        truthgpt_optimization_context,
+        truthgpt_training_context,
+        truthgpt_evaluation_context
+    )
+except ImportError:
+    from optimization_core.utils import (
+        quick_truthgpt_setup,
+        quick_truthgpt_training,
+        quick_truthgpt_evaluation,
+        complete_truthgpt_workflow,
+        truthgpt_optimization_context,
+        truthgpt_training_context,
+        truthgpt_evaluation_context
+    )
+
 
 
 class TestTruthGPTQuickStart:
@@ -214,7 +226,10 @@ class TestTruthGPTPackageIntegration:
     
     def test_package_version(self):
         """Test package version information."""
-        from __init__ import __version__, __author__, __description__
+        try:
+            from utils import __version__, __author__, __description__
+        except ImportError:
+            from optimization_core.utils import __version__, __author__, __description__
         
         assert __version__ == "2.0.0"
         assert __author__ == "TruthGPT Optimization Core Team"
@@ -222,9 +237,13 @@ class TestTruthGPTPackageIntegration:
     
     def test_package_exports(self):
         """Test package exports."""
-        from __init__ import __all__
+        try:
+            from utils import __all__
+        except ImportError:
+            from optimization_core.utils import __all__
         
         assert isinstance(__all__, list)
+
         assert len(__all__) > 50  # Should have many exports
         
         # Check for key exports

@@ -3,6 +3,7 @@ Optimizer Manager - Handles optimizer creation, parameter decay grouping, learni
 
 Refactored with weight decay parameter grouping best practices, multi-scheduler support, exception safety, and relative imports.
 """
+import sys
 import logging
 from typing import Optional, List, Dict, Any, Union
 import torch
@@ -221,13 +222,24 @@ class OptimizerManager(BaseOptimizerManager):
     def create_scaler(self) -> Any:
         """Create automatic mixed precision GradScaler."""
         try:
-            scaler = GradScaler(
-                enabled=self.use_amp,
-                init_scale=2.0**16,
-                growth_factor=2.0,
-                backoff_factor=0.5,
-                growth_interval=2000,
-            )
+            if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
+                device_str = "cuda" if torch.cuda.is_available() else "cpu"
+                scaler = torch.amp.GradScaler(
+                    device_str,
+                    enabled=self.use_amp,
+                    init_scale=2.0**16,
+                    growth_factor=2.0,
+                    backoff_factor=0.5,
+                    growth_interval=2000,
+                )
+            else:
+                scaler = GradScaler(
+                    enabled=self.use_amp,
+                    init_scale=2.0**16,
+                    growth_factor=2.0,
+                    backoff_factor=0.5,
+                    growth_interval=2000,
+                )
             self.scaler = scaler
             return scaler
         except Exception as e:
@@ -278,3 +290,11 @@ class OptimizerManager(BaseOptimizerManager):
 
 
 __all__ = ["OptimizerManager"]
+
+import sys
+_mod = sys.modules.get(__name__)
+if _mod:
+    if __name__.startswith("optimization_core.trainers."):
+        sys.modules["trainers." + __name__[len("optimization_core.trainers."):]] = _mod
+    elif __name__.startswith("trainers."):
+        sys.modules["optimization_core.trainers." + __name__[len("trainers."):]] = _mod

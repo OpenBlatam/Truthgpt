@@ -62,8 +62,11 @@ class TruthGPTEnhancedConfig:
     enable_attention_optimization: bool = True
     enable_kernel_fusion: bool = True
     enable_graph_optimization: bool = True
+    enable_gradient_checkpointing: bool = True
+    enable_performance_optimization: bool = True
     
     # Performance settings
+
     target_latency_ms: float = 50.0
     target_memory_gb: float = 8.0
     target_throughput: float = 2000.0
@@ -784,8 +787,14 @@ class TruthGPTEnhancedManager:
     
     def _generate_cache_key(self, model: nn.Module, strategy: str) -> str:
         """Generate cache key for model and strategy."""
-        model_hash = hashlib.md5(str(model.state_dict()).encode()).hexdigest()
+        try:
+            param_names = "_".join(sorted(model.state_dict().keys()))
+            arch = f"{model.__class__.__name__}_{param_names}"
+            model_hash = hashlib.md5(arch.encode()).hexdigest()
+        except Exception:
+            model_hash = str(id(model))
         return f"{model_hash}_{strategy}_{self.config.optimization_level}"
+
     
     def _optimize_with_recovery(self, model: nn.Module, strategy: str) -> nn.Module:
         """Optimize model with error recovery."""
@@ -907,22 +916,122 @@ def quick_enhanced_truthgpt_optimization(model: nn.Module,
         enable_quantization=True,
         enable_pruning=True,
         enable_memory_optimization=True,
-        enable_performance_optimization=True
     )
     
     manager = create_enhanced_truthgpt_manager(config)
     return manager.optimize_model_enhanced(model, "balanced")
 
+def quick_truthgpt_setup(model: nn.Module, 
+                       optimization_level: str = "advanced",
+                       precision: str = "fp16",
+                       device: str = "auto",
+                       **kwargs) -> Tuple[nn.Module, TruthGPTEnhancedManager]:
+    """Quick TruthGPT setup returning (optimized_model, manager)."""
+    config = TruthGPTEnhancedConfig(
+        optimization_level=optimization_level,
+        precision=precision,
+        device=device,
+        **kwargs
+    )
+    manager = create_enhanced_truthgpt_manager(config)
+    optimized_model = manager.optimize_model_enhanced(model, "balanced")
+    return optimized_model, manager
+
+def complete_truthgpt_workflow(model: nn.Module,
+                               train_dataloader: Any,
+                               val_dataloader: Any,
+                               optimization_level: str = "advanced",
+                               precision: str = "fp16",
+                               training_epochs: int = 1,
+                               **kwargs) -> Dict[str, Any]:
+    """Complete end-to-end TruthGPT workflow."""
+    optimized_model, manager = quick_truthgpt_setup(
+        model,
+        optimization_level=optimization_level,
+        precision=precision,
+        **kwargs
+    )
+    try:
+        from ..training.training_utils import quick_truthgpt_training
+        from ..training.evaluation_utils import quick_truthgpt_evaluation
+    except (ImportError, ValueError):
+        try:
+            from training.training_utils import quick_truthgpt_training
+            from training.evaluation_utils import quick_truthgpt_evaluation
+        except (ImportError, ValueError):
+            from utils.training.training_utils import quick_truthgpt_training
+            from utils.training.evaluation_utils import quick_truthgpt_evaluation
+
+    trained_model = quick_truthgpt_training(
+        optimized_model,
+        train_dataloader,
+        max_epochs=training_epochs,
+        num_epochs=training_epochs,
+    )
+    try:
+        device = next(trained_model.parameters()).device
+    except (StopIteration, Exception):
+        device = torch.device("cpu")
+
+    evaluation_metrics = quick_truthgpt_evaluation(
+        trained_model,
+        val_dataloader,
+        device,
+        "language_modeling",
+    )
+    enhanced_metrics = manager.get_enhanced_metrics()
+    return {
+        'optimized_model': optimized_model,
+        'trained_model': trained_model,
+        'evaluation_metrics': evaluation_metrics,
+        'enhanced_metrics': enhanced_metrics,
+        'manager': manager,
+    }
+
 # Enhanced context managers
 @contextmanager
-def enhanced_truthgpt_optimization_context(model: nn.Module, config: TruthGPTEnhancedConfig):
+def enhanced_truthgpt_optimization_context(model: nn.Module, *args, **kwargs):
     """Enhanced context manager for TruthGPT optimization."""
+    if args and isinstance(args[0], TruthGPTEnhancedConfig):
+        config = args[0]
+    elif 'config' in kwargs and isinstance(kwargs['config'], TruthGPTEnhancedConfig):
+        config = kwargs['config']
+    else:
+        optimization_level = args[0] if len(args) > 0 else kwargs.get('optimization_level', 'advanced')
+        precision = args[1] if len(args) > 1 else kwargs.get('precision', 'fp16')
+        device = args[2] if len(args) > 2 else kwargs.get('device', 'auto')
+        config = TruthGPTEnhancedConfig(
+            optimization_level=optimization_level,
+            precision=precision,
+            device=device,
+            **{k: v for k, v in kwargs.items() if k not in ('optimization_level', 'precision', 'device')}
+        )
     manager = create_enhanced_truthgpt_manager(config)
+    optimized_model = manager.optimize_model_enhanced(model, "balanced")
     try:
-        yield manager
+        yield (optimized_model, manager)
     finally:
         # Cleanup if needed
         pass
+
+# Aliases
+quick_truthgpt_optimization = quick_enhanced_truthgpt_optimization
+truthgpt_optimization_context = enhanced_truthgpt_optimization_context
+
+
+__all__ = [
+    'TruthGPTEnhancedConfig',
+    'TruthGPTPerformanceProfiler',
+    'TruthGPTAdvancedOptimizer',
+    'TruthGPTEnhancedManager',
+    'create_enhanced_truthgpt_manager',
+    'quick_enhanced_truthgpt_optimization',
+    'enhanced_truthgpt_optimization_context',
+    'quick_truthgpt_setup',
+    'quick_truthgpt_optimization',
+    'complete_truthgpt_workflow',
+    'truthgpt_optimization_context',
+]
 
 # Example usage
 if __name__ == "__main__":
@@ -954,5 +1063,6 @@ if __name__ == "__main__":
     optimized_model = quick_enhanced_truthgpt_optimization(model, "ultra", "fp16", "auto")
     
     print("✅ Enhanced TruthGPT optimization completed!")
+
 
 

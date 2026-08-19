@@ -26,7 +26,7 @@ This directory contains the complete specifications for the `optimization_core` 
 - **`13_ELIXIR_CORE_SPEC.md`** - Elixir Native Implementation *[Pending]*
 
 ### 4. Utilities & Services
-- **`14_UTILS_SPEC.md`** - Common Core Utilities (validation, errors, events) *[Pending]*
+- **[14_UTILS_SPEC.md](14_UTILS_SPEC.md)** - Common Core Utilities (validation, errors, events, discovery)
 - **`15_BENCHMARKS_SPEC.md`** - FFI Performance & Benchmark Suite *[Pending]*
 - **`16_TESTING_SPEC.md`** - Asynchronous Test Framework *[Pending]*
 - **`17_OBSERVABILITY_SPEC.md`** - Logging, Tracing, and Telemetry *[Pending]*
@@ -71,20 +71,16 @@ This directory contains the complete specifications for the `optimization_core` 
 ### Completed Specs ✅
 - ✅ [01_ARCHITECTURE_SPEC.md](01_ARCHITECTURE_SPEC.md) - System Macro Architecture
 - ✅ [02_POLYGLOT_ARCHITECTURE_SPEC.md](02_POLYGLOT_ARCHITECTURE_SPEC.md) - Polyglot FFI Layer
+- ✅ [03_MODULAR_DESIGN_SPEC.md](03_MODULAR_DESIGN_SPEC.md) - Modular Design
 - ✅ [04_CORE_INTERFACES_SPEC.md](04_CORE_INTERFACES_SPEC.md) - Base Lifecycle Interfaces
 - ✅ [05_INFERENCE_ENGINES_SPEC.md](05_INFERENCE_ENGINES_SPEC.md) - Inference Engine Implementations
+- ✅ [06_DATA_PROCESSING_SPEC.md](06_DATA_PROCESSING_SPEC.md) - Polars Processing
 - ✅ [07_POLYGLOT_CORE_SPEC.md](07_POLYGLOT_CORE_SPEC.md) - Polyglot Router
 - ✅ [08_RUST_CORE_SPEC.md](08_RUST_CORE_SPEC.md) - Rust Extension Backend
 - ✅ [11_JULIA_CORE_SPEC.md](11_JULIA_CORE_SPEC.md) - Julia Backend
+- ✅ [14_UTILS_SPEC.md](14_UTILS_SPEC.md) - Shared Core Utilities
 
 ### Pending Specs ⏳
-- ⏳ [03_MODULAR_DESIGN_SPEC.md](03_MODULAR_DESIGN_SPEC.md) - Modular Design
-- ⏳ [06_DATA_PROCESSING_SPEC.md](06_DATA_PROCESSING_SPEC.md) - Polars Processing
-- ⏳ `09_CPP_CORE_SPEC.md` - C++ Backend
-- ⏳ `10_GO_CORE_SPEC.md` - Go Backend
-- ⏳ `12_SCALA_CORE_SPEC.md` - Scala Backend
-- ⏳ `13_ELIXIR_CORE_SPEC.md` - Elixir Backend
-- ⏳ `14_UTILS_SPEC.md` - Shared Utilities
 - ⏳ `15_BENCHMARKS_SPEC.md` - Performance Benchmarks
 - ⏳ `16_TESTING_SPEC.md` - Async Testing
 - ⏳ `17_OBSERVABILITY_SPEC.md` - Telemetry

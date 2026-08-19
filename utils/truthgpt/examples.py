@@ -12,20 +12,47 @@ import json
 from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 
-# Import TruthGPT utilities
-from .truthgpt_adapters import (
-    TruthGPTIntegratedAdapter, TruthGPTConfig, create_truthgpt_adapter
-)
-from .truthgpt_optimization_utils import (
-    TruthGPTIntegratedOptimizer, TruthGPTOptimizationConfig, create_truthgpt_optimizer
-)
-from .truthgpt_monitoring import (
+# Import TruthGPT utilities with safe fallbacks
+try:
+    from ..enterprise.truthgpt_adapter import (
+        EnterpriseTruthGPTAdapter as TruthGPTIntegratedAdapter,
+        EnterpriseTruthGPTAdapter as TruthGPTAdapter,
+    )
+    from .core import TruthGPTConfig
+    create_truthgpt_adapter = lambda *a, **kw: TruthGPTAdapter(*a, **kw)
+except ImportError:
+    try:
+        from optimization_core.adapters.truthgpt_adapters import (
+            TruthGPTIntegratedAdapter, TruthGPTAdapter, TruthGPTConfig, create_truthgpt_adapter
+        )
+    except ImportError:
+        TruthGPTIntegratedAdapter = None
+        TruthGPTAdapter = None
+        TruthGPTConfig = None
+        create_truthgpt_adapter = None
+
+try:
+    from ..training.optimization_utils import (
+        TruthGPTIntegratedOptimizer, TruthGPTOptimizationConfig, create_truthgpt_optimizer
+    )
+except ImportError:
+    try:
+        from .core import (
+            TruthGPTIntegratedOptimizer, TruthGPTConfig as TruthGPTOptimizationConfig, create_truthgpt_optimizer
+        )
+    except ImportError:
+        TruthGPTIntegratedOptimizer = None
+        TruthGPTOptimizationConfig = None
+        create_truthgpt_optimizer = None
+
+from .monitoring import (
     TruthGPTMonitor, TruthGPTAnalytics, TruthGPTDashboard, create_truthgpt_monitoring_suite
 )
-from .truthgpt_integration import (
-    TruthGPTIntegrationManager, TruthGPTIntegrationConfig, TruthGPTQuickSetup,
-    create_truthgpt_integration, quick_truthgpt_integration
+from .integration import (
+    TruthGPTIntegrationManager, TruthGPTIntegrationConfig,
+    create_truthgpt_integration_manager as create_truthgpt_integration, quick_truthgpt_integration
 )
+TruthGPTQuickSetup = quick_truthgpt_integration
 
 logger = logging.getLogger(__name__)
 
@@ -319,9 +346,11 @@ def example_custom_adapters():
     print("\n🛠️ Custom TruthGPT Adapters Example")
     print("=" * 50)
     
-    from .truthgpt_adapters import TruthGPTAdapter, TruthGPTConfig
-    
-    class CustomTruthGPTAdapter(TruthGPTAdapter):
+    # Use resolved adapter classes
+    _AdapterClass = TruthGPTAdapter if TruthGPTAdapter is not None else object
+    _ConfigClass = TruthGPTConfig
+
+    class CustomTruthGPTAdapter(_AdapterClass):
         """Custom adapter for specific use case."""
         
         def __init__(self, config: TruthGPTConfig, custom_param: str = "default"):

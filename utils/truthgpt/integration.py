@@ -21,12 +21,12 @@ from enum import Enum
 
 # Import TruthGPT utilities
 try:
-    from .truthgpt_adapters import (
+    from ..adapters.truthgpt_adapters import (
         TruthGPTConfig, TruthGPTAdapter, TruthGPTPerformanceAdapter,
         TruthGPTMemoryAdapter, TruthGPTGPUAdapter, TruthGPTValidationAdapter,
         TruthGPTIntegratedAdapter, create_truthgpt_adapter, quick_truthgpt_setup
     )
-except ImportError:
+except Exception:
     try:
         from optimization_core.adapters.truthgpt_adapters import (
             TruthGPTConfig, TruthGPTAdapter, TruthGPTPerformanceAdapter,
@@ -36,9 +36,9 @@ except ImportError:
         TruthGPTIntegratedAdapter = TruthGPTAdapter
         create_truthgpt_adapter = lambda *a, **kw: TruthGPTAdapter(*a, **kw)
         quick_truthgpt_setup = lambda *a, **kw: None
-    except ImportError:
-        from .enterprise_truthgpt_adapter import EnterpriseTruthGPTAdapter as TruthGPTAdapter
+    except Exception:
         TruthGPTConfig = None
+        TruthGPTAdapter = None
         TruthGPTPerformanceAdapter = None
         TruthGPTMemoryAdapter = None
         TruthGPTGPUAdapter = None
@@ -47,17 +47,45 @@ except ImportError:
         create_truthgpt_adapter = None
         quick_truthgpt_setup = None
 
-from .truthgpt_optimization_utils import (
-    TruthGPTOptimizationConfig, TruthGPTQuantizer, TruthGPTPruner,
-    TruthGPTDistiller, TruthGPTParallelProcessor, TruthGPTMemoryOptimizer,
-    TruthGPTPerformanceOptimizer, TruthGPTIntegratedOptimizer,
-    create_truthgpt_optimizer, quick_truthgpt_optimization
-)
+try:
+    from .core import (
+        TruthGPTOptimizationConfig, TruthGPTQuantizer, TruthGPTPruner,
+        TruthGPTDistiller, TruthGPTParallelProcessor, TruthGPTMemoryOptimizer,
+        TruthGPTPerformanceOptimizer, TruthGPTIntegratedOptimizer,
+        create_truthgpt_optimizer, quick_truthgpt_optimization
+    )
+except Exception:
+    try:
+        from ..training.optimization_utils import (
+            TruthGPTOptimizationConfig, TruthGPTQuantizer, TruthGPTPruner,
+            TruthGPTDistiller, TruthGPTParallelProcessor, TruthGPTMemoryOptimizer,
+            TruthGPTPerformanceOptimizer, TruthGPTIntegratedOptimizer,
+            create_truthgpt_optimizer, quick_truthgpt_optimization
+        )
+    except Exception:
+        TruthGPTOptimizationConfig = None
+        TruthGPTQuantizer = None
+        TruthGPTPruner = None
+        TruthGPTDistiller = None
+        TruthGPTParallelProcessor = None
+        TruthGPTMemoryOptimizer = None
+        TruthGPTPerformanceOptimizer = None
+        TruthGPTIntegratedOptimizer = None
+        create_truthgpt_optimizer = lambda *a, **kw: None
+        quick_truthgpt_optimization = lambda *a, **kw: None
 
-from .truthgpt_monitoring import (
-    TruthGPTMonitor, TruthGPTAnalytics, TruthGPTDashboard, TruthGPTMetrics,
-    create_truthgpt_monitoring_suite, quick_truthgpt_monitoring_setup
-)
+try:
+    from .monitoring import (
+        TruthGPTMonitor, TruthGPTAnalytics, TruthGPTDashboard, TruthGPTMetrics,
+        create_truthgpt_monitoring_suite, quick_truthgpt_monitoring_setup
+    )
+except Exception:
+    TruthGPTMonitor = None
+    TruthGPTAnalytics = None
+    TruthGPTDashboard = None
+    TruthGPTMetrics = None
+    create_truthgpt_monitoring_suite = None
+    quick_truthgpt_monitoring_setup = None
 
 logger = logging.getLogger(__name__)
 

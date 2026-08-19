@@ -87,9 +87,9 @@ class DataManager(BaseDataManager):
         use_lm_collate = collate_name == "lm"
         collate_fn: Optional[Callable] = None
         
-        if use_lm_collate and _COLLATE_REGISTRY_AVAILABLE and COLLATE is not None:
+        if use_lm_collate and _COLLATE_REGISTRY_AVAILABLE and COLLATE is not None and self.tokenizer is not None:
             try:
-                collate_fn = COLLATE.build("lm")(self.tokenizer, self.text_field_max_len)
+                collate_fn = COLLATE.build("lm", tokenizer=self.tokenizer, max_length=self.text_field_max_len)
             except Exception as e:
                 logger.warning(f"Could not build 'lm' collator from registry: {e}. Falling back to HFTextDataset.")
                 collate_fn = None
@@ -165,3 +165,11 @@ class DataManager(BaseDataManager):
 
 
 __all__ = ["DataManager", "BucketBatchSampler"]
+
+import sys
+_mod = sys.modules.get(__name__)
+if _mod:
+    if __name__.startswith("optimization_core.trainers."):
+        sys.modules["trainers." + __name__[len("optimization_core.trainers."):]] = _mod
+    elif __name__.startswith("trainers."):
+        sys.modules["optimization_core.trainers." + __name__[len("trainers."):]] = _mod

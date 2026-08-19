@@ -240,7 +240,10 @@ class EnhancedCUDAOptimizations:
     def _apply_kernel_fusion(self, model: nn.Module) -> nn.Module:
         """Apply kernel fusion optimizations."""
         try:
-            from .advanced_kernel_fusion import KernelFusionOptimizer
+            try:
+                from .kernel_fusion import KernelFusionOptimizer
+            except ImportError:
+                from ..advanced_kernel_fusion import KernelFusionOptimizer
             fusion_optimizer = KernelFusionOptimizer()
             return fusion_optimizer.apply_kernel_fusion(model, {
                 'fuse_layernorm_linear': True,

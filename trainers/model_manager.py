@@ -3,6 +3,7 @@ Model Manager - Handles model loading, tokenizer configuration, LoRA setup, and 
 
 Separated from trainer for modularity, clean architecture, and testability.
 """
+import sys
 import logging
 from typing import Optional, List, Tuple, Any, Dict
 import torch
@@ -261,3 +262,11 @@ class ModelManager(BaseModelManager):
 
 
 __all__ = ["ModelManager"]
+
+import sys
+_mod = sys.modules.get(__name__)
+if _mod:
+    if __name__.startswith("optimization_core.trainers."):
+        sys.modules["trainers." + __name__[len("optimization_core.trainers."):]] = _mod
+    elif __name__.startswith("trainers."):
+        sys.modules["optimization_core.trainers." + __name__[len("trainers."):]] = _mod

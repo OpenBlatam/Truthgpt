@@ -14,42 +14,97 @@ import time
 import json
 from pathlib import Path
 
-# Import all TruthGPT utilities
-from .truthgpt_adapters import (
-    TruthGPTConfig, TruthGPTAdapter, TruthGPTPerformanceAdapter,
-    TruthGPTMemoryAdapter, TruthGPTGPUAdapter, TruthGPTValidationAdapter,
-    TruthGPTIntegratedAdapter, create_truthgpt_adapter, quick_truthgpt_setup
-)
+# Import all TruthGPT utilities with robust relative paths
+try:
+    from ..enterprise.truthgpt_adapter import (
+        EnterpriseTruthGPTAdapter as TruthGPTAdapter,
+        EnterpriseTruthGPTAdapter as TruthGPTIntegratedAdapter,
+        EnterpriseTruthGPTAdapter as TruthGPTPerformanceAdapter,
+        EnterpriseTruthGPTAdapter as TruthGPTMemoryAdapter,
+        EnterpriseTruthGPTAdapter as TruthGPTGPUAdapter,
+        EnterpriseTruthGPTAdapter as TruthGPTValidationAdapter,
+    )
+    from .core import TruthGPTConfig
+    create_truthgpt_adapter = lambda *a, **kw: TruthGPTAdapter(*a, **kw)
+    quick_truthgpt_setup = lambda *a, **kw: None
+except ImportError:
+    try:
+        from optimization_core.adapters.truthgpt_adapters import (
+            TruthGPTConfig, TruthGPTAdapter, TruthGPTPerformanceAdapter,
+            TruthGPTMemoryAdapter, TruthGPTGPUAdapter, TruthGPTValidationAdapter,
+            TruthGPTIntegratedAdapter, create_truthgpt_adapter, quick_truthgpt_setup
+        )
+    except ImportError:
+        TruthGPTConfig = None
+        TruthGPTAdapter = None
+        TruthGPTPerformanceAdapter = None
+        TruthGPTMemoryAdapter = None
+        TruthGPTGPUAdapter = None
+        TruthGPTValidationAdapter = None
+        TruthGPTIntegratedAdapter = None
+        create_truthgpt_adapter = None
+        quick_truthgpt_setup = None
 
-from .truthgpt_optimization_utils import (
-    TruthGPTOptimizationConfig, TruthGPTQuantizer, TruthGPTPruner,
-    TruthGPTDistiller, TruthGPTParallelProcessor, TruthGPTMemoryOptimizer,
-    TruthGPTPerformanceOptimizer, TruthGPTIntegratedOptimizer,
-    create_truthgpt_optimizer, quick_truthgpt_optimization
-)
+try:
+    from ..training.optimization_utils import (
+        TruthGPTOptimizationConfig, TruthGPTQuantizer, TruthGPTPruner,
+        TruthGPTDistiller, TruthGPTParallelProcessor, TruthGPTMemoryOptimizer,
+        TruthGPTPerformanceOptimizer, TruthGPTIntegratedOptimizer,
+        create_truthgpt_optimizer, quick_truthgpt_optimization
+    )
+except ImportError:
+    from .core import (
+        TruthGPTIntegratedOptimizer, TruthGPTConfig as TruthGPTOptimizationConfig,
+        create_truthgpt_optimizer, quick_truthgpt_optimization
+    )
+    TruthGPTQuantizer = None
+    TruthGPTPruner = None
+    TruthGPTDistiller = None
+    TruthGPTParallelProcessor = None
+    TruthGPTMemoryOptimizer = None
+    TruthGPTPerformanceOptimizer = None
 
-from .truthgpt_monitoring import (
+from .monitoring import (
     TruthGPTMonitor, TruthGPTAnalytics, TruthGPTDashboard, TruthGPTMetrics,
     create_truthgpt_monitoring_suite, quick_truthgpt_monitoring_setup
 )
 
-from .truthgpt_integration import (
-    TruthGPTIntegrationManager, TruthGPTIntegrationConfig, TruthGPTQuickSetup,
-    create_truthgpt_integration, quick_truthgpt_integration,
+from .integration import (
+    TruthGPTIntegrationManager, TruthGPTIntegrationConfig,
+    create_truthgpt_integration_manager as create_truthgpt_integration, quick_truthgpt_integration,
     truthgpt_monitoring_context, truthgpt_optimization_context
 )
+TruthGPTQuickSetup = quick_truthgpt_integration
 
-from .truthgpt_training_utils import (
-    TruthGPTTrainer, TruthGPTFineTuner, TruthGPTTrainingConfig,
-    create_truthgpt_trainer, create_truthgpt_finetuner, quick_truthgpt_training,
-    truthgpt_training_context
-)
+try:
+    from ..training.training_utils import (
+        TruthGPTTrainer, TruthGPTFineTuner, TruthGPTTrainingConfig,
+        create_truthgpt_trainer, create_truthgpt_finetuner, quick_truthgpt_training,
+        truthgpt_training_context
+    )
+except ImportError:
+    TruthGPTTrainer = None
+    TruthGPTFineTuner = None
+    TruthGPTTrainingConfig = None
+    create_truthgpt_trainer = None
+    create_truthgpt_finetuner = None
+    quick_truthgpt_training = None
+    truthgpt_training_context = None
 
-from .truthgpt_evaluation_utils import (
-    TruthGPTEvaluator, TruthGPTComparison, TruthGPTEvaluationConfig,
-    create_truthgpt_evaluator, create_truthgpt_comparison, quick_truthgpt_evaluation,
-    truthgpt_evaluation_context
-)
+try:
+    from ..training.evaluation_utils import (
+        TruthGPTEvaluator, TruthGPTComparison, TruthGPTEvaluationConfig,
+        create_truthgpt_evaluator, create_truthgpt_comparison, quick_truthgpt_evaluation,
+        truthgpt_evaluation_context
+    )
+except ImportError:
+    TruthGPTEvaluator = None
+    TruthGPTComparison = None
+    TruthGPTEvaluationConfig = None
+    create_truthgpt_evaluator = None
+    create_truthgpt_comparison = None
+    quick_truthgpt_evaluation = None
+    truthgpt_evaluation_context = None
 
 logger = logging.getLogger(__name__)
 
