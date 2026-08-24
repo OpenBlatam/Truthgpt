@@ -12,7 +12,7 @@ from typing import Optional, Any, Dict
 class LearningBaseException(Exception):
     """Base exception for all errors originating from the learning module."""
 
-    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, message: str = "", details: Optional[Dict[str, Any]] = None) -> None:
         super().__init__(message)
         self.message = message
         self.details = details or {}
@@ -53,85 +53,165 @@ class StrategyNotSupportedError(LearningBaseException):
     pass
 
 
-class SamplingError(LearningError):
+class SamplingError(LearningBaseException):
     """Raised when active learning sampling fails due to invalid pool or metric NaN."""
     pass
 
 
-class AdversarialAttackError(LearningError):
+# Domain Specific Exceptions & Aliases
+class ActiveLearningError(LearningBaseException):
+    """Raised during active learning sampling or cycle execution."""
+    pass
+
+
+class AdaptiveLearningError(LearningBaseException):
+    """Raised during adaptive drift detection or online adjustment."""
+    pass
+
+
+class AdversarialAttackError(LearningBaseException):
     """Raised when an adversarial attack generation fails."""
     pass
 
 
-class CausalDiscoveryError(LearningError):
-    """Raised when causal DAG discovery or effect estimation fails."""
+class AdversarialDefenseError(LearningBaseException):
+    """Raised when an adversarial defense or certified radius calculation fails."""
     pass
 
 
-class ContinualLearningError(LearningError):
-    """Raised during task transitions, replay memory, or regularization."""
+class AdversarialError(LearningBaseException):
+    """General adversarial learning error."""
     pass
 
 
-class EnsembleError(LearningError):
-    """Raised during ensemble model aggregation, voting, or stacking."""
+class BayesianOptimizationError(LearningBaseException):
+    """Raised during Bayesian optimization acquisition or surrogate fitting."""
     pass
 
 
-class EvolutionaryError(LearningError):
-    """Raised during genetic selection, mutation, or population evaluation."""
+class BayesianError(LearningBaseException):
+    """General Bayesian error."""
     pass
 
 
-class FederatedLearningError(LearningError):
-    """Raised during federated aggregation, client training, or communication."""
+class CausalInferenceError(LearningBaseException):
+    """Raised during causal treatment effect estimation or refutation."""
     pass
 
 
-class HyperparameterOptimizationError(LearningError):
-    """Raised during hyperparameter search, trial pruning, or sampling."""
+class CausalDiscoveryError(LearningBaseException):
+    """Raised when causal DAG discovery fails."""
     pass
 
 
-class MetaLearningError(LearningError):
-    """Raised during inner-loop adaptation or meta-gradient computation."""
+class ContinualLearningError(LearningBaseException):
+    """Raised during continual learning task adaptation or EWC regularization."""
     pass
 
 
-class MultiTaskLearningError(LearningError):
-    """Raised during multi-task loss balancing, gradient surgery, or head routing."""
+class ContinualError(LearningBaseException):
+    """General continual learning error."""
     pass
 
 
-class NASError(LearningError):
-    """Raised during neural architecture search, evaluation, or generation."""
+class EnsembleLearningError(LearningBaseException):
+    """Raised during ensemble weighting, bagging, or voting aggregation."""
     pass
 
 
-class ReinforcementLearningError(LearningError):
-    """Raised during policy updates, environment interactions, or replay storage."""
+class EnsembleError(LearningBaseException):
+    """General ensemble error."""
     pass
 
 
-class SelfSupervisedError(LearningError):
-    """Raised during pretext task computation, contrastive pairing, or representation learning."""
+class EvolutionaryOptimizationError(LearningBaseException):
+    """Raised during evolutionary genetic selection or crossover."""
     pass
 
 
-class TransferLearningError(LearningError):
-    """Raised during domain adaptation, feature extraction, or fine-tuning."""
+class EvolutionaryError(LearningBaseException):
+    """General evolutionary error."""
     pass
 
 
-class PipelineExecutionError(LearningError):
-    """Raised when a multi-stage learning pipeline encounters a fatal execution error."""
+class FederatedLearningError(LearningBaseException):
+    """Raised during federated round execution or client synchronization."""
     pass
 
 
-# Convenience Aliases
-ArchitectureSearchError = NASError
-FederatedAggregationError = FederatedLearningError
-PipelineError = PipelineExecutionError
+class FederatedAggregationError(LearningBaseException):
+    """Raised when federated parameter aggregation or secure weight averaging fails."""
+    pass
+
+
+class HyperparameterOptimizationError(LearningBaseException):
+    """Raised during hyperparameter trial search or pruning."""
+    pass
+
+
+class HPOError(LearningBaseException):
+    """General HPO error."""
+    pass
+
+
+class MetaLearningError(LearningBaseException):
+    """Raised during meta-parameter adaptation or inner-loop task updates."""
+    pass
+
+
+class MultitaskLearningError(LearningBaseException):
+    """Raised during multi-task loss balancing or gradient surgery."""
+    pass
+
+
+class MultiTaskError(LearningBaseException):
+    """General multi-task learning error."""
+    pass
+
+
+class ArchitectureSearchError(LearningBaseException):
+    """Raised when neural architecture generation or evaluation fails."""
+    pass
+
+
+class NASError(LearningBaseException):
+    """General neural architecture search error."""
+    pass
+
+
+class ReinforcementLearningError(LearningBaseException):
+    """Raised during RL policy updates, action selection, or trajectory collection."""
+    pass
+
+
+class RLError(LearningBaseException):
+    """General RL error."""
+    pass
+
+
+class SelfSupervisedLearningError(LearningBaseException):
+    """Raised during self-supervised contrastive pretraining."""
+    pass
+
+
+class SSLError(LearningBaseException):
+    """General self-supervised error."""
+    pass
+
+
+class TransferLearningError(LearningBaseException):
+    """Raised during transfer fine-tuning, domain adaptation, or distillation."""
+    pass
+
+
+class PipelineError(LearningBaseException):
+    """Raised when execution of a multi-stage learning pipeline encounters an error."""
+    pass
+
+
+class PipelineExecutionError(PipelineError):
+    """Raised when a specific pipeline stage execution fails."""
+    pass
 
 
 __all__ = [
@@ -144,23 +224,37 @@ __all__ = [
     'ConvergenceError',
     'StrategyNotSupportedError',
     'SamplingError',
+    'ActiveLearningError',
+    'AdaptiveLearningError',
     'AdversarialAttackError',
+    'AdversarialDefenseError',
+    'AdversarialError',
+    'BayesianOptimizationError',
+    'BayesianError',
+    'CausalInferenceError',
     'CausalDiscoveryError',
     'ContinualLearningError',
+    'ContinualError',
+    'EnsembleLearningError',
     'EnsembleError',
+    'EvolutionaryOptimizationError',
     'EvolutionaryError',
     'FederatedLearningError',
     'FederatedAggregationError',
     'HyperparameterOptimizationError',
+    'HPOError',
     'MetaLearningError',
-    'MultiTaskLearningError',
-    'NASError',
+    'MultitaskLearningError',
+    'MultiTaskError',
     'ArchitectureSearchError',
+    'NASError',
     'ReinforcementLearningError',
-    'SelfSupervisedError',
+    'RLError',
+    'SelfSupervisedLearningError',
+    'SSLError',
     'TransferLearningError',
-    'PipelineExecutionError',
     'PipelineError',
+    'PipelineExecutionError',
 ]
 
 import sys

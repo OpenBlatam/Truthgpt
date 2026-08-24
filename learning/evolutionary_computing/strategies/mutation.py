@@ -1,8 +1,12 @@
+from __future__ import annotations
 import random
 import numpy as np
-from typing import List, Tuple
-from ..individual import Individual
+from typing import TYPE_CHECKING, List, Tuple
 from ..types import MutationMethod
+
+if TYPE_CHECKING:
+    from ..individual import Individual
+
 
 def gaussian_mutation(individual: Individual, mutation_strength: float):
     """Gaussian mutation"""

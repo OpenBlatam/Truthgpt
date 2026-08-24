@@ -27,6 +27,10 @@ from sklearn.linear_model import LogisticRegression
 import warnings
 warnings.filterwarnings('ignore')
 
+from .interfaces import BaseLearner
+from .registry import LearningRegistry
+from .exceptions import EnsembleError
+
 logger = logging.getLogger(__name__)
 
 class EnsembleStrategy(Enum):
@@ -835,10 +839,13 @@ class DynamicEnsemble:
         else:
             return np.argmax(weighted_pred, axis=1)
 
-class EnsembleTrainer:
+@LearningRegistry.register_learner("ensemble", aliases=["ensemble_learning", "EnsembleLearner", "EnsembleTrainer"], paradigm="ensemble")
+class EnsembleTrainer(BaseLearner):
     """Main ensemble learning trainer"""
     
-    def __init__(self, config: EnsembleConfig):
+    def __init__(self, config: Optional[EnsembleConfig] = None):
+        if config is None:
+            config = EnsembleConfig()
         self.config = config
         
         # Components
@@ -852,6 +859,17 @@ class EnsembleTrainer:
         self.ensemble_history = []
         
         logger.info("✅ Ensemble Learning Trainer initialized")
+    
+    def fit(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        """Fit implementation delegating to train_ensemble_learning."""
+        return self.train_ensemble_learning(*args, **kwargs)
+
+    def evaluate(self, *args: Any, **kwargs: Any) -> Dict[str, float]:
+        """Evaluate implementation returning ensemble metrics."""
+        if self.ensemble_history:
+            last = self.ensemble_history[-1]
+            return {"duration": float(last.get("total_duration", 0.0))}
+        return {}
     
     def train_ensemble_learning(self, X: np.ndarray, y: np.ndarray) -> Dict[str, Any]:
         """Train ensemble learning"""

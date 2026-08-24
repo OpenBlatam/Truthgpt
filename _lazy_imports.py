@@ -570,9 +570,16 @@ _LEARNING_LAZY_IMPORTS: Dict[str, str] = {
     
     # Pipeline & Registry
     'LearningRegistry': '.learning',
+    'LEARNING_REGISTRY': '.learning',
+    'register_learning_module': '.learning',
+    'LearningPipeline': '.learning',
     'LearningPipelineBuilder': '.learning',
     'create_learning_module': '.learning',
+    'create_learner': '.learning',
+    'create_learning_pipeline': '.learning',
+    'create_pipeline_builder': '.learning',
     'list_available_learning_modules': '.learning',
+    'get_learning_module_info': '.learning',
 }
 
 # Combine all lazy imports

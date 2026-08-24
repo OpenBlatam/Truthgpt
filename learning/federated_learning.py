@@ -25,6 +25,10 @@ from sklearn.metrics import accuracy_score, mean_squared_error
 import warnings
 warnings.filterwarnings('ignore')
 
+from .interfaces import BaseLearner
+from .registry import LearningRegistry
+from .exceptions import FederatedLearningError
+
 logger = logging.getLogger(__name__)
 
 class AggregationMethod(Enum):
@@ -452,10 +456,13 @@ class PrivacyPreservation:
         self.privacy_history.append(privacy_result)
         return encrypted_updates
 
-class FederatedLearningSystem:
+@LearningRegistry.register_learner("federated", aliases=["federated_learning", "FederatedLearner", "FederatedLearningSystem"], paradigm="federated")
+class FederatedLearningSystem(BaseLearner):
     """Main federated learning system"""
     
-    def __init__(self, config: FederatedLearningConfig):
+    def __init__(self, config: Optional[FederatedLearningConfig] = None):
+        if config is None:
+            config = FederatedLearningConfig()
         self.config = config
         
         # Components
@@ -467,6 +474,17 @@ class FederatedLearningSystem:
         self.current_round = 0
         
         logger.info("✅ Federated Learning System initialized")
+    
+    def fit(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        """Fit implementation delegating to run_federated_learning."""
+        return self.run_federated_learning()
+
+    def evaluate(self, *args: Any, **kwargs: Any) -> Dict[str, float]:
+        """Evaluate implementation returning federated metrics."""
+        if self.federated_history:
+            last = self.federated_history[-1]
+            return {"duration": float(last.get("total_duration", 0.0))}
+        return {}
     
     def add_client(self, client_id: str, model: nn.Module, data: torch.Tensor, labels: torch.Tensor):
         """Add client to federated learning"""

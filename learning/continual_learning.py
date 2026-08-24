@@ -25,6 +25,10 @@ from sklearn.metrics import accuracy_score, mean_squared_error
 import warnings
 warnings.filterwarnings('ignore')
 
+from .interfaces import BaseLearner
+from .registry import LearningRegistry
+from .exceptions import ContinualLearningError
+
 logger = logging.getLogger(__name__)
 
 class CLStrategy(Enum):
@@ -657,10 +661,13 @@ class LifelongLearner:
         self.learning_history.append(learning_result)
         return learning_result
 
-class CLTrainer:
+@LearningRegistry.register_learner("continual", aliases=["continual_learning", "ContinualLearner", "CLTrainer", "LifelongLearner"], paradigm="continual")
+class CLTrainer(BaseLearner):
     """Continual learning trainer"""
     
-    def __init__(self, config: ContinualLearningConfig):
+    def __init__(self, config: Optional[ContinualLearningConfig] = None):
+        if config is None:
+            config = ContinualLearningConfig()
         self.config = config
         
         # Components
@@ -674,6 +681,17 @@ class CLTrainer:
         self.cl_history = []
         
         logger.info("✅ Continual Learning Trainer initialized")
+    
+    def fit(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        """Fit implementation delegating to train_continual_learning."""
+        return self.train_continual_learning(*args, **kwargs)
+
+    def evaluate(self, *args: Any, **kwargs: Any) -> Dict[str, float]:
+        """Evaluate implementation returning continual learning metrics."""
+        if self.cl_history:
+            last = self.cl_history[-1]
+            return {"duration": float(last.get("total_duration", 0.0))}
+        return {}
     
     def train_continual_learning(self, task_data: Dict[int, Tuple[torch.Tensor, torch.Tensor]]) -> Dict[str, Any]:
         """Train continual learning"""

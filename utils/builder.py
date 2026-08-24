@@ -195,15 +195,20 @@ class UtilityPipeline(BaseUtility):
             return
 
         rl = self.config.resilience.rate_limiter
+        time_window = getattr(rl, 'time_window_sec', 60.0)
+        max_req = getattr(rl, 'max_requests', 100)
+        if not isinstance(time_window, (int, float)) or not isinstance(max_req, (int, float)):
+            return
+
         now = time.time()
-        cutoff = now - rl.time_window_sec
+        cutoff = now - time_window
 
         self._request_timestamps = [t for t in self._request_timestamps if t > cutoff]
 
-        if len(self._request_timestamps) >= rl.max_requests:
+        if len(self._request_timestamps) >= max_req:
             oldest = self._request_timestamps[0]
-            retry_after = (oldest + rl.time_window_sec) - now
-            raise RateLimitExceededError(rl.max_requests, rl.time_window_sec, retry_after)
+            retry_after = (oldest + time_window) - now
+            raise RateLimitExceededError(max_req, time_window, retry_after)
 
         self._request_timestamps.append(now)
 

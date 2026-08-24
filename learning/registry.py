@@ -38,6 +38,7 @@ class LearningRegistry:
         factory_or_cls: Any,
         description: Optional[str] = None,
         aliases: Optional[List[str]] = None,
+        **kwargs: Any,
     ) -> Any:
         """Register a learner or optimizer factory/class directly."""
         key = name.value if isinstance(name, LearningStrategyType) else str(name).lower()
@@ -47,6 +48,7 @@ class LearningRegistry:
                 "name": key,
                 "target": factory_or_cls,
                 "description": description or f"Learning component {key}",
+                **kwargs,
             }
             if aliases:
                 for alias in aliases:
@@ -58,16 +60,20 @@ class LearningRegistry:
         cls,
         name: Union[str, LearningStrategyType],
         aliases: Optional[List[str]] = None,
+        description: Optional[str] = None,
+        *args: Any,
+        **kwargs: Any,
     ) -> Callable[[Type[Any]], Type[Any]]:
         """Decorator to register a learner class."""
         def decorator(target_cls: Type[Any]) -> Type[Any]:
-            key = name.value if isinstance(name, LearningStrategyType) else name.lower()
+            key = name.value if isinstance(name, LearningStrategyType) else str(name).lower()
             with cls._lock:
                 cls._learners[key] = target_cls
                 cls._metadata[key] = {
                     "name": key,
                     "target": target_cls,
-                    "description": target_cls.__doc__ or f"Learner {key}",
+                    "description": description or target_cls.__doc__ or f"Learner {key}",
+                    **kwargs,
                 }
                 if aliases:
                     for alias in aliases:
@@ -81,16 +87,20 @@ class LearningRegistry:
         cls,
         name: Union[str, LearningStrategyType],
         aliases: Optional[List[str]] = None,
+        description: Optional[str] = None,
+        *args: Any,
+        **kwargs: Any,
     ) -> Callable[[Type[Any]], Type[Any]]:
         """Decorator to register a learning search or optimization algorithm."""
         def decorator(target_cls: Type[Any]) -> Type[Any]:
-            key = name.value if isinstance(name, LearningStrategyType) else name.lower()
+            key = name.value if isinstance(name, LearningStrategyType) else str(name).lower()
             with cls._lock:
                 cls._optimizers[key] = target_cls
                 cls._metadata[key] = {
                     "name": key,
                     "target": target_cls,
-                    "description": target_cls.__doc__ or f"Optimizer {key}",
+                    "description": description or target_cls.__doc__ or f"Optimizer {key}",
+                    **kwargs,
                 }
                 if aliases:
                     for alias in aliases:
@@ -104,12 +114,21 @@ class LearningRegistry:
         cls,
         name: str,
         aliases: Optional[List[str]] = None,
+        description: Optional[str] = None,
+        *args: Any,
+        **kwargs: Any,
     ) -> Callable[[Type[Any]], Type[Any]]:
         """Decorator to register a specialized learning strategy."""
         def decorator(target_cls: Type[Any]) -> Type[Any]:
-            key = name.lower()
+            key = str(name).lower()
             with cls._lock:
                 cls._strategies[key] = target_cls
+                cls._metadata[key] = {
+                    "name": key,
+                    "target": target_cls,
+                    "description": description or target_cls.__doc__ or f"Strategy {key}",
+                    **kwargs,
+                }
                 if aliases:
                     for alias in aliases:
                         cls._aliases[alias.lower()] = key
@@ -122,12 +141,21 @@ class LearningRegistry:
         cls,
         name: str,
         aliases: Optional[List[str]] = None,
+        description: Optional[str] = None,
+        *args: Any,
+        **kwargs: Any,
     ) -> Callable[[Type[Any]], Type[Any]]:
         """Decorator to register a query sampler."""
         def decorator(target_cls: Type[Any]) -> Type[Any]:
-            key = name.lower()
+            key = str(name).lower()
             with cls._lock:
                 cls._samplers[key] = target_cls
+                cls._metadata[key] = {
+                    "name": key,
+                    "target": target_cls,
+                    "description": description or target_cls.__doc__ or f"Sampler {key}",
+                    **kwargs,
+                }
                 if aliases:
                     for alias in aliases:
                         cls._aliases[alias.lower()] = key
@@ -140,12 +168,21 @@ class LearningRegistry:
         cls,
         name: str,
         aliases: Optional[List[str]] = None,
+        description: Optional[str] = None,
+        *args: Any,
+        **kwargs: Any,
     ) -> Callable[[Type[Any]], Type[Any]]:
         """Decorator to register a lifecycle callback."""
         def decorator(target_cls: Type[Any]) -> Type[Any]:
-            key = name.lower()
+            key = str(name).lower()
             with cls._lock:
                 cls._callbacks[key] = target_cls
+                cls._metadata[key] = {
+                    "name": key,
+                    "target": target_cls,
+                    "description": description or target_cls.__doc__ or f"Callback {key}",
+                    **kwargs,
+                }
                 if aliases:
                     for alias in aliases:
                         cls._aliases[alias.lower()] = key

@@ -99,8 +99,8 @@ class BaseConfigMixin:
 @dataclass
 class ActiveLearningConfig(BaseConfigMixin):
     """Configuration for Active Learning strategies."""
-    strategy: QueryStrategy = QueryStrategy.UNCERTAINTY_BASED
-    uncertainty_measure: UncertaintyMeasure = UncertaintyMeasure.ENTROPY
+    strategy: QueryStrategyType = QueryStrategyType.UNCERTAINTY_BASED
+    uncertainty_measure: UncertaintyMeasureType = UncertaintyMeasureType.ENTROPY
     n_initial_samples: int = 100
     n_query_samples: int = 10
     n_total_budget: int = 1000
@@ -129,7 +129,7 @@ class AdaptiveLearningConfig(BaseConfigMixin):
     adaptation_rate: float = 0.01
     exploration_rate: float = 0.1
     exploitation_rate: float = 0.9
-    mode: LearningMode = LearningMode.SELF_IMPROVING
+    mode: AdaptiveMode = AdaptiveMode.SELF_IMPROVING
     drift_detection_threshold: float = 0.05
     drift_window_size: int = 200
     enable_meta_learning: bool = True
@@ -149,8 +149,8 @@ class AdaptiveLearningConfig(BaseConfigMixin):
 @dataclass
 class AdversarialConfig(BaseConfigMixin):
     """Configuration for Adversarial attacks, defense, and robust training."""
-    attack_type: AdversarialAttackType = AdversarialAttackType.PGD
-    defense_type: DefenseStrategy = DefenseStrategy.ADVERSARIAL_TRAINING
+    attack_type: AttackType = AttackType.PGD
+    defense_type: DefenseType = DefenseType.ADVERSARIAL_TRAINING
     epsilon: float = 0.0314  # 8/255
     alpha: float = 0.0078    # 2/255
     num_steps: int = 10
@@ -169,8 +169,8 @@ class AdversarialConfig(BaseConfigMixin):
 @dataclass
 class BayesianConfig(BaseConfigMixin):
     """Configuration for Bayesian Optimization with Gaussian Processes."""
-    acquisition_function: AcquisitionFunction = AcquisitionFunction.EXPECTED_IMPROVEMENT
-    kernel_type: KernelType = KernelType.RBF
+    acquisition_function: AcquisitionFunctionType = AcquisitionFunctionType.EXPECTED_IMPROVEMENT
+    kernel_type: KernelType = KernelType.MATERN52
     n_initial_points: int = 10
     n_iterations: int = 50
     exploration_weight: float = 2.576  # UCB kappa
@@ -470,6 +470,13 @@ class LearningConfig(BaseConfigMixin):
         self.transfer.head_learning_rate = value
 
 
+# Convenience Aliases
+SSLConfig = SelfSupervisedConfig
+MetaLearningConfig = MetaConfig
+MultiTaskConfig = MultitaskConfig
+LearningPipelineConfig = PipelineConfig
+
+
 __all__ = [
     'BaseConfigMixin',
     'ActiveLearningConfig',
@@ -483,11 +490,16 @@ __all__ = [
     'FederatedConfig',
     'HPOConfig',
     'MetaConfig',
+    'MetaLearningConfig',
     'MultitaskConfig',
+    'MultiTaskConfig',
     'NASConfig',
     'RLConfig',
     'SelfSupervisedConfig',
+    'SSLConfig',
     'TransferLearningConfig',
     'PipelineConfig',
+    'LearningPipelineConfig',
     'LearningConfig',
 ]
+
