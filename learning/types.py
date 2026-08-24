@@ -647,7 +647,18 @@ class ModelSnapshot:
     created_at: float = field(default_factory=time.time)
 
 
-LearningStage = LearningStatus
+class LearningStage(str, Enum):
+    """Lifecycle stage of a learning process or pipeline."""
+    INITIALIZATION = "initialization"
+    PRETRAINING = "pretraining"
+    EXPLORATION = "exploration"
+    EXPLOITATION = "exploitation"
+    ADAPTATION = "adaptation"
+    FINE_TUNING = "fine_tuning"
+    ROBUSTIFICATION = "robustification"
+    EVALUATION = "evaluation"
+    COMPLETE = "complete"
+    FAILED = "failed"
 
 
 # ==========================================

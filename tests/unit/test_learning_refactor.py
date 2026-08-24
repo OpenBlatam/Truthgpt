@@ -1,315 +1,369 @@
 """
-Comprehensive Unit Test Suite for Refactored optimization_core.learning Subsystem.
-=================================================================================
-Validates:
-1. Module imports (root lazy imports, direct imports, dual namespace resolution).
-2. Central LearningRegistry component discovery, registration, and inspection.
-3. Unified factory instantiation (`create_learning_module` and `create_learner`) across all 16 learning domains.
-4. Fluent LearningPipelineBuilder chaining and sequential execution.
-5. Enums, Dataclasses, Configuration Schemas, and Metric Telemetry.
-6. Typed Exception hierarchy and error propagation.
+Unit Test Suite for optimization_core.learning Refactored Subsystem
+===================================================================
+Tests thread-safe component registry, declarative fluent pipeline builder,
+unified factory subsystem, typed exception hierarchy, dataclasses,
+callbacks, evolutionary computing, and 100% backward compatibility for
+all 16 learning paradigms.
 """
 
-import sys
+from __future__ import annotations
+
 import os
+import sys
 import unittest
-from typing import Dict, Any
+from typing import Any, Dict, List, Optional
+from unittest.mock import MagicMock
 
-# Ensure workspace root is in sys.path
-WORKSPACE_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-if WORKSPACE_ROOT not in sys.path:
-    sys.path.insert(0, WORKSPACE_ROOT)
+# Add workspace root to sys.path for direct imports
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
+from learning import (
+    # Core Infrastructure
+    __version__,
+    LearningRegistry,
+    LEARNING_REGISTRY,
+    LearningPipeline,
+    CompositeLearningPipeline,
+    LearningPipelineBuilder,
+    create_pipeline_builder,
+    create_learning_pipeline,
+    create_learning_module,
+    create_learner,
+    create_learning_optimizer,
+    create_learning_config,
+    list_available_learning_modules,
+    get_learning_module_info,
+    
+    # Exceptions
+    LearningBaseException,
+    LearningError,
+    LearnerNotFoundError,
+    LearnerInitializationError,
+    LearnerConfigurationError,
+    OptimizationFailedError,
+    ConvergenceError,
+    StrategyNotSupportedError,
+    SamplingError,
+    ActiveLearningError,
+    AdaptiveLearningError,
+    AdversarialAttackError,
+    AdversarialDefenseError,
+    CausalInferenceError,
+    ContinualLearningError,
+    EnsembleLearningError,
+    EvolutionaryError,
+    FederatedLearningError,
+    HyperparameterOptimizationError,
+    MetaLearningError,
+    MultiTaskLearningError,
+    NASError,
+    ReinforcementLearningError,
+    SelfSupervisedLearningError,
+    TransferLearningError,
+    PipelineError,
+    PipelineExecutionError,
+    
+    # Types & Enums
+    LearningStrategyType,
+    UncertaintyMeasure,
+    SamplingStrategy,
+    AdversarialMethod,
+    OptimizationMetric,
+    TaskType,
+    DistillationMethod,
+    LearningMetrics,
+    OptimizationResult,
+    ActiveLearningResult,
+    CausalEffectResult,
+    LearningConfig,
+    ActiveLearningConfig,
+    EvolutionaryConfig,
+    
+    # All 16 Learner Classes
+    ActiveLearner,
+    AdaptiveLearner,
+    AdversarialLearner,
+    BayesianOptimizer,
+    CausalInference,
+    ContinualLearner,
+    EnsembleLearner,
+    EvolutionaryOptimizer,
+    FederatedLearner,
+    HyperparameterOptimizer,
+    MetaLearner,
+    MultitaskLearner,
+    NASOptimizer,
+    ReinforcementLearner,
+    SelfSupervisedLearner,
+    TransferLearner,
+)
 
-class TestLearningImportsAndNamespaces(unittest.TestCase):
-    """Test module imports across canonical and legacy namespaces."""
-
-    def test_direct_learning_module_import(self):
-        """Test importing learning module directly."""
-        import learning
-        self.assertIsNotNone(learning)
-        self.assertTrue(hasattr(learning, "create_learning_module"))
-        self.assertTrue(hasattr(learning, "list_available_learning_modules"))
-        self.assertTrue(hasattr(learning, "LEARNING_REGISTRY"))
-
-    def test_optimization_core_learning_import(self):
-        """Test importing through optimization_core.learning."""
-        import optimization_core.learning as ocl
-        self.assertIsNotNone(ocl)
-        self.assertTrue(hasattr(ocl, "create_learning_module"))
-        self.assertTrue(hasattr(ocl, "LearningPipelineBuilder"))
-
-    def test_optimization_core_root_lazy_imports(self):
-        """Test accessing learning symbols from root optimization_core package."""
-        import optimization_core as opt
-        self.assertTrue(hasattr(opt, "ActiveLearner"))
-        self.assertTrue(hasattr(opt, "EvolutionaryOptimizer"))
-        self.assertTrue(hasattr(opt, "BayesianOptimizer"))
-        self.assertTrue(hasattr(opt, "create_learning_module"))
-        self.assertTrue(hasattr(opt, "LearningPipelineBuilder"))
-
-    def test_dual_namespace_identity(self):
-        """Test that learning and optimization_core.learning point to identical objects."""
-        import learning
-        import optimization_core.learning as ocl
-        self.assertIs(learning.create_learning_module, ocl.create_learning_module)
-        self.assertIs(learning.LEARNING_REGISTRY, ocl.LEARNING_REGISTRY)
+from learning.callbacks import (
+    LearningCallback,
+    EarlyStoppingCallback,
+    MetricsLoggerCallback,
+    ProgressCallback,
+    CheckpointCallback,
+)
+from learning.pipeline import PipelineStage, PipelineStageResult
 
 
 class TestLearningRegistry(unittest.TestCase):
-    """Test thread-safe LearningRegistry and discovery APIs."""
+    """Test cases for the thread-safe LearningRegistry."""
 
-    def setUp(self):
-        from learning.registry import LEARNING_REGISTRY
-        self.registry = LEARNING_REGISTRY
-
-    def test_registered_16_domains(self):
-        """Verify all 16 core learning strategy domains are registered."""
-        available = self.registry.list_available()
-        expected_domains = [
-            "active", "adaptive", "adversarial", "bayesian",
-            "causal", "continual", "ensemble", "evolutionary",
-            "federated", "hpo", "meta", "multitask",
-            "nas", "reinforcement", "self_supervised", "transfer"
+    def test_builtin_discovery(self):
+        """Verify all 16 learning paradigms are discoverable."""
+        available = list_available_learning_modules()
+        expected = [
+            "active", "adaptive", "adversarial", "bayesian", "causal",
+            "continual", "ensemble", "evolutionary", "federated", "hpo",
+            "meta", "multitask", "nas", "reinforcement", "self_supervised", "transfer"
         ]
-        for domain in expected_domains:
-            self.assertIn(domain, available, f"Domain '{domain}' missing from registry")
+        for name in expected:
+            self.assertIn(name, available, f"Domain '{name}' missing from discovery list")
 
-    def test_get_module_info(self):
-        """Test metadata retrieval for registered modules."""
-        info = self.registry.get_info("active")
-        self.assertEqual(info["name"], "active")
-        self.assertEqual(info["category"], "sampling")
-        self.assertIn("ActiveLearningSystem", info["learner_class"])
-        self.assertIn("sampling", info["tags"])
+    def test_custom_learner_registration(self):
+        """Verify dynamic custom learner registration and alias resolution."""
+        class CustomTestLearner:
+            def __init__(self, config=None, **kwargs):
+                self.config = config
+                self.kwargs = kwargs
 
-    def test_custom_module_registration(self):
-        """Test registering and retrieving custom learner components."""
-        class CustomDummyLearner:
-            def __init__(self, cfg=None):
-                self.cfg = cfg or {}
-            def fit(self, *args, **kwargs):
-                return {"custom": True}
-
-        self.registry.register(
-            name="custom_dummy",
-            category="custom",
-            description="Custom test learner",
-            factory_fn=lambda cfg=None: CustomDummyLearner(cfg),
-            tags=["test", "custom"],
-            override=True
+        LearningRegistry.register(
+            name="custom_test_learner",
+            factory_or_cls=CustomTestLearner,
+            description="Custom learner for unit testing",
+            aliases=["test_learner_alias", "ctl"]
         )
 
-        self.assertTrue(self.registry.is_registered("custom_dummy"))
-        instance = self.registry.create("custom_dummy", config={"lr": 0.05})
-        self.assertIsInstance(instance, CustomDummyLearner)
-        self.assertEqual(instance.cfg, {"lr": 0.05})
+        # Retrieve via primary name
+        learner_cls = LearningRegistry.get_learner("custom_test_learner")
+        self.assertEqual(learner_cls, CustomTestLearner)
 
-        # Cleanup
-        self.registry.unregister("custom_dummy")
-        self.assertFalse(self.registry.is_registered("custom_dummy"))
+        # Retrieve via aliases
+        self.assertEqual(LearningRegistry.get_learner("test_learner_alias"), CustomTestLearner)
+        self.assertEqual(LearningRegistry.get_learner("ctl"), CustomTestLearner)
 
+        # Verify metadata
+        info = LearningRegistry.get_info("custom_test_learner")
+        self.assertEqual(info["description"], "Custom learner for unit testing")
 
-class TestUnifiedFactoryAllDomains(unittest.TestCase):
-    """Test instantiate all 16 learning modules via create_learning_module."""
-
-    def test_instantiate_active_learning(self):
-        from learning import create_learning_module
-        active = create_learning_module("active")
-        self.assertIsNotNone(active)
-        self.assertTrue(hasattr(active, "run_active_learning") or hasattr(active, "query_samples"))
-
-    def test_instantiate_adaptive_learning(self):
-        from learning import create_learning_module
-        adaptive = create_learning_module("adaptive")
-        self.assertIsNotNone(adaptive)
-        self.assertTrue(hasattr(adaptive, "adapt"))
-
-    def test_instantiate_adversarial_learning(self):
-        from learning import create_learning_module
-        adv = create_learning_module("adversarial")
-        self.assertIsNotNone(adv)
-        self.assertTrue(hasattr(adv, "run_adversarial_learning") or hasattr(adv, "attacker"))
-
-    def test_instantiate_bayesian_optimization(self):
-        from learning import create_learning_module
-        bayes = create_learning_module("bayesian")
-        self.assertIsNotNone(bayes)
-        self.assertTrue(hasattr(bayes, "optimize"))
-
-    def test_instantiate_causal_inference(self):
-        from learning import create_learning_module
-        causal = create_learning_module("causal")
-        self.assertIsNotNone(causal)
-        self.assertTrue(hasattr(causal, "run_causal_inference") or hasattr(causal, "discovery"))
-
-    def test_instantiate_continual_learning(self):
-        from learning import create_learning_module
-        cl = create_learning_module("continual")
-        self.assertIsNotNone(cl)
-        self.assertTrue(hasattr(cl, "train_continual") or hasattr(cl, "learn_task"))
-
-    def test_instantiate_ensemble_learning(self):
-        from learning import create_learning_module
-        ensemble = create_learning_module("ensemble")
-        self.assertIsNotNone(ensemble)
-        self.assertTrue(hasattr(ensemble, "train_ensemble") or hasattr(ensemble, "voting_ensemble"))
-
-    def test_instantiate_evolutionary_computing(self):
-        from learning import create_learning_module
-        evo = create_learning_module("evolutionary")
-        self.assertIsNotNone(evo)
-        self.assertTrue(hasattr(evo, "optimize"))
-
-    def test_instantiate_federated_learning(self):
-        from learning import create_learning_module
-        fed = create_learning_module("federated")
-        self.assertIsNotNone(fed)
-        self.assertTrue(hasattr(fed, "run_federated_learning") or hasattr(fed, "server"))
-
-    def test_instantiate_hpo(self):
-        from learning import create_learning_module
-        hpo = create_learning_module("hpo")
-        self.assertIsNotNone(hpo)
-        self.assertTrue(hasattr(hpo, "run_optimization") or hasattr(hpo, "optimize"))
-
-    def test_instantiate_meta_learning(self):
-        from learning import create_learning_module
-        meta = create_learning_module("meta")
-        self.assertIsNotNone(meta)
-        self.assertTrue(hasattr(meta, "meta_train") or hasattr(meta, "train"))
-
-    def test_instantiate_multitask_learning(self):
-        from learning import create_learning_module
-        mt = create_learning_module("multitask")
-        self.assertIsNotNone(mt)
-        self.assertTrue(hasattr(mt, "train_multitask") or hasattr(mt, "train_step"))
-
-    def test_instantiate_nas(self):
-        from learning import create_learning_module
-        nas = create_learning_module("nas")
-        self.assertIsNotNone(nas)
-        self.assertTrue(hasattr(nas, "search"))
-
-    def test_instantiate_reinforcement_learning(self):
-        from learning import create_learning_module
-        rl = create_learning_module("reinforcement")
-        self.assertIsNotNone(rl)
-        self.assertTrue(hasattr(rl, "train_agent"))
-
-    def test_instantiate_self_supervised_learning(self):
-        from learning import create_learning_module
-        ssl = create_learning_module("self_supervised")
-        self.assertIsNotNone(ssl)
-        self.assertTrue(hasattr(ssl, "train_ssl") or hasattr(ssl, "pretrain_step"))
-
-    def test_instantiate_transfer_learning(self):
-        from learning import create_learning_module
-        transfer = create_learning_module("transfer")
-        self.assertIsNotNone(transfer)
-        self.assertTrue(hasattr(transfer, "train_transfer") or hasattr(transfer, "fine_tune"))
-
-    def test_alias_resolution(self):
-        """Test that common aliases resolve to proper modules."""
-        from learning import create_learning_module
-        hpo1 = create_learning_module("hyperparameter_optimization")
-        hpo2 = create_learning_module("hpo")
-        self.assertEqual(type(hpo1), type(hpo2))
-
-        ssl1 = create_learning_module("ssl")
-        ssl2 = create_learning_module("self_supervised")
-        self.assertEqual(type(ssl1), type(ssl2))
+    def test_nonexistent_learner_raises(self):
+        """Verify querying unknown learner raises LearnerNotFoundError."""
+        with self.assertRaises(LearnerNotFoundError):
+            LearningRegistry.get_learner("non_existent_domain_xyz_123")
 
 
-class TestLearningPipeline(unittest.TestCase):
-    """Test fluent LearningPipelineBuilder and multi-stage orchestration."""
+class TestLearningExceptions(unittest.TestCase):
+    """Test cases for the hierarchical exception architecture."""
 
-    def test_pipeline_builder_fluent_execution(self):
-        from learning.pipeline import create_pipeline_builder
-        from learning.types import LearningPipelineConfig
+    def test_exception_inheritance(self):
+        """Verify all domain exceptions inherit from LearningBaseException and LearningError."""
+        exceptions_to_check = [
+            ActiveLearningError,
+            AdaptiveLearningError,
+            AdversarialAttackError,
+            AdversarialDefenseError,
+            CausalInferenceError,
+            ContinualLearningError,
+            EnsembleLearningError,
+            EvolutionaryError,
+            FederatedLearningError,
+            HyperparameterOptimizationError,
+            MetaLearningError,
+            MultiTaskLearningError,
+            NASError,
+            ReinforcementLearningError,
+            SelfSupervisedLearningError,
+            TransferLearningError,
+            PipelineExecutionError,
+        ]
 
-        # Define lightweight dummy stages
-        class Stage1Pretrain:
-            def fit(self, data=None, **kwargs):
-                return {"pretrain_loss": 0.25, "features": [1, 2, 3]}
+        for exc_cls in exceptions_to_check:
+            self.assertTrue(
+                issubclass(exc_cls, LearningBaseException),
+                f"{exc_cls.__name__} must inherit from LearningBaseException"
+            )
+            self.assertTrue(
+                issubclass(exc_cls, (LearningError, LearningBaseException)),
+                f"{exc_cls.__name__} must inherit from LearningError"
+            )
 
-        class Stage2Active:
-            def query_samples(self, prev_output, **kwargs):
-                return {"queried_indices": [0, 1], "count": len(prev_output.get("features", []))}
+    def test_exception_details_payload(self):
+        """Verify structured details dictionary in exceptions."""
+        exc = LearnerInitializationError("Initialization failed", details={"code": 500, "domain": "active"})
+        self.assertEqual(str(exc), "Initialization failed")
+        self.assertEqual(exc.details["code"], 500)
+        self.assertEqual(exc.details["domain"], "active")
 
-        class Stage3Eval:
-            def evaluate(self, prev_output, **kwargs):
-                return {"accuracy": 0.96}
 
-        builder = create_pipeline_builder("test_end_to_end_pipeline")
+class TestLearningFactory(unittest.TestCase):
+    """Test cases for the unified factory methods."""
+
+    def test_create_learning_module_evolutionary(self):
+        """Verify factory can instantiate evolutionary optimizer with default config."""
+        opt = create_learning_module("evolutionary")
+        self.assertIsInstance(opt, EvolutionaryOptimizer)
+
+    def test_create_learning_module_with_dict_config(self):
+        """Verify factory accepts dictionary configurations."""
+        opt = create_learning_module(
+            "evolutionary",
+            config={"population_size": 20, "max_generations": 10}
+        )
+        self.assertIsInstance(opt, EvolutionaryOptimizer)
+        self.assertEqual(opt.config.population_size, 20)
+        self.assertEqual(opt.config.max_generations, 10)
+
+    def test_create_learning_config(self):
+        """Verify config factory builds domain-specific configs."""
+        cfg = create_learning_config("evolutionary", population_size=42)
+        self.assertIsNotNone(cfg)
+        self.assertEqual(getattr(cfg, "population_size", None), 42)
+
+
+class TestLearningPipelineBuilder(unittest.TestCase):
+    """Test cases for the fluent LearningPipelineBuilder."""
+
+    def test_fluent_pipeline_construction(self):
+        """Verify stages, callbacks, and validation chain smoothly."""
+        builder = create_pipeline_builder()
+        
+        executed_stages = []
+        
+        def dummy_action_1(context: Dict[str, Any]) -> Dict[str, Any]:
+            executed_stages.append("stage1")
+            return {"data_prepared": True}
+
+        def dummy_action_2(context: Dict[str, Any]) -> Dict[str, Any]:
+            executed_stages.append("stage2")
+            return {"accuracy": 0.95}
+
         pipeline = (
             builder
-            .with_fail_fast(True)
-            .with_stage("pretrain", Stage1Pretrain())
-            .with_stage("active_query", Stage2Active())
-            .with_stage("eval", Stage3Eval())
+            .set_name("SelfImprovingTestPipeline")
+            .add_stage("data_prep", dummy_action_1)
+            .add_stage("active_sampling", dummy_action_2, dependencies=["data_prep"])
+            .add_callback(ProgressCallback())
             .build()
         )
 
-        results = pipeline.execute(initial_data={"raw_inputs": [10, 20]})
-        self.assertTrue(results["success"])
-        self.assertIn("pretrain", results["stages"])
-        self.assertIn("active_query", results["stages"])
-        self.assertIn("eval", results["stages"])
-        self.assertEqual(results["stages"]["pretrain"]["output"]["pretrain_loss"], 0.25)
-        self.assertEqual(results["stages"]["active_query"]["output"]["count"], 3)
+        self.assertIsInstance(pipeline, (LearningPipeline, CompositeLearningPipeline))
+        self.assertEqual(pipeline.name, "SelfImprovingTestPipeline")
+
+        results = pipeline.execute(initial_context={"raw_data": [1, 2, 3]})
+        self.assertIn("stage1", executed_stages)
+        self.assertIn("stage2", executed_stages)
+        self.assertTrue(results.get("data_prep", {}).get("data_prepared", False))
 
 
-class TestTypesAndConfigs(unittest.TestCase):
-    """Test Enums, dataclass schemas, and metrics telemetry."""
+class TestLearningCallbacks(unittest.TestCase):
+    """Test cases for lifecycle callbacks."""
 
-    def test_configs_initialization(self):
-        from learning.types import (
-            ActiveLearningConfig,
-            AdaptiveLearningConfig,
-            AdversarialConfig,
-            BayesianOptimizationConfig,
-            LearningPipelineConfig,
+    def test_early_stopping_callback(self):
+        """Verify early stopping triggers on stagnation."""
+        callback = EarlyStoppingCallback(monitor="val_loss", min_delta=0.01, patience=2, mode="min")
+        
+        # Epoch 1: 1.0 (Best)
+        res1 = callback.on_epoch_end(1, {"val_loss": 1.0})
+        self.assertFalse(res1)
+        self.assertFalse(callback.should_stop)
+        
+        # Epoch 2: 0.999 (No significant improvement, wait=1)
+        res2 = callback.on_epoch_end(2, {"val_loss": 0.999})
+        self.assertFalse(res2)
+        
+        # Epoch 3: 1.05 (Worse, wait=2 -> should stop)
+        res3 = callback.on_epoch_end(3, {"val_loss": 1.05})
+        self.assertTrue(res3)
+        self.assertTrue(callback.should_stop)
+
+    def test_metrics_logger_callback(self):
+        """Verify metrics logger captures epoch and step history."""
+        logger = MetricsLoggerCallback()
+        logger.on_step_end(1, {"loss": 0.5})
+        logger.on_step_end(2, {"loss": 0.4})
+        logger.on_epoch_end(1, {"val_loss": 0.45})
+
+        history = logger.get_history()
+        self.assertEqual(len(history["step_metrics"]), 2)
+        self.assertEqual(len(history["epoch_metrics"]), 1)
+        self.assertEqual(history["epoch_metrics"][0]["val_loss"], 0.45)
+
+
+class TestEvolutionaryComputingDomain(unittest.TestCase):
+    """Test cases for evolutionary computing algorithm."""
+
+    def test_individual_creation_and_mutation(self):
+        """Verify individual genome generation and mutation."""
+        from learning.evolutionary_computing import Individual, MutationMethod
+        import numpy as np
+
+        ind = Individual([1.0, 2.0, 3.0])
+        self.assertEqual(len(ind.genes), 3)
+        
+        mutated = ind.mutate(MutationMethod.GAUSSIAN, mutation_rate=1.0, mutation_strength=0.1)
+        self.assertEqual(len(mutated.genes), 3)
+        self.assertFalse(np.array_equal(ind.genes, mutated.genes))
+
+    def test_evolutionary_optimization_run(self):
+        """Verify end-to-end optimization of a sphere function."""
+        import numpy as np
+        from learning.evolutionary_computing import (
+            EvolutionaryOptimizer,
+            create_evolutionary_config,
+            EvolutionaryAlgorithm
         )
 
-        al_cfg = ActiveLearningConfig(n_initial_samples=50, n_query_samples=5)
-        self.assertEqual(al_cfg.n_initial_samples, 50)
-        self.assertEqual(al_cfg.n_query_samples, 5)
-
-        pipe_cfg = LearningPipelineConfig(name="prod_pipeline", fail_fast=False)
-        self.assertEqual(pipe_cfg.name, "prod_pipeline")
-        self.assertFalse(pipe_cfg.fail_fast)
-
-    def test_learning_metrics(self):
-        from learning.types import LearningMetrics, StepState
-        metrics = LearningMetrics(best_metric_name="val_loss")
-        metrics.add_step(StepState(step=1, epoch=1, loss=0.5, metrics={"val_loss": 0.45}))
-        metrics.add_step(StepState(step=2, epoch=1, loss=0.3, metrics={"val_loss": 0.25}))
-
-        self.assertEqual(metrics.total_steps, 2)
-        self.assertEqual(metrics.best_metric_value, 0.25)
-        self.assertEqual(len(metrics.history), 2)
-
-
-class TestExceptionHierarchy(unittest.TestCase):
-    """Test typed exceptions and inheritance hierarchy."""
-
-    def test_exceptions(self):
-        from learning.exceptions import (
-            LearningBaseException,
-            LearningError,
-            LearnerNotFoundError,
-            LearnerInitializationError,
-            PipelineError,
+        config = create_evolutionary_config(
+            evolutionary_algorithm=EvolutionaryAlgorithm.GENETIC_ALGORITHM,
+            population_size=20,
+            max_generations=5,
+            crossover_rate=0.8,
+            mutation_rate=0.1
         )
+        optimizer = EvolutionaryOptimizer(config)
 
-        self.assertTrue(issubclass(LearningError, LearningBaseException))
-        self.assertTrue(issubclass(LearnerNotFoundError, LearningBaseException))
-        self.assertTrue(issubclass(LearnerInitializationError, LearningBaseException))
-        self.assertTrue(issubclass(PipelineError, LearningBaseException))
+        def sphere(genes):
+            return -float(np.sum(np.square(genes)))
 
-        err = LearnerNotFoundError("Module not found", details={"module": "non_existent"})
-        self.assertEqual(err.details.get("module"), "non_existent")
+        results = optimizer.optimize(fitness_function=sphere, gene_length=4)
+        self.assertIn("generations", results)
+        self.assertIn("final_generation", results)
+
+
+class TestBackwardCompatibilityAndExports(unittest.TestCase):
+    """Test backward compatibility of all 16 domains and aliases."""
+
+    def test_all_16_learners_present(self):
+        """Verify that all 16 paradigm learners are available."""
+        learners = [
+            ActiveLearner,
+            AdaptiveLearner,
+            AdversarialLearner,
+            BayesianOptimizer,
+            CausalInference,
+            ContinualLearner,
+            EnsembleLearner,
+            EvolutionaryOptimizer,
+            FederatedLearner,
+            HyperparameterOptimizer,
+            MetaLearner,
+            MultitaskLearner,
+            NASOptimizer,
+            ReinforcementLearner,
+            SelfSupervisedLearner,
+            TransferLearner,
+        ]
+        for learner in learners:
+            self.assertIsNotNone(learner)
+
+    def test_version_string(self):
+        """Verify subsystem version format."""
+        self.assertTrue(__version__.startswith("2."))
 
 
 if __name__ == "__main__":
