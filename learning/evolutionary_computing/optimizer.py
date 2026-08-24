@@ -11,7 +11,13 @@ logger = logging.getLogger(__name__)
 class EvolutionaryOptimizer:
     """Main evolutionary optimizer"""
     
-    def __init__(self, config: EvolutionaryConfig):
+    def __init__(self, config: Optional[Union[EvolutionaryConfig, Dict[str, Any]]] = None):
+        if config is None:
+            from .types import create_evolutionary_config
+            config = create_evolutionary_config()
+        elif isinstance(config, dict):
+            from .types import create_evolutionary_config
+            config = create_evolutionary_config(**config)
         self.config = config
         self.population = Population(config)
         self.optimization_history = []

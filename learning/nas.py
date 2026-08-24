@@ -275,10 +275,13 @@ class NeuralArchitecture:
         else:
             return {}
 
-class EvolutionaryNAS:
+@LearningRegistry.register_learner("nas", aliases=["neural_architecture_search", "NASOptimizer", "NeuralArchitectureSearch", "EvolutionaryNAS"], paradigm="nas")
+class EvolutionaryNAS(BaseLearner):
     """Evolutionary Neural Architecture Search"""
     
-    def __init__(self, config: NASConfig):
+    def __init__(self, config: Optional[NASConfig] = None):
+        if config is None:
+            config = NASConfig()
         self.config = config
         self.population = []
         self.generation = 0
@@ -286,6 +289,23 @@ class EvolutionaryNAS:
         self.search_history = []
         
         logger.info("✅ Evolutionary NAS initialized")
+    
+    def fit(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        """Fit implementation delegating to search."""
+        if len(args) > 0 and callable(args[0]):
+            best = self.search(args[0])
+            return {"best_architecture": best, "stats": self.get_search_statistics()}
+        elif "evaluation_fn" in kwargs:
+            best = self.search(kwargs["evaluation_fn"])
+            return {"best_architecture": best, "stats": self.get_search_statistics()}
+        # Default dummy evaluation if none provided
+        best = self.search(lambda m: 0.5)
+        return {"best_architecture": best, "stats": self.get_search_statistics()}
+
+    def evaluate(self, *args: Any, **kwargs: Any) -> Dict[str, float]:
+        """Evaluate implementation returning best fitness."""
+        stats = self.get_search_statistics()
+        return {"best_fitness": float(stats.get("best_fitness", 0.0))}
     
     def initialize_population(self):
         """Initialize random population"""
