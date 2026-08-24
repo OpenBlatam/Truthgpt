@@ -377,10 +377,15 @@ class Reptile:
         
         return loss
 
-class MetaLearner:
+@LearningRegistry.register_learner("meta", aliases=["meta_learning", "MetaLearner"], paradigm="meta")
+class MetaLearner(BaseLearner):
     """Main meta-learning system"""
     
-    def __init__(self, model: nn.Module, config: MetaLearningConfig):
+    def __init__(self, model: Optional[nn.Module] = None, config: Optional[MetaLearningConfig] = None):
+        if config is None:
+            config = MetaLearningConfig()
+        if model is None:
+            model = nn.Sequential(nn.Linear(10, 32), nn.ReLU(), nn.Linear(32, 5))
         self.model = model
         self.config = config
         self.task_generator = TaskGenerator(config)
@@ -399,6 +404,15 @@ class MetaLearner:
         self.best_performance = 0.0
         
         logger.info(f"✅ Meta-Learner initialized with {config.algorithm.value}")
+    
+    def fit(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        """Fit implementation delegating to train."""
+        num_iterations = kwargs.get("num_iterations", 100)
+        return self.train(num_iterations=num_iterations)
+
+    def evaluate(self, *args: Any, **kwargs: Any) -> Dict[str, float]:
+        """Evaluate implementation returning best performance."""
+        return {"best_performance": float(self.best_performance)}
     
     def train(self, num_iterations: int = 1000) -> Dict[str, Any]:
         """Train meta-learner"""
