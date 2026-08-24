@@ -481,10 +481,22 @@ class OptimizationResult:
     best_params: Dict[str, Any] = field(default_factory=dict)
     best_score: float = 0.0
     n_iterations: int = 0
+    total_iterations: int = 0
+    best_parameters: Dict[str, Any] = field(default_factory=dict)
     history: List[Dict[str, Any]] = field(default_factory=list)
     duration_seconds: float = 0.0
     converged: bool = True
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        if not self.best_params and self.best_parameters:
+            self.best_params = self.best_parameters
+        if not self.best_parameters and self.best_params:
+            self.best_parameters = self.best_params
+        if self.n_iterations == 0 and self.total_iterations != 0:
+            self.n_iterations = self.total_iterations
+        if self.total_iterations == 0 and self.n_iterations != 0:
+            self.total_iterations = self.n_iterations
 
 
 @dataclass

@@ -1,481 +1,659 @@
 """
-Learning Strategies Subsystem for TruthGPT Optimization Core
-=============================================================
-Unified, enterprise-grade learning subsystem encompassing 16 learning paradigms,
-multi-stage fluent pipelines, typed registry, and extensible optimization strategies:
-- Active Learning
-- Adaptive Learning & Concept Drift
-- Adversarial Learning & Robustness
-- Bayesian Optimization & Surrogate Models
-- Causal Inference & Effect Estimation
-- Continual & Lifelong Learning
-- Ensemble Learning (Voting, Stacking, Boosting)
-- Evolutionary Computing & Multi-Objective Search
-- Federated Learning & Privacy Preservation
-- Hyperparameter Optimization (Optuna, TPE, CMA-ES)
-- Meta-Learning (MAML, Reptile, Few-Shot)
-- Multitask Learning & Gradient Surgery
-- Neural Architecture Search (NAS)
-- Reinforcement Learning (DQN, PPO)
-- Self-Supervised Learning & Contrastive Pretraining
-- Transfer Learning, Domain Adaptation & Distillation
+Unified Learning Strategies Subsystem for TruthGPT Optimization Core.
+
+Provides an enterprise-grade, highly modular, and extensible suite of 16 distinct
+learning paradigms with thread-safe lazy imports, structured configuration
+dataclasses, typed exceptions, component registries, lifecycle callbacks,
+and multi-stage learning pipeline orchestration.
+
+Paradigms Supported:
+- Active Learning (Uncertainty, Diversity, Committee, Expected Model Change)
+- Adaptive Learning (Exploration, Exploitation, Meta-Learning, Self-Improvement)
+- Adversarial Robustness & GANs (FGSM, PGD, CW, Defensive Distillation, WGAN)
+- Bayesian Optimization (Gaussian Processes, Acquisition Optimization, Multi-Objective)
+- Causal Inference (Discovery, Effect Estimation, Sensitivity, DiD, Propensity Matching)
+- Continual Learning (EWC, Replay Buffers, Progressive Networks, Lifelong Learning)
+- Ensemble Learning (Voting, Stacking, Bagging, Boosting, Dynamic Weighting)
+- Evolutionary Computing (Genetic Algorithms, Multi-Objective Pareto, Elitism)
+- Federated Learning (FedAvg, FedProx, Differential Privacy, Secure Aggregation)
+- Hyperparameter Optimization (TPE, CMA-ES, Bayesian HPO, Optuna, Pruning)
+- Meta-Learning (MAML, Reptile, Few-Shot Task Generation)
+- Multitask Learning (Hard/Soft Parameter Sharing, Gradient Surgery, PCGrad)
+- Neural Architecture Search (Evolutionary NAS, Differentiable Supernets)
+- Reinforcement Learning (DQN, Dueling DQN, PPO, Multi-Agent Environments)
+- Self-Supervised Learning (SimCLR, MoCo, BYOL, Pretext Tasks, Memory Banks)
+- Transfer Learning (Fine-Tuning, Feature Extraction, Domain Adaptation, Distillation)
+- Learning Pipeline (Multi-stage composition & workflow execution)
 """
 
 from __future__ import annotations
 
+import importlib
+import logging
 import sys
 import threading
-import importlib
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Type, Union
 
-# Version
-__version__ = "2.5.0"
+logger = logging.getLogger(__name__)
 
-# Module level aliasing for backward compatibility
-_curr_mod = sys.modules.get(__name__)
-if _curr_mod:
-    if __name__.startswith("optimization_core.learning"):
-        sys.modules["learning"] = _curr_mod
-    elif __name__ == "learning":
-        sys.modules["optimization_core.learning"] = _curr_mod
+# ==========================================
+# Lazy Import Resolution Map
+# ==========================================
 
-# Comprehensive lazy import mapping
 _LAZY_IMPORTS: Dict[str, str] = {
-    # Interfaces & Contracts
+    # Core Infrastructure
     'BaseLearner': '.interfaces',
-    'BaseLearningOptimizer': '.interfaces',
-    'BaseSampler': '.interfaces',
-    'BaseActiveLearner': '.interfaces',
-    'BaseAdaptiveLearner': '.interfaces',
-    'BaseAdversarialLearner': '.interfaces',
-    'BaseBayesianOptimizer': '.interfaces',
-    'BaseCausalInference': '.interfaces',
-    'BaseContinualLearner': '.interfaces',
-    'BaseEnsembleLearner': '.interfaces',
-    'BaseEvolutionaryOptimizer': '.interfaces',
-    'BaseFederatedLearner': '.interfaces',
-    'BaseHyperparameterOptimizer': '.interfaces',
-    'BaseMetaLearner': '.interfaces',
-    'BaseMultitaskLearner': '.interfaces',
-    'BaseNASOptimizer': '.interfaces',
-    'BaseReinforcementLearner': '.interfaces',
-    'BaseSelfSupervisedLearner': '.interfaces',
-    'BaseTransferLearner': '.interfaces',
-    'BaseLearningPipeline': '.interfaces',
-    'BaseCallback': '.interfaces',
+    'BaseLearningStrategy': '.interfaces',
     'BaseQuerySampler': '.interfaces',
     'BaseDefense': '.interfaces',
     'BaseDomainAdapter': '.interfaces',
     'BaseAggregationStrategy': '.interfaces',
-
+    'BaseArchitectureSearch': '.interfaces',
+    'BaseAcquisitionFunction': '.interfaces',
+    'BaseCallback': '.interfaces',
+    
     # Exceptions
-    'LearningBaseException': '.exceptions',
     'LearningError': '.exceptions',
-    'LearnerNotFoundError': '.exceptions',
-    'LearnerInitializationError': '.exceptions',
-    'LearnerConfigurationError': '.exceptions',
-    'OptimizationFailedError': '.exceptions',
-    'ConvergenceError': '.exceptions',
-    'StrategyNotSupportedError': '.exceptions',
-    'SamplingError': '.exceptions',
+    'LearningConfigError': '.exceptions',
     'ActiveLearningError': '.exceptions',
     'AdaptiveLearningError': '.exceptions',
     'AdversarialAttackError': '.exceptions',
     'AdversarialDefenseError': '.exceptions',
-    'AdversarialError': '.exceptions',
     'BayesianOptimizationError': '.exceptions',
-    'BayesianError': '.exceptions',
     'CausalInferenceError': '.exceptions',
-    'CausalDiscoveryError': '.exceptions',
     'ContinualLearningError': '.exceptions',
-    'ContinualError': '.exceptions',
-    'EnsembleLearningError': '.exceptions',
     'EnsembleError': '.exceptions',
-    'EvolutionaryOptimizationError': '.exceptions',
     'EvolutionaryError': '.exceptions',
     'FederatedLearningError': '.exceptions',
-    'FederatedAggregationError': '.exceptions',
     'HyperparameterOptimizationError': '.exceptions',
-    'HPOError': '.exceptions',
     'MetaLearningError': '.exceptions',
-    'MultitaskLearningError': '.exceptions',
-    'MultiTaskError': '.exceptions',
+    'MultiTaskLearningError': '.exceptions',
     'NASError': '.exceptions',
-    'ArchitectureSearchError': '.exceptions',
     'ReinforcementLearningError': '.exceptions',
-    'RLError': '.exceptions',
-    'SelfSupervisedLearningError': '.exceptions',
     'SelfSupervisedError': '.exceptions',
-    'SSLError': '.exceptions',
     'TransferLearningError': '.exceptions',
     'PipelineExecutionError': '.exceptions',
-    'PipelineError': '.exceptions',
-
+    
+    # Configs
+    'BaseLearningConfig': '.config',
+    'ActiveLearningConfig': '.config',
+    'AdaptiveLearningConfig': '.config',
+    'AdversarialConfig': '.config',
+    'BayesianOptimizationConfig': '.config',
+    'CausalConfig': '.config',
+    'ContinualLearningConfig': '.config',
+    'EnsembleConfig': '.config',
+    'EvolutionaryConfig': '.config',
+    'FederatedLearningConfig': '.config',
+    'HPOConfig': '.config',
+    'MetaLearningConfig': '.config',
+    'MultiTaskConfig': '.config',
+    'NASConfig': '.config',
+    'RLConfig': '.config',
+    'SSLConfig': '.config',
+    'TransferLearningConfig': '.config',
+    'LearningPipelineConfig': '.config',
+    
     # Types & Enums
     'LearningParadigm': '.types',
-    'LearningStrategyType': '.types',
     'LearningStatus': '.types',
-    'ActiveLearningStrategy': '.types',
-    'UncertaintyMeasure': '.types',
-    'QueryStrategy': '.types',
-    'SamplingStrategy': '.types',
-    'LearningMode': '.types',
-    'AdaptiveLearningStrategy': '.types',
-    'AdversarialAttackType': '.types',
-    'AdversarialMethod': '.types',
-    'GANType': '.types',
-    'DefenseStrategy': '.types',
-    'AcquisitionFunction': '.types',
-    'KernelType': '.types',
-    'OptimizationStrategy': '.types',
-    'OptimizationMetric': '.types',
-    'CausalMethod': '.types',
-    'CausalEffectType': '.types',
-    'CLStrategy': '.types',
-    'ContinualStrategy': '.types',
-    'ReplayStrategy': '.types',
-    'MemoryType': '.types',
-    'EnsembleStrategy': '.types',
-    'VotingStrategy': '.types',
-    'BoostingMethod': '.types',
-    'AggregationMethod': '.types',
-    'FederatedAggregationMethod': '.types',
-    'ClientSelectionStrategy': '.types',
-    'PrivacyLevel': '.types',
-    'HpoAlgorithm': '.types',
-    'SamplerType': '.types',
-    'PrunerType': '.types',
-    'MetaLearningAlgorithm': '.types',
-    'TaskDistribution': '.types',
-    'TaskType': '.types',
-    'TaskRelationship': '.types',
-    'SharingStrategy': '.types',
-    'SearchStrategy': '.types',
-    'RLAlgorithm': '.types',
-    'EnvironmentType': '.types',
-    'SSLMethod': '.types',
-    'PretextTaskType': '.types',
-    'ContrastiveLossType': '.types',
-    'TransferStrategy': '.types',
-    'DomainAdaptationMethod': '.types',
-    'KnowledgeDistillationType': '.types',
-    'DistillationMethod': '.types',
-
-    # Results & Telemetry
     'StepState': '.types',
     'LearningMetrics': '.types',
-    'OptimizationResult': '.types',
     'QueryResult': '.types',
-    'ActiveLearningResult': '.types',
-    'CausalEffectResult': '.types',
-    'FederatedRoundResult': '.types',
     'DefenseResult': '.types',
     'NASResult': '.types',
     'HPOExperimentResult': '.types',
     'PipelineStageResult': '.types',
-
-    # Configs
-    'LearningConfig': '.types',
-    'ActiveLearningConfig': '.types',
-    'AdaptiveLearningConfig': '.types',
-    'AdversarialConfig': '.types',
-    'BayesianOptimizationConfig': '.types',
-    'BayesianConfig': '.types',
-    'CausalConfig': '.types',
-    'ContinualLearningConfig': '.types',
-    'ContinualConfig': '.types',
-    'EnsembleConfig': '.types',
-    'EvolutionaryConfig': '.types',
-    'FederatedLearningConfig': '.types',
-    'FederatedConfig': '.types',
-    'HpoConfig': '.types',
-    'HPOConfig': '.types',
-    'MetaLearningConfig': '.types',
-    'MultiTaskConfig': '.types',
-    'NASConfig': '.types',
-    'RLConfig': '.types',
-    'SSLConfig': '.types',
-    'TransferLearningConfig': '.types',
-    'LearningPipelineConfig': '.types',
-
-    # Registry & Pipeline
-    'LearningModuleEntry': '.registry',
+    
+    # Registry, Callbacks & Pipeline
     'LearningRegistry': '.registry',
-    'LEARNING_REGISTRY': '.registry',
-    'learning_registry': '.registry',
-    'register_learning_module': '.registry',
-    'list_available_learning_modules': '.registry',
-    'get_learning_module_info': '.registry',
-    'create_learning_module': '.registry',
-    'create_learner': '.registry',
-    'create_learning_optimizer': '.factory',
-    'create_learning_config': '.factory',
-    'LEARNING_MODULE_REGISTRY': '.registry',
+    'CallbackHandler': '.callbacks',
+    'PrintLogger': '.callbacks',
+    'TelemetryCallback': '.callbacks',
+    'EarlyStoppingCallback': '.callbacks',
     'PipelineStage': '.pipeline',
     'LearningPipeline': '.pipeline',
-    'CompositeLearningPipeline': '.pipeline',
-    'PipelineResult': '.pipeline',
-    'PipelineConfig': '.config',
-    'LearningPipelineBuilder': '.pipeline',
-    'create_pipeline_builder': '.pipeline',
-    'create_learning_pipeline': '.pipeline',
-
-    # Submodules
-    'active_learning': '.active_learning',
-    'adaptive_learning': '.adaptive_learning',
-    'adversarial_learning': '.adversarial_learning',
-    'bayesian_optimization': '.bayesian_optimization',
-    'causal_inference': '.causal_inference',
-    'continual_learning': '.continual_learning',
-    'ensemble_learning': '.ensemble_learning',
-    'evolutionary_computing': '.evolutionary_computing',
-    'federated_learning': '.federated_learning',
-    'hyperparameter_optimization': '.hyperparameter_optimization',
-    'meta_learning': '.meta_learning',
-    'multitask_learning': '.multitask_learning',
-    'reinforcement_learning': '.reinforcement_learning',
-    'self_supervised_learning': '.self_supervised_learning',
-    'transfer_learning': '.transfer_learning',
-
-    # 1. Active Learning
-    'ActiveLearner': '.active_learning',
+    
+    # Active Learning
+    'ActiveLearningStrategy': '.active_learning',
+    'UncertaintyMeasure': '.active_learning',
+    'QueryStrategy': '.active_learning',
     'ActiveLearningSystem': '.active_learning',
+    'ActiveLearner': '.active_learning',
     'UncertaintySampler': '.active_learning',
     'DiversitySampler': '.active_learning',
     'QueryByCommittee': '.active_learning',
     'ExpectedModelChange': '.active_learning',
     'BatchActiveLearning': '.active_learning',
-    'create_active_learning_system': '.active_learning',
-
-    # 2. Adaptive Learning
-    'AdaptiveLearner': '.adaptive_learning',
+    
+    # Adaptive Learning
+    'LearningMode': '.adaptive_learning',
+    'AdaptiveLearningStrategy': '.adaptive_learning',
     'AdaptiveLearningSystem': '.adaptive_learning',
+    'AdaptiveLearner': '.adaptive_learning',
     'PerformanceTracker': '.adaptive_learning',
     'SelfImprovementEngine': '.adaptive_learning',
-    'create_adaptive_learning_system': '.adaptive_learning',
-
-    # 3. Adversarial Learning
-    'AdversarialLearner': '.adversarial_learning',
+    
+    # Adversarial Learning
+    'AdversarialAttackType': '.adversarial_learning',
+    'GANType': '.adversarial_learning',
+    'DefenseStrategy': '.adversarial_learning',
     'AdversarialLearningSystem': '.adversarial_learning',
+    'AdversarialLearner': '.adversarial_learning',
     'AdversarialAttacker': '.adversarial_learning',
     'AdversarialDefense': '.adversarial_learning',
+    'RobustnessAnalyzer': '.adversarial_learning',
+    'GANTrainer': '.adversarial_learning',
     'GANGenerator': '.adversarial_learning',
     'GANDiscriminator': '.adversarial_learning',
-    'GANTrainer': '.adversarial_learning',
-    'RobustnessAnalyzer': '.adversarial_learning',
-    'create_adversarial_learning_system': '.adversarial_learning',
-
-    # 4. Bayesian Optimization
+    
+    # Bayesian Optimization
+    'AcquisitionFunction': '.bayesian_optimization',
+    'KernelType': '.bayesian_optimization',
+    'OptimizationStrategy': '.bayesian_optimization',
     'BayesianOptimizer': '.bayesian_optimization',
     'GaussianProcessModel': '.bayesian_optimization',
     'AcquisitionFunctionOptimizer': '.bayesian_optimization',
-    'create_bayesian_optimizer': '.bayesian_optimization',
-
-    # 5. Causal Inference
+    
+    # Causal Inference
+    'CausalMethod': '.causal_inference',
+    'CausalEffectType': '.causal_inference',
+    'CausalInferenceSystem': '.causal_inference',
     'CausalInference': '.causal_inference',
     'CausalInferenceEngine': '.causal_inference',
-    'CausalInferenceSystem': '.causal_inference',
     'CausalDiscovery': '.causal_inference',
     'CausalEffectEstimator': '.causal_inference',
     'SensitivityAnalyzer': '.causal_inference',
     'RobustnessChecker': '.causal_inference',
-    'create_causal_inference_system': '.causal_inference',
-
-    # 6. Continual Learning
-    'ContinualLearner': '.continual_learning',
+    
+    # Continual Learning
+    'CLStrategy': '.continual_learning',
+    'ReplayStrategy': '.continual_learning',
+    'MemoryType': '.continual_learning',
     'CLTrainer': '.continual_learning',
-    'LifelongLearner': '.continual_learning',
+    'ContinualLearner': '.continual_learning',
     'EWC': '.continual_learning',
     'ReplayBuffer': '.continual_learning',
     'ProgressiveNetwork': '.continual_learning',
-    'create_cl_trainer': '.continual_learning',
-
-    # 7. Ensemble Learning
-    'EnsembleLearner': '.ensemble_learning',
+    'LifelongLearner': '.continual_learning',
+    
+    # Ensemble Learning
+    'EnsembleStrategy': '.ensemble_learning',
+    'VotingStrategy': '.ensemble_learning',
+    'BoostingMethod': '.ensemble_learning',
     'EnsembleTrainer': '.ensemble_learning',
+    'EnsembleLearner': '.ensemble_learning',
+    'EnsembleManager': '.ensemble_learning',
     'VotingEnsemble': '.ensemble_learning',
     'StackingEnsemble': '.ensemble_learning',
     'BaggingEnsemble': '.ensemble_learning',
     'BoostingEnsemble': '.ensemble_learning',
     'DynamicEnsemble': '.ensemble_learning',
-    'create_ensemble_trainer': '.ensemble_learning',
-
-    # 8. Evolutionary Computing
+    
+    # Evolutionary Computing
+    'SelectionMethod': '.evolutionary_computing',
+    'CrossoverMethod': '.evolutionary_computing',
+    'MutationMethod': '.evolutionary_computing',
+    'EvolutionaryAlgorithm': '.evolutionary_computing',
     'EvolutionaryOptimizer': '.evolutionary_computing',
-    'create_evolutionary_optimizer': '.evolutionary_computing',
-
-    # 9. Federated Learning
-    'FederatedLearner': '.federated_learning',
+    'Individual': '.evolutionary_computing',
+    'Population': '.evolutionary_computing',
+    
+    # Federated Learning
+    'AggregationMethod': '.federated_learning',
+    'ClientSelectionStrategy': '.federated_learning',
+    'PrivacyLevel': '.federated_learning',
     'FederatedLearningSystem': '.federated_learning',
+    'FederatedLearner': '.federated_learning',
     'FederatedClient': '.federated_learning',
     'FederatedServer': '.federated_learning',
     'AsyncFederatedServer': '.federated_learning',
-    'create_federated_learning_system': '.federated_learning',
-
-    # 10. Hyperparameter Optimization
-    'HyperparameterOptimizer': '.hyperparameter_optimization',
+    'PrivacyPreservation': '.federated_learning',
+    
+    # Hyperparameter Optimization
+    'HpoAlgorithm': '.hyperparameter_optimization',
+    'SamplerType': '.hyperparameter_optimization',
+    'PrunerType': '.hyperparameter_optimization',
     'HpoManager': '.hyperparameter_optimization',
+    'HyperparameterOptimizer': '.hyperparameter_optimization',
     'TPEOptimizer': '.hyperparameter_optimization',
     'CMAESOptimizer': '.hyperparameter_optimization',
     'OptunaOptimizer': '.hyperparameter_optimization',
-    'create_hpo_manager': '.hyperparameter_optimization',
-
-    # 11. Meta Learning
+    
+    # Meta Learning
+    'MetaLearningAlgorithm': '.meta_learning',
+    'TaskDistribution': '.meta_learning',
     'MetaLearner': '.meta_learning',
+    'TaskGenerator': '.meta_learning',
     'MAML': '.meta_learning',
     'Reptile': '.meta_learning',
-    'TaskGenerator': '.meta_learning',
-    'create_meta_learner': '.meta_learning',
-
-    # 12. Multitask Learning
-    'MultitaskLearner': '.multitask_learning',
+    
+    # Multitask Learning
+    'TaskType': '.multitask_learning',
+    'TaskRelationship': '.multitask_learning',
+    'SharingStrategy': '.multitask_learning',
     'MultiTaskTrainer': '.multitask_learning',
-    'MultiTaskNetwork': '.multitask_learning',
+    'MultitaskLearner': '.multitask_learning',
+    'MultitaskModel': '.multitask_learning',
     'TaskBalancer': '.multitask_learning',
     'GradientSurgery': '.multitask_learning',
-    'create_multitask_trainer': '.multitask_learning',
-
-    # 13. NAS
-    'NASOptimizer': '.nas',
+    'SharedRepresentation': '.multitask_learning',
+    'MultiTaskHead': '.multitask_learning',
+    'MultiTaskNetwork': '.multitask_learning',
+    
+    # Neural Architecture Search
+    'SearchStrategy': '.nas',
     'EvolutionaryNAS': '.nas',
+    'NASOptimizer': '.nas',
+    'NeuralArchitectureSearch': '.nas',
     'DifferentiableNAS': '.nas',
-    'create_evolutionary_nas': '.nas',
-
-    # 14. Reinforcement Learning
-    'ReinforcementLearner': '.reinforcement_learning',
+    'ArchitectureGene': '.nas',
+    'NeuralArchitecture': '.nas',
+    
+    # Reinforcement Learning
+    'RLAlgorithm': '.reinforcement_learning',
+    'EnvironmentType': '.reinforcement_learning',
     'RLTrainingManager': '.reinforcement_learning',
+    'ReinforcementLearner': '.reinforcement_learning',
+    'RLSystem': '.reinforcement_learning',
     'DQNAgent': '.reinforcement_learning',
     'PPOAgent': '.reinforcement_learning',
-    'create_rl_training_manager': '.reinforcement_learning',
-
-    # 15. Self-Supervised Learning
-    'SelfSupervisedLearner': '.self_supervised_learning',
+    'ExperienceReplay': '.reinforcement_learning',
+    'DQNNetwork': '.reinforcement_learning',
+    'DuelingDQNNetwork': '.reinforcement_learning',
+    'MultiAgentEnvironment': '.reinforcement_learning',
+    
+    # Self-Supervised Learning
+    'SSLMethod': '.self_supervised_learning',
+    'PretextTaskType': '.self_supervised_learning',
+    'ContrastiveLossType': '.self_supervised_learning',
     'SSLTrainer': '.self_supervised_learning',
+    'SelfSupervisedLearner': '.self_supervised_learning',
+    'SelfSupervisedTrainer': '.self_supervised_learning',
     'ContrastiveLearner': '.self_supervised_learning',
+    'PretextTaskModel': '.self_supervised_learning',
     'RepresentationLearner': '.self_supervised_learning',
-    'create_ssl_trainer': '.self_supervised_learning',
-
-    # 16. Transfer Learning
-    'TransferLearner': '.transfer_learning',
+    'MomentumEncoder': '.self_supervised_learning',
+    'MemoryBank': '.self_supervised_learning',
+    
+    # Transfer Learning
+    'TransferStrategy': '.transfer_learning',
+    'DomainAdaptationMethod': '.transfer_learning',
+    'KnowledgeDistillationType': '.transfer_learning',
     'TransferTrainer': '.transfer_learning',
+    'TransferLearner': '.transfer_learning',
+    'TransferLearningManager': '.transfer_learning',
     'FineTuner': '.transfer_learning',
     'FeatureExtractor': '.transfer_learning',
     'KnowledgeDistiller': '.transfer_learning',
     'DomainAdapter': '.transfer_learning',
-    'create_transfer_trainer': '.transfer_learning',
+    'MultiTaskAdapter': '.transfer_learning',
 }
 
 _import_cache: Dict[str, Any] = {}
 _cache_lock = threading.RLock()
 
 
-def _lazy_load_symbol(name: str) -> Any:
-    """Helper to lazily load a specific symbol without triggering full imports."""
-    if name in _import_cache:
-        return _import_cache[name]
-
-    if name not in _LAZY_IMPORTS:
-        available = sorted(list(_LAZY_IMPORTS.keys()))[:10]
-        raise AttributeError(
-            f"module '{__name__}' has no attribute '{name}'. "
-            f"Available: {', '.join(available)}..."
-        )
-
-    module_path = _LAZY_IMPORTS[name]
-    pkg = __name__
-    try:
-        module = importlib.import_module(module_path, pkg)
-        obj = getattr(module, name)
-        _import_cache[name] = obj
-        return obj
-    except (ImportError, AttributeError) as e:
-        # Fallback across alternate namespace root (learning vs optimization_core.learning)
-        try:
-            rel = module_path.lstrip('.')
-            alt_mod = f"optimization_core.learning.{rel}" if "optimization_core" not in pkg else f"learning.{rel}"
-            module = importlib.import_module(alt_mod)
-            obj = getattr(module, name)
-            _import_cache[name] = obj
-            return obj
-        except Exception:
-            raise AttributeError(
-                f"module '{__name__}' has no attribute '{name}'. "
-                f"Failed to import from '{module_path}': {e}"
-            ) from e
-
-
 def __getattr__(name: str) -> Any:
-    """Lazy import system for learning modules."""
-    if name == "__version__":
-        return __version__
+    """
+    Thread-safe lazy import resolution for the learning subsystem.
+    """
     if name.startswith('_'):
         raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-
+    
     with _cache_lock:
-        return _lazy_load_symbol(name)
-
-
-def _register_builtin_modules() -> None:
-    """Pre-populate the learning registry with all 16 domains using lazy dispatch."""
-    from .registry import LEARNING_REGISTRY
-    
-    def _make_factory(symbol_name: str, fallback_cls: Optional[str] = None):
-        def _factory(*args: Any, **kwargs: Any) -> Any:
+        if name in _import_cache:
+            return _import_cache[name]
+        
+        if name not in _LAZY_IMPORTS:
+            available = sorted(_LAZY_IMPORTS.keys())[:15]
+            raise AttributeError(
+                f"module '{__name__}' has no attribute '{name}'. "
+                f"Available attributes: {', '.join(available)}..."
+            )
+        
+        rel_module = _LAZY_IMPORTS[name]
+        full_module = f"{__name__}{rel_module}"
+        try:
+            mod = importlib.import_module(full_module)
+            obj = getattr(mod, name)
+            _import_cache[name] = obj
+            return obj
+        except Exception as e:
+            # Fallback direct relative import
             try:
-                fn = _lazy_load_symbol(symbol_name)
-                return fn(*args, **kwargs)
-            except Exception:
-                if fallback_cls:
-                    cls_obj = _lazy_load_symbol(fallback_cls)
-                    return cls_obj(*args, **kwargs)
-                raise
-        return _factory
-
-    domains = {
-        "active": ("create_active_learning_system", "ActiveLearner", ["active_learning"]),
-        "adaptive": ("create_adaptive_learning_system", "AdaptiveLearner", ["adaptive_learning"]),
-        "adversarial": ("create_adversarial_learning_system", "AdversarialLearner", ["adversarial_learning"]),
-        "bayesian": ("create_bayesian_optimizer", "BayesianOptimizer", ["bayesian_optimization"]),
-        "causal": ("create_causal_inference_system", "CausalInference", ["causal_inference"]),
-        "continual": ("create_cl_trainer", "ContinualLearner", ["continual_learning"]),
-        "ensemble": ("create_ensemble_trainer", "EnsembleLearner", ["ensemble_learning"]),
-        "evolutionary": ("create_evolutionary_optimizer", "EvolutionaryOptimizer", ["evolutionary_computing"]),
-        "federated": ("create_federated_learning_system", "FederatedLearner", ["federated_learning"]),
-        "hpo": ("create_hpo_manager", "HyperparameterOptimizer", ["hyperparameter_optimization"]),
-        "meta": ("create_meta_learner", "MetaLearner", ["meta_learning"]),
-        "multitask": ("create_multitask_trainer", "MultitaskLearner", ["multitask_learning"]),
-        "nas": ("create_evolutionary_nas", "NASOptimizer", ["neural_architecture_search"]),
-        "reinforcement": ("create_rl_training_manager", "ReinforcementLearner", ["reinforcement_learning"]),
-        "self_supervised": ("create_ssl_trainer", "SelfSupervisedLearner", ["self_supervised_learning"]),
-        "transfer": ("create_transfer_trainer", "TransferLearner", ["transfer_learning"]),
-    }
-    
-    for name, (factory_fn, class_name, aliases) in domains.items():
-        LEARNING_REGISTRY.register(
-            name=name,
-            factory_or_cls=_make_factory(factory_fn, fallback_cls=class_name),
-            description=f"Unified factory for {name} learning paradigm.",
-            aliases=aliases + [class_name],
-        )
+                mod = importlib.import_module(rel_module, package=__name__)
+                obj = getattr(mod, name)
+                _import_cache[name] = obj
+                return obj
+            except Exception as inner_e:
+                raise AttributeError(
+                    f"module '{__name__}' failed to load '{name}' from '{full_module}': {e} | {inner_e}"
+                ) from e
 
 
 def __dir__() -> List[str]:
-    """Directory listing for dynamic inspection and tab completion."""
-    return sorted(list(globals().keys()) + list(_LAZY_IMPORTS.keys()))
+    """Provide complete autocomplete attribute listing."""
+    return sorted(set(list(globals().keys()) + list(_LAZY_IMPORTS.keys()) + list(LEARNING_MODULE_REGISTRY.keys())))
 
 
-# Populate default registry entries
-_register_builtin_modules()
+# ==========================================
+# Unified Factory & Module Registry
+# ==========================================
 
-# Dual module registration for backward compatibility
+LEARNING_MODULE_REGISTRY: Dict[str, Dict[str, str]] = {
+    "active": {
+        "module": ".active_learning",
+        "class": "ActiveLearningSystem",
+        "config_class": "ActiveLearningConfig",
+        "description": "Active Learning with uncertainty and diversity sampling."
+    },
+    "adaptive": {
+        "module": ".adaptive_learning",
+        "class": "AdaptiveLearningSystem",
+        "config_class": "AdaptiveLearningConfig",
+        "description": "Adaptive and self-improving meta-optimization systems."
+    },
+    "adversarial": {
+        "module": ".adversarial_learning",
+        "class": "AdversarialLearningSystem",
+        "config_class": "AdversarialConfig",
+        "description": "Adversarial robustness, attack simulations, and GAN training."
+    },
+    "bayesian": {
+        "module": ".bayesian_optimization",
+        "class": "BayesianOptimizer",
+        "config_class": "BayesianOptimizationConfig",
+        "description": "Bayesian optimization with Gaussian Processes."
+    },
+    "causal": {
+        "module": ".causal_inference",
+        "class": "CausalInferenceSystem",
+        "config_class": "CausalConfig",
+        "description": "Causal discovery, effect estimation, and sensitivity analysis."
+    },
+    "continual": {
+        "module": ".continual_learning",
+        "class": "CLTrainer",
+        "config_class": "ContinualLearningConfig",
+        "description": "Continual and lifelong learning with catastrophic forgetting prevention."
+    },
+    "ensemble": {
+        "module": ".ensemble_learning",
+        "class": "EnsembleTrainer",
+        "config_class": "EnsembleConfig",
+        "description": "Ensemble model aggregation, voting, bagging, boosting, and stacking."
+    },
+    "evolutionary": {
+        "module": ".evolutionary_computing",
+        "class": "EvolutionaryOptimizer",
+        "config_class": "EvolutionaryConfig",
+        "description": "Evolutionary computing, genetic algorithms, and multi-objective optimization."
+    },
+    "federated": {
+        "module": ".federated_learning",
+        "class": "FederatedLearningSystem",
+        "config_class": "FederatedLearningConfig",
+        "description": "Federated learning with differential privacy and client aggregation."
+    },
+    "hpo": {
+        "module": ".hyperparameter_optimization",
+        "class": "HpoManager",
+        "config_class": "HPOConfig",
+        "description": "Hyperparameter optimization via TPE, CMA-ES, and Optuna."
+    },
+    "meta": {
+        "module": ".meta_learning",
+        "class": "MetaLearner",
+        "config_class": "MetaLearningConfig",
+        "description": "Meta-learning algorithms including MAML and Reptile."
+    },
+    "multitask": {
+        "module": ".multitask_learning",
+        "class": "MultiTaskTrainer",
+        "config_class": "MultiTaskConfig",
+        "description": "Multi-task learning with shared representation and gradient surgery."
+    },
+    "nas": {
+        "module": ".nas",
+        "class": "EvolutionaryNAS",
+        "config_class": "NASConfig",
+        "description": "Neural architecture search with evolutionary and differentiable strategies."
+    },
+    "reinforcement": {
+        "module": ".reinforcement_learning",
+        "class": "RLTrainingManager",
+        "config_class": "RLConfig",
+        "description": "Reinforcement learning training with DQN, PPO, and multi-agent systems."
+    },
+    "self_supervised": {
+        "module": ".self_supervised_learning",
+        "class": "SSLTrainer",
+        "config_class": "SSLConfig",
+        "description": "Self-supervised learning with contrastive learning and pretext tasks."
+    },
+    "transfer": {
+        "module": ".transfer_learning",
+        "class": "TransferTrainer",
+        "config_class": "TransferLearningConfig",
+        "description": "Transfer learning, domain adaptation, and knowledge distillation."
+    },
+    "pipeline": {
+        "module": ".pipeline",
+        "class": "LearningPipeline",
+        "config_class": "LearningPipelineConfig",
+        "description": "Multi-stage learning pipeline orchestrator."
+    }
+}
+
+
+def create_learning_module(module_type: str, config: Optional[Union[Dict[str, Any], Any]] = None, **kwargs: Any) -> Any:
+    """
+    Unified factory function to instantiate any learning subsystem module.
+    
+    Args:
+        module_type: Name of the paradigm (e.g., 'active', 'adversarial', 'evolutionary', etc.)
+        config: Optional configuration dataclass instance or dictionary of options.
+        **kwargs: Additional parameters passed to component initialization.
+        
+    Returns:
+        Instantiated learner object adhering to BaseLearner protocol.
+        
+    Example:
+        >>> from optimization_core.learning import create_learning_module
+        >>> learner = create_learning_module("active")
+        >>> hpo = create_learning_module("hpo", {"n_trials": 20})
+    """
+    key = module_type.lower().replace("-", "_").replace(" ", "_")
+    
+    # Handle common aliases
+    alias_map = {
+        "active_learning": "active",
+        "adaptive_learning": "adaptive",
+        "adversarial_learning": "adversarial",
+        "bayesian_optimization": "bayesian",
+        "causal_inference": "causal",
+        "continual_learning": "continual",
+        "lifelong_learning": "continual",
+        "ensemble_learning": "ensemble",
+        "evolutionary_computing": "evolutionary",
+        "federated_learning": "federated",
+        "hyperparameter_optimization": "hpo",
+        "meta_learning": "meta",
+        "multitask_learning": "multitask",
+        "neural_architecture_search": "nas",
+        "reinforcement_learning": "reinforcement",
+        "rl": "reinforcement",
+        "self_supervised_learning": "self_supervised",
+        "ssl": "self_supervised",
+        "transfer_learning": "transfer",
+    }
+    key = alias_map.get(key, key)
+    
+    if key not in LEARNING_MODULE_REGISTRY:
+        available = ", ".join(sorted(LEARNING_MODULE_REGISTRY.keys()))
+        raise ValueError(f"Unknown learning module type: '{module_type}'. Available: {available}")
+    
+    entry = LEARNING_MODULE_REGISTRY[key]
+    mod_path = f"{__name__}{entry['module']}"
+    cls_name = entry["class"]
+    cfg_name = entry["config_class"]
+    
+    mod = importlib.import_module(mod_path)
+    cls_obj = getattr(mod, cls_name)
+    
+    # Build config instance if dict is passed
+    if isinstance(config, dict):
+        try:
+            cfg_mod = importlib.import_module(f"{__name__}.config")
+            cfg_cls = getattr(cfg_mod, cfg_name)
+            config_instance = cfg_cls.from_dict(config)
+        except Exception:
+            config_instance = config
+    elif config is None:
+        try:
+            cfg_mod = importlib.import_module(f"{__name__}.config")
+            cfg_cls = getattr(cfg_mod, cfg_name)
+            config_instance = cfg_cls(**kwargs)
+        except Exception:
+            config_instance = None
+    else:
+        config_instance = config
+
+    if config_instance is not None:
+        return cls_obj(config_instance)
+    return cls_obj()
+
+
+def list_available_learning_modules() -> List[str]:
+    """List all supported learning paradigms in the subsystem."""
+    return sorted(list(LEARNING_MODULE_REGISTRY.keys()))
+
+
+def get_learning_module_info(module_type: str) -> Dict[str, Any]:
+    """Retrieve metadata and description for a learning module."""
+    key = module_type.lower()
+    if key not in LEARNING_MODULE_REGISTRY:
+        raise ValueError(f"Module '{module_type}' not found.")
+    return dict(LEARNING_MODULE_REGISTRY[key])
+
+
+# ==========================================
+# Module Exports
+# ==========================================
+
+__all__ = [
+    # Factory & Utilities
+    'create_learning_module',
+    'list_available_learning_modules',
+    'get_learning_module_info',
+    'LEARNING_MODULE_REGISTRY',
+    
+    # Core Interfaces
+    'BaseLearner',
+    'BaseLearningStrategy',
+    'BaseQuerySampler',
+    'BaseDefense',
+    'BaseDomainAdapter',
+    'BaseAggregationStrategy',
+    'BaseArchitectureSearch',
+    'BaseAcquisitionFunction',
+    'BaseCallback',
+    
+    # Exceptions
+    'LearningError',
+    'LearningConfigError',
+    'ActiveLearningError',
+    'AdaptiveLearningError',
+    'AdversarialAttackError',
+    'AdversarialDefenseError',
+    'BayesianOptimizationError',
+    'CausalInferenceError',
+    'ContinualLearningError',
+    'EnsembleError',
+    'EvolutionaryError',
+    'FederatedLearningError',
+    'HyperparameterOptimizationError',
+    'MetaLearningError',
+    'MultiTaskLearningError',
+    'NASError',
+    'ReinforcementLearningError',
+    'SelfSupervisedError',
+    'TransferLearningError',
+    'PipelineExecutionError',
+    
+    # Core Infrastructure
+    'LearningRegistry',
+    'LearningPipeline',
+    'PipelineStage',
+    'CallbackHandler',
+    'PrintLogger',
+    'TelemetryCallback',
+    'EarlyStoppingCallback',
+    
+    # Configs
+    'BaseLearningConfig',
+    'ActiveLearningConfig',
+    'AdaptiveLearningConfig',
+    'AdversarialConfig',
+    'BayesianOptimizationConfig',
+    'CausalConfig',
+    'ContinualLearningConfig',
+    'EnsembleConfig',
+    'EvolutionaryConfig',
+    'FederatedLearningConfig',
+    'HPOConfig',
+    'MetaLearningConfig',
+    'MultiTaskConfig',
+    'NASConfig',
+    'RLConfig',
+    'SSLConfig',
+    'TransferLearningConfig',
+    'LearningPipelineConfig',
+    
+    # Primary Learners & Aliases
+    'ActiveLearningSystem',
+    'ActiveLearner',
+    'AdaptiveLearningSystem',
+    'AdaptiveLearner',
+    'AdversarialLearningSystem',
+    'AdversarialLearner',
+    'BayesianOptimizer',
+    'CausalInferenceSystem',
+    'CausalInference',
+    'CausalInferenceEngine',
+    'CLTrainer',
+    'ContinualLearner',
+    'LifelongLearner',
+    'EnsembleTrainer',
+    'EnsembleLearner',
+    'EnsembleManager',
+    'EvolutionaryOptimizer',
+    'FederatedLearningSystem',
+    'FederatedLearner',
+    'HpoManager',
+    'HyperparameterOptimizer',
+    'MetaLearner',
+    'MultiTaskTrainer',
+    'MultitaskLearner',
+    'EvolutionaryNAS',
+    'NASOptimizer',
+    'NeuralArchitectureSearch',
+    'RLTrainingManager',
+    'ReinforcementLearner',
+    'RLSystem',
+    'SSLTrainer',
+    'SelfSupervisedLearner',
+    'SelfSupervisedTrainer',
+    'TransferTrainer',
+    'TransferLearner',
+    'TransferLearningManager',
+]
+
+# Dual-namespace shim support
 _curr_mod = sys.modules.get(__name__)
 if _curr_mod:
-    if __name__ == "optimization_core.learning":
+    if __name__.startswith("optimization_core.learning"):
         sys.modules["learning"] = _curr_mod
     elif __name__ == "learning":
         sys.modules["optimization_core.learning"] = _curr_mod
-
-__all__ = list(_LAZY_IMPORTS.keys()) + [
-    '__version__',
-    '__all__',
-]
