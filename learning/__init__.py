@@ -29,7 +29,7 @@ import importlib
 from typing import Any, Dict, List, Optional, Union
 
 # Version
-__version__ = "2.0.0"
+__version__ = "2.5.0"
 
 # Module level aliasing for backward compatibility
 _curr_mod = sys.modules.get(__name__)
@@ -353,10 +353,10 @@ _import_cache: Dict[str, Any] = {}
 _cache_lock = threading.RLock()
 
 
-def __getattr__(name: str) -> Any:
-    """Lazy import system for learning modules."""
-    if name.startswith('_'):
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+def _lazy_load_symbol(name: str) -> Any:
+    """Helper to lazily load a specific symbol without triggering full imports."""
+    if name in _import_cache:
+        return _import_cache[name]
 
     if name not in _LAZY_IMPORTS:
         available = sorted(list(_LAZY_IMPORTS.keys()))[:10]
@@ -365,37 +365,99 @@ def __getattr__(name: str) -> Any:
             f"Available: {', '.join(available)}..."
         )
 
-    with _cache_lock:
-        if name in _import_cache:
-            return _import_cache[name]
-
-        module_path = _LAZY_IMPORTS[name]
-        pkg = __name__
+    module_path = _LAZY_IMPORTS[name]
+    pkg = __name__
+    try:
+        module = importlib.import_module(module_path, pkg)
+        obj = getattr(module, name)
+        _import_cache[name] = obj
+        return obj
+    except (ImportError, AttributeError) as e:
+        # Fallback across alternate namespace root (learning vs optimization_core.learning)
         try:
-            module = importlib.import_module(module_path, pkg)
+            rel = module_path.lstrip('.')
+            alt_mod = f"optimization_core.learning.{rel}" if "optimization_core" not in pkg else f"learning.{rel}"
+            module = importlib.import_module(alt_mod)
             obj = getattr(module, name)
             _import_cache[name] = obj
             return obj
-        except (ImportError, AttributeError) as e:
-            # Fallback across alternate namespace root (learning vs optimization_core.learning)
+        except Exception:
+            raise AttributeError(
+                f"module '{__name__}' has no attribute '{name}'. "
+                f"Failed to import from '{module_path}': {e}"
+            ) from e
+
+
+def __getattr__(name: str) -> Any:
+    """Lazy import system for learning modules."""
+    if name == "__version__":
+        return __version__
+    if name.startswith('_'):
+        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
+    with _cache_lock:
+        return _lazy_load_symbol(name)
+
+
+def _register_builtin_modules() -> None:
+    """Pre-populate the learning registry with all 16 domains using lazy dispatch."""
+    from .registry import LEARNING_REGISTRY
+    
+    def _make_factory(symbol_name: str, fallback_cls: Optional[str] = None):
+        def _factory(*args: Any, **kwargs: Any) -> Any:
             try:
-                rel = module_path.lstrip('.')
-                alt_mod = f"optimization_core.learning.{rel}" if "optimization_core" not in pkg else f"learning.{rel}"
-                module = importlib.import_module(alt_mod)
-                obj = getattr(module, name)
-                _import_cache[name] = obj
-                return obj
+                fn = _lazy_load_symbol(symbol_name)
+                return fn(*args, **kwargs)
             except Exception:
-                raise AttributeError(
-                    f"module '{__name__}' has no attribute '{name}'. "
-                    f"Failed to import from '{module_path}': {e}"
-                ) from e
+                if fallback_cls:
+                    cls_obj = _lazy_load_symbol(fallback_cls)
+                    return cls_obj(*args, **kwargs)
+                raise
+        return _factory
+
+    domains = {
+        "active": ("create_active_learning_system", "ActiveLearner", ["active_learning"]),
+        "adaptive": ("create_adaptive_learning_system", "AdaptiveLearner", ["adaptive_learning"]),
+        "adversarial": ("create_adversarial_learning_system", "AdversarialLearner", ["adversarial_learning"]),
+        "bayesian": ("create_bayesian_optimizer", "BayesianOptimizer", ["bayesian_optimization"]),
+        "causal": ("create_causal_inference_system", "CausalInference", ["causal_inference"]),
+        "continual": ("create_cl_trainer", "ContinualLearner", ["continual_learning"]),
+        "ensemble": ("create_ensemble_trainer", "EnsembleLearner", ["ensemble_learning"]),
+        "evolutionary": ("create_evolutionary_optimizer", "EvolutionaryOptimizer", ["evolutionary_computing"]),
+        "federated": ("create_federated_learning_system", "FederatedLearner", ["federated_learning"]),
+        "hpo": ("create_hpo_manager", "HyperparameterOptimizer", ["hyperparameter_optimization"]),
+        "meta": ("create_meta_learner", "MetaLearner", ["meta_learning"]),
+        "multitask": ("create_multitask_trainer", "MultitaskLearner", ["multitask_learning"]),
+        "nas": ("create_evolutionary_nas", "NASOptimizer", ["neural_architecture_search"]),
+        "reinforcement": ("create_rl_training_manager", "ReinforcementLearner", ["reinforcement_learning"]),
+        "self_supervised": ("create_ssl_trainer", "SelfSupervisedLearner", ["self_supervised_learning"]),
+        "transfer": ("create_transfer_trainer", "TransferLearner", ["transfer_learning"]),
+    }
+    
+    for name, (factory_fn, class_name, aliases) in domains.items():
+        LEARNING_REGISTRY.register(
+            name=name,
+            factory_or_cls=_make_factory(factory_fn, fallback_cls=class_name),
+            description=f"Unified factory for {name} learning paradigm.",
+            aliases=aliases + [class_name],
+        )
 
 
 def __dir__() -> List[str]:
     """Directory listing for dynamic inspection and tab completion."""
     return sorted(list(globals().keys()) + list(_LAZY_IMPORTS.keys()))
 
+
+# Populate default registry entries
+_register_builtin_modules()
+
+# Dual module registration for backward compatibility
+_curr_mod = sys.modules.get(__name__)
+if _curr_mod:
+    if __name__ == "optimization_core.learning":
+        sys.modules["learning"] = _curr_mod
+    elif __name__ == "learning":
+        sys.modules["optimization_core.learning"] = _curr_mod
 
 __all__ = list(_LAZY_IMPORTS.keys()) + [
     '__version__',
