@@ -77,14 +77,31 @@ def create_learning_module(
 
     try:
         if config is not None:
+            if isinstance(config, dict) and kwargs:
+                merged = dict(config)
+                merged.update(kwargs)
+                config = merged
             try:
                 return target(config=config, **kwargs)
             except TypeError:
                 try:
                     return target(config, **kwargs)
                 except TypeError:
-                    return target(**kwargs)
+                    try:
+                        return target(config=config)
+                    except TypeError:
+                        return target(**kwargs)
         else:
+            if kwargs:
+                try:
+                    # Attempt building typed config dataclass first if supported
+                    cfg = create_learning_config(key, **kwargs)
+                    try:
+                        return target(config=cfg)
+                    except TypeError:
+                        return target(cfg)
+                except Exception:
+                    pass
             return target(**kwargs)
     except Exception as e:
         raise LearnerInitializationError(

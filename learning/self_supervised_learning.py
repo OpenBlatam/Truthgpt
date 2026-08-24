@@ -66,6 +66,7 @@ class ContrastiveLossType(Enum):
     SUPERVISED_CONTRASTIVE = "supervised_contrastive"
     HARD_NEGATIVE_MINING = "hard_negative_mining"
 
+@dataclass
 class SSLConfig:
     """Configuration for self-supervised learning system"""
     # Basic settings
@@ -1031,8 +1032,10 @@ def create_memory_bank(config: SSLConfig) -> MemoryBank:
     """Create memory bank"""
     return MemoryBank(config)
 
-def create_ssl_trainer(config: SSLConfig) -> SSLTrainer:
+def create_ssl_trainer(config: Optional[SSLConfig] = None) -> SSLTrainer:
     """Create SSL trainer"""
+    if config is None:
+        config = SSLConfig()
     return SSLTrainer(config)
 
 # Example usage

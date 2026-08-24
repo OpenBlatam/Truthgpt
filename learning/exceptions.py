@@ -48,123 +48,123 @@ class ConvergenceError(LearningBaseException):
     pass
 
 
-class StrategyNotSupportedError(LearningBaseException):
+class StrategyNotSupportedError(LearningError):
     """Raised when an unsupported algorithm or combination of strategies is specified."""
     pass
 
 
-class SamplingError(LearningBaseException):
+class SamplingError(LearningError):
     """Raised when active learning sampling fails due to invalid pool or metric NaN."""
     pass
 
 
 # Domain Specific Exceptions & Aliases
-class ActiveLearningError(LearningBaseException):
+class ActiveLearningError(LearningError):
     """Raised during active learning sampling or cycle execution."""
     pass
 
 
-class AdaptiveLearningError(LearningBaseException):
+class AdaptiveLearningError(LearningError):
     """Raised during adaptive drift detection or online adjustment."""
     pass
 
 
-class AdversarialAttackError(LearningBaseException):
+class AdversarialAttackError(LearningError):
     """Raised when an adversarial attack generation fails."""
     pass
 
 
-class AdversarialDefenseError(LearningBaseException):
+class AdversarialDefenseError(LearningError):
     """Raised when an adversarial defense or certified radius calculation fails."""
     pass
 
 
-class AdversarialError(LearningBaseException):
+class AdversarialError(LearningError):
     """General adversarial learning error."""
     pass
 
 
-class BayesianOptimizationError(LearningBaseException):
+class BayesianOptimizationError(LearningError):
     """Raised during Bayesian optimization acquisition or surrogate fitting."""
     pass
 
 
-class BayesianError(LearningBaseException):
+class BayesianError(LearningError):
     """General Bayesian error."""
     pass
 
 
-class CausalInferenceError(LearningBaseException):
+class CausalInferenceError(LearningError):
     """Raised during causal treatment effect estimation or refutation."""
     pass
 
 
-class CausalDiscoveryError(LearningBaseException):
+class CausalDiscoveryError(LearningError):
     """Raised when causal DAG discovery fails."""
     pass
 
 
-class ContinualLearningError(LearningBaseException):
+class ContinualLearningError(LearningError):
     """Raised during continual learning task adaptation or EWC regularization."""
     pass
 
 
-class ContinualError(LearningBaseException):
+class ContinualError(LearningError):
     """General continual learning error."""
     pass
 
 
-class EnsembleLearningError(LearningBaseException):
+class EnsembleLearningError(LearningError):
     """Raised during ensemble weighting, bagging, or voting aggregation."""
     pass
 
 
-class EnsembleError(LearningBaseException):
+class EnsembleError(LearningError):
     """General ensemble error."""
     pass
 
 
-class EvolutionaryOptimizationError(LearningBaseException):
+class EvolutionaryOptimizationError(LearningError):
     """Raised during evolutionary genetic selection or crossover."""
     pass
 
 
-class EvolutionaryError(LearningBaseException):
+class EvolutionaryError(LearningError):
     """General evolutionary error."""
     pass
 
 
-class FederatedLearningError(LearningBaseException):
+class FederatedLearningError(LearningError):
     """Raised during federated round execution or client synchronization."""
     pass
 
 
-class FederatedAggregationError(LearningBaseException):
+class FederatedAggregationError(LearningError):
     """Raised when federated parameter aggregation or secure weight averaging fails."""
     pass
 
 
-class HyperparameterOptimizationError(LearningBaseException):
+class HyperparameterOptimizationError(LearningError):
     """Raised during hyperparameter trial search or pruning."""
     pass
 
 
-class HPOError(LearningBaseException):
+class HPOError(LearningError):
     """General HPO error."""
     pass
 
 
-class MetaLearningError(LearningBaseException):
+class MetaLearningError(LearningError):
     """Raised during meta-parameter adaptation or inner-loop task updates."""
     pass
 
 
-class MultitaskLearningError(LearningBaseException):
+class MultitaskLearningError(LearningError):
     """Raised during multi-task loss balancing or gradient surgery."""
     pass
 
 
-class MultiTaskError(LearningBaseException):
+class MultiTaskError(LearningError):
     """General multi-task learning error."""
     pass
 
@@ -172,32 +172,32 @@ class MultiTaskError(LearningBaseException):
 MultiTaskLearningError = MultitaskLearningError
 
 
-class ArchitectureSearchError(LearningBaseException):
+class ArchitectureSearchError(LearningError):
     """Raised when neural architecture generation or evaluation fails."""
     pass
 
 
-class NASError(LearningBaseException):
+class NASError(LearningError):
     """General neural architecture search error."""
     pass
 
 
-class ReinforcementLearningError(LearningBaseException):
+class ReinforcementLearningError(LearningError):
     """Raised during RL policy updates, action selection, or trajectory collection."""
     pass
 
 
-class RLError(LearningBaseException):
+class RLError(LearningError):
     """General RL error."""
     pass
 
 
-class SelfSupervisedLearningError(LearningBaseException):
+class SelfSupervisedLearningError(LearningError):
     """Raised during self-supervised contrastive pretraining."""
     pass
 
 
-class SSLError(LearningBaseException):
+class SSLError(LearningError):
     """General self-supervised error."""
     pass
 
@@ -205,12 +205,12 @@ class SSLError(LearningBaseException):
 SelfSupervisedError = SelfSupervisedLearningError
 
 
-class TransferLearningError(LearningBaseException):
+class TransferLearningError(LearningError):
     """Raised during transfer fine-tuning, domain adaptation, or distillation."""
     pass
 
 
-class PipelineError(LearningBaseException):
+class PipelineError(LearningError):
     """Raised when execution of a multi-stage learning pipeline encounters an error."""
     pass
 
