@@ -115,6 +115,6 @@ class EvolutionaryOptimizer:
         from .visualization import visualize_optimization_results
         visualize_optimization_results(self.optimization_history, self.config, save_path)
 
-def create_evolutionary_optimizer(config: EvolutionaryConfig) -> EvolutionaryOptimizer:
+def create_evolutionary_optimizer(config: Optional[Union[EvolutionaryConfig, Dict[str, Any]]] = None) -> EvolutionaryOptimizer:
     """Create evolutionary optimizer"""
     return EvolutionaryOptimizer(config)
