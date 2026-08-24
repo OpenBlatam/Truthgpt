@@ -82,13 +82,15 @@ def create_learning_module(
                 merged.update(kwargs)
                 config = merged
             try:
-                return target(config=config, **kwargs)
+                return target(config, **kwargs)
             except TypeError:
                 try:
-                    return target(config, **kwargs)
+                    return target(config=config, **kwargs)
                 except TypeError:
                     try:
-                        return target(config=config)
+                        if isinstance(config, dict):
+                            return target(**{**config, **kwargs})
+                        return target(config)
                     except TypeError:
                         return target(**kwargs)
         else:

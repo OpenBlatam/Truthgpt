@@ -215,6 +215,15 @@ class LearningPipeline(BaseLearningPipeline):
         }
 
     @property
+    def name(self) -> str:
+        """Name of the pipeline."""
+        return self.config.pipeline_name
+
+    @name.setter
+    def name(self, val: str) -> None:
+        self.config.pipeline_name = val
+
+    @property
     def history(self) -> List[PipelineStageResult]:
         """Retrieve execution history of the last pipeline run."""
         return list(self._execution_history)
@@ -227,9 +236,19 @@ class LearningPipelineBuilder:
         self.config = PipelineConfig(pipeline_name=name)
         self.pipeline = LearningPipeline(config=self.config)
 
+    def set_name(self, name: str) -> LearningPipelineBuilder:
+        self.config.pipeline_name = name
+        self.pipeline.config.pipeline_name = name
+        return self
+
     def with_config(self, config: PipelineConfig) -> LearningPipelineBuilder:
         self.config = config
         self.pipeline.config = config
+        return self
+
+    def with_fail_fast(self, fail_fast: bool = True) -> LearningPipelineBuilder:
+        self.config.stop_on_stage_failure = fail_fast
+        self.pipeline.config.stop_on_stage_failure = fail_fast
         return self
 
     def add_stage(
@@ -238,13 +257,29 @@ class LearningPipelineBuilder:
         module: Any,
         config: Optional[Any] = None,
         condition: Optional[Callable[[Dict[str, Any]], bool]] = None,
+        dependencies: Optional[List[str]] = None,
+        **kwargs: Any,
     ) -> LearningPipelineBuilder:
         self.pipeline.add_stage(name, module, config=config, condition=condition)
         return self
 
+    def with_stage(
+        self,
+        name: str,
+        module: Any,
+        config: Optional[Any] = None,
+        condition: Optional[Callable[[Dict[str, Any]], bool]] = None,
+        dependencies: Optional[List[str]] = None,
+        **kwargs: Any,
+    ) -> LearningPipelineBuilder:
+        return self.add_stage(name, module, config=config, condition=condition, dependencies=dependencies, **kwargs)
+
     def add_callback(self, callback: BaseCallback) -> LearningPipelineBuilder:
         self.pipeline.callbacks.append(callback)
         return self
+
+    def with_callback(self, callback: BaseCallback) -> LearningPipelineBuilder:
+        return self.add_callback(callback)
 
     def build(self) -> LearningPipeline:
         return self.pipeline

@@ -787,9 +787,14 @@ def create_multitask_network(config: MultiTaskConfig) -> MultiTaskNetwork:
     """Create multi-task network"""
     return MultiTaskNetwork(config)
 
-def create_multitask_trainer(config: MultiTaskConfig) -> MultiTaskTrainer:
-    """Create multi-task trainer"""
+def create_multitask_trainer(config: Optional[Union[MultiTaskConfig, Dict[str, Any]]] = None, **kwargs: Any) -> MultiTaskTrainer:
+    """Create multi-task trainer with flexible config binding."""
+    if config is None:
+        config = MultiTaskConfig(**kwargs)
+    elif isinstance(config, dict):
+        config = MultiTaskConfig(**config)
     return MultiTaskTrainer(config)
+
 
 # Example usage
 def example_multitask_learning():

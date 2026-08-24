@@ -138,6 +138,10 @@ class EvolutionaryOptimizer(BaseLearner):
         from .visualization import visualize_optimization_results
         visualize_optimization_results(self.optimization_history, self.config, save_path)
 
-def create_evolutionary_optimizer(config: Optional[Union[EvolutionaryConfig, Dict[str, Any]]] = None) -> EvolutionaryOptimizer:
+def create_evolutionary_optimizer(
+    config: Optional[Union[EvolutionaryConfig, Dict[str, Any]]] = None,
+    **kwargs: Any
+) -> EvolutionaryOptimizer:
     """Create evolutionary optimizer"""
-    return EvolutionaryOptimizer(config)
+    return EvolutionaryOptimizer(config=config, **kwargs)
+
