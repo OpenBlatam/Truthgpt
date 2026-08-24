@@ -1,7 +1,7 @@
 import time
 import logging
 import numpy as np
-from typing import Dict, Any, List, Tuple, Callable
+from typing import Dict, Any, List, Tuple, Callable, Optional, Union
 from .types import EvolutionaryConfig
 from .population import Population
 from .individual import Individual

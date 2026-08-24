@@ -202,6 +202,9 @@ class SSLError(LearningBaseException):
     pass
 
 
+SelfSupervisedError = SelfSupervisedLearningError
+
+
 class TransferLearningError(LearningBaseException):
     """Raised during transfer fine-tuning, domain adaptation, or distillation."""
     pass
@@ -255,6 +258,7 @@ __all__ = [
     'ReinforcementLearningError',
     'RLError',
     'SelfSupervisedLearningError',
+    'SelfSupervisedError',
     'SSLError',
     'TransferLearningError',
     'PipelineError',

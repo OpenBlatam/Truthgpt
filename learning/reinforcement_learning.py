@@ -21,6 +21,10 @@ import random
 from collections import deque, namedtuple
 import itertools
 
+from .interfaces import BaseLearner
+from .registry import LearningRegistry
+from .exceptions import ReinforcementLearningError
+
 logger = logging.getLogger(__name__)
 
 class RLAlgorithm(Enum):
@@ -516,16 +520,36 @@ class MultiAgentEnvironment:
         
         return next_states, rewards, dones
 
-class RLTrainingManager:
+@LearningRegistry.register_learner("reinforcement", aliases=["reinforcement_learning", "ReinforcementLearner", "RLTrainingManager", "RLSystem"], paradigm="reinforcement")
+class RLTrainingManager(BaseLearner):
     """Reinforcement Learning Training Manager"""
     
-    def __init__(self, config: RLConfig):
+    def __init__(self, config: Optional[RLConfig] = None):
+        if config is None:
+            config = RLConfig()
         self.config = config
         self.agents = []
         self.environment = None
         self.training_history = []
         
         logger.info("✅ RL Training Manager initialized")
+    
+    def fit(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        """Fit implementation delegating to train_agent."""
+        if "agent" in kwargs:
+            agent = kwargs["agent"]
+        elif len(args) > 0:
+            agent = args[0]
+        else:
+            agent = self.create_agent(10, 4)
+        num_episodes = kwargs.get("num_episodes", 10)
+        return self.train_agent(agent, num_episodes=num_episodes)
+
+    def evaluate(self, *args: Any, **kwargs: Any) -> Dict[str, float]:
+        """Evaluate implementation returning latest training stats."""
+        stats = self.get_training_statistics()
+        latest = stats.get("latest_stats", {})
+        return {"avg_reward": float(latest.get("avg_reward", 0.0))}
     
     def create_agent(self, state_dim: int, action_dim: int) -> Union[DQNAgent, PPOAgent]:
         """Create agent based on algorithm"""
