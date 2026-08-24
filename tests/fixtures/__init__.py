@@ -1,6 +1,8 @@
 """
-Test fixtures for TruthGPT optimization core testing
+Centralized Test Fixtures and Synthetic Generators for TruthGPT Optimization Core.
 """
+
+from __future__ import annotations
 
 from .test_data import TestDataFactory
 from .mock_components import (
@@ -9,40 +11,46 @@ from .mock_components import (
     MockAttention,
     MockMLP,
     MockDataset,
-    MockKVCache
+    MockKVCache,
+    MockTokenizer,
+    MockTrainer,
+    MockCompiler,
+    MockAgent,
+    MockEvaluator,
 )
 from .test_utils import (
     TestUtils,
     PerformanceProfiler,
     MemoryTracker,
     TestAssertions,
-    TestCoverageTracker,
     AdvancedTestDecorators,
     ParallelTestRunner,
-    TestVisualizer
+    TestVisualizer,
 )
 
 __all__ = [
-    # Data
+    # Data Factory
     'TestDataFactory',
     
-    # Mock components
+    # Mock Components
     'MockOptimizer',
     'MockModel',
     'MockAttention',
     'MockMLP',
     'MockDataset',
     'MockKVCache',
+    'MockTokenizer',
+    'MockTrainer',
+    'MockCompiler',
+    'MockAgent',
+    'MockEvaluator',
     
-    # Utilities
+    # Telemetry and Utilities
     'TestUtils',
     'PerformanceProfiler',
     'MemoryTracker',
     'TestAssertions',
-    
-    # Advanced features
-    'TestCoverageTracker',
     'AdvancedTestDecorators',
     'ParallelTestRunner',
-    'TestVisualizer'
+    'TestVisualizer',
 ]

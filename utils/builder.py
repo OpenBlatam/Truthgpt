@@ -379,11 +379,36 @@ class UtilityPipelineBuilder:
             self._config = config
         return self
 
-    def add_step(self, step_name: str, fn: Callable[..., Any]) -> UtilityPipelineBuilder:
-        """Add a procedural or transformation step."""
-        if not callable(fn):
-            raise UtilityConfigurationError(f"Step '{step_name}' must be callable.")
-        self._steps.append((step_name, fn))
+    def add_step(self, step_name_or_fn: Union[str, Callable[..., Any], Any], fn: Optional[Callable[..., Any]] = None) -> UtilityPipelineBuilder:
+        """Add a procedural, transformation, or BaseUtility step."""
+        if fn is None:
+            # Single argument passed (e.g. util instance or function)
+            callable_obj = step_name_or_fn
+            name = getattr(callable_obj, "name", getattr(callable_obj, "__name__", callable_obj.__class__.__name__))
+            if hasattr(callable_obj, "execute"):
+                func = callable_obj.execute
+            elif callable(callable_obj):
+                func = callable_obj
+            else:
+                raise UtilityConfigurationError(f"Step '{name}' must be callable or provide execute().")
+            self._steps.append((name, func))
+        else:
+            # Two arguments passed: step_name, fn
+            name = str(step_name_or_fn)
+            if not callable(fn):
+                if hasattr(fn, "execute"):
+                    fn = fn.execute
+                else:
+                    raise UtilityConfigurationError(f"Step '{name}' must be callable.")
+            self._steps.append((name, fn))
+        return self
+
+    def with_optimization_level(
+        self,
+        level: Union[OptimizationLevel, str] = OptimizationLevel.BALANCED,
+    ) -> UtilityPipelineBuilder:
+        """Configure optimization aggressiveness level."""
+        self._config.optimization_level = OptimizationLevel(level) if isinstance(level, str) else level
         return self
 
     def with_hardware(

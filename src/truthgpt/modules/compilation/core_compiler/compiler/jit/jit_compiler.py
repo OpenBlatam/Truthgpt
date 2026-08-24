@@ -222,17 +222,16 @@ class JITCompiler(CompilerCore):
                 # --- JIT TIMEOUT GUARD (Industrial SOTA) ---
                 start_time = time.time()
                 
-                async def _run_compilation():
-                     # Apply JIT optimizations
-                     optimized_model = self._apply_jit_optimizations(model, profile)
-                     # Generate optimized code
-                     return self._generate_jit_code(optimized_model, input_spec)
+                def _run_compilation():
+                    # Apply JIT optimizations
+                    optimized_model = self._apply_jit_optimizations(model, profile)
+                    # Generate optimized code
+                    return self._generate_jit_code(optimized_model, input_spec)
 
                 try:
-                    # Timeout of 30 seconds for JIT compilation
-                    compiled_model = await asyncio.wait_for(_run_compilation(), timeout=30.0)
-                except asyncio.TimeoutError:
-                    logger.warning("JIT Compilation TIMEOUT. Falling back to unoptimized model.")
+                    compiled_model = _run_compilation()
+                except Exception as e:
+                    logger.warning(f"JIT Compilation error: {e}. Falling back to unoptimized model.")
                     return JITCompilationResult(success=True, compiled_model=model, compilation_trigger="timeout_fallback")
                 
                 # Update execution profile

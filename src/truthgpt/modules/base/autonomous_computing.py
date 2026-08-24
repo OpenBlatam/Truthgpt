@@ -807,7 +807,7 @@ class SelfHealingSystem:
         if "memory" in system_state.resource_usage:
             system_state.resource_usage["memory"] *= 0.8
         
-                    return True
+        return True
         
     async def _free_memory(self, system_state: SystemState) -> bool:
         """Free system memory"""
@@ -1311,17 +1311,17 @@ def create_self_healing_system(config: AutonomousConfig) -> SelfHealingSystem:
 if __name__ == "__main__":
     async def main():
         # Create autonomous config
-    config = AutonomousConfig(
-        autonomy_level=AutonomyLevel.AUTONOMOUS,
+        config = AutonomousConfig(
+            autonomy_level=AutonomyLevel.AUTONOMOUS,
             decision_types=[DecisionType.OPERATIONAL, DecisionType.REACTIVE],
             learning_mode=LearningMode.CONTINUAL_LEARNING,
-        enable_self_healing=True,
+            enable_self_healing=True,
             enable_self_optimization=True
-    )
-    
-    # Create autonomous manager
-    manager = create_autonomous_manager(config)
-    
+        )
+        
+        # Create autonomous manager
+        manager = create_autonomous_manager(config)
+        
         # Start autonomous operation
         await manager.start_autonomous_operation()
         
@@ -1333,7 +1333,7 @@ if __name__ == "__main__":
         
         # Get stats
         stats = manager.get_autonomous_stats()
-    print(f"Autonomous manager stats: {stats}")
-    
+        print(f"Autonomous manager stats: {stats}")
+        
     # Run example
     asyncio.run(main())

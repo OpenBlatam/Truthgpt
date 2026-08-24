@@ -262,7 +262,6 @@ COMPILER_REGISTRY = {
         "description": "Distributed compiler",
         "factory": create_distributed_compiler,
     },
-    },
     "tf2tensorrt": {
         "class": TF2TensorRTCompiler,
         "module": "compiler.tf2tensorrt.tf2tensorrt_compiler",

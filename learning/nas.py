@@ -633,8 +633,14 @@ def example_neural_architecture_search():
     
     return best_architecture
 
+# Backward compatibility aliases
+NASOptimizer = EvolutionaryNAS
+NeuralArchitectureSearch = EvolutionaryNAS
+
 # Export utilities
 __all__ = [
+    'NASOptimizer',
+    'NeuralArchitectureSearch',
     'SearchStrategy',
     'NASConfig',
     'ArchitectureGene',
@@ -650,6 +656,15 @@ __all__ = [
 if __name__ == "__main__":
     example_neural_architecture_search()
     print("✅ Neural Architecture Search example completed successfully!")
+
+import sys
+_mod = sys.modules.get(__name__)
+if _mod:
+    if __name__.startswith("optimization_core.learning."):
+        sys.modules["learning." + __name__[len("optimization_core.learning."):]] = _mod
+    elif __name__.startswith("learning."):
+        sys.modules["optimization_core.learning." + __name__[len("learning."):]] = _mod
+
 
 
 

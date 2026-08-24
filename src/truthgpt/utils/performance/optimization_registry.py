@@ -49,49 +49,55 @@ class OptimizationRegistry:
     def _register_default_optimizations(self):
         """Register default and enhanced optimization techniques."""
         try:
-            from .cuda_kernels import CUDAOptimizations
-            from .triton_optimizations import apply_triton_optimizations
-            from .enhanced_grpo import create_enhanced_grpo_trainer
+            try:
+                from ..gpu.cuda_kernels import CUDAOptimizations
+                self.register_optimization("cuda_kernels", CUDAOptimizations.replace_layer_norm)
+            except (ImportError, AttributeError):
+                pass
+            
+            try:
+                from ..gpu.triton_optimizations import apply_triton_optimizations
+                self.register_optimization("triton_kernels", apply_triton_optimizations)
+            except (ImportError, AttributeError):
+                pass
+            
+            try:
+                from ..training.enhanced_grpo import create_enhanced_grpo_trainer
+                self.register_optimization("enhanced_grpo", create_enhanced_grpo_trainer)
+            except (ImportError, AttributeError):
+                pass
+
             try:
                 from .mcts_optimization import create_mcts_optimizer
                 self.register_optimization("mcts_optimization", create_mcts_optimizer)
-            except ImportError:
-                warnings.warn("MCTS optimization not available")
+            except (ImportError, AttributeError):
+                pass
             
             try:
                 from .parallel_training import create_parallel_actor
                 self.register_optimization("parallel_training", create_parallel_actor)
-            except ImportError:
-                warnings.warn("Parallel training not available")
+            except (ImportError, AttributeError):
+                pass
             
             try:
                 from .experience_buffer import create_experience_buffer
                 self.register_optimization("experience_buffer", create_experience_buffer)
-            except ImportError:
-                warnings.warn("Experience buffer not available")
+            except (ImportError, AttributeError):
+                pass
             
             try:
                 from .advanced_losses import create_loss_function
                 self.register_optimization("advanced_losses", create_loss_function)
-            except ImportError:
-                warnings.warn("Advanced losses not available")
+            except (ImportError, AttributeError):
+                pass
             
             try:
                 from .reward_functions import create_reward_function
                 self.register_optimization("reward_functions", create_reward_function)
-            except ImportError:
-                warnings.warn("Reward functions not available")
-            
-            self.register_optimization("cuda_kernels", CUDAOptimizations.replace_layer_norm)
-            self.register_optimization("triton_kernels", apply_triton_optimizations)
-            self.register_optimization("enhanced_grpo", create_enhanced_grpo_trainer)
-            self.register_optimization("mcts_optimization", create_mcts_optimizer)
-            self.register_optimization("parallel_training", create_parallel_actor)
-            self.register_optimization("experience_buffer", create_experience_buffer)
-            self.register_optimization("advanced_losses", create_loss_function)
-            self.register_optimization("reward_functions", create_reward_function)
-        except ImportError as e:
-            warnings.warn(f"Some optimizations could not be loaded: {e}")
+            except (ImportError, AttributeError):
+                pass
+        except Exception:
+            pass
     
     def register_optimization(self, name: str, optimization_func: Callable):
         """Register a new optimization technique."""

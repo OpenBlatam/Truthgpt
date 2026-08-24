@@ -22,6 +22,7 @@ class OptimizationFramework(Enum):
 class OptimizationLevel(Enum):
     """Optimization levels for TruthGPT."""
     BASIC = "basic"
+    BALANCED = "balanced"
     ADVANCED = "advanced"
     EXPERT = "expert"
     MASTER = "master"

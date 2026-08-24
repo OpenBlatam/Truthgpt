@@ -19,6 +19,42 @@ class OptimizationFramework(Enum):
     DISTRIBUTED = "distributed"
     PARALLEL = "parallel"
 
+# Convenience aliases
+Framework = OptimizationFramework
+
+class HardwareBackend(Enum):
+    """Hardware target backends."""
+    CPU = "cpu"
+    CUDA = "cuda"
+    ROCM = "rocm"
+    TPU = "tpu"
+    METAL = "metal"
+    VULKAN = "vulkan"
+    TRITON = "triton"
+
+class DeviceType(Enum):
+    """Device types."""
+    CPU = "cpu"
+    CUDA = "cuda"
+    MPS = "mps"
+    TPU = "tpu"
+
+class PrecisionType(Enum):
+    """Precision formats."""
+    FP32 = "fp32"
+    FP16 = "fp16"
+    BF16 = "bf16"
+    INT8 = "int8"
+    INT4 = "int4"
+
+class CompilerType(Enum):
+    """Compiler backends."""
+    AOT = "aot"
+    JIT = "jit"
+    PYTORCH = "pytorch"
+    TENSORRT = "tensorrt"
+    TRITON = "triton"
+
 class OptimizationLevel(Enum):
     """Optimization levels for TruthGPT."""
     BASIC = "basic"

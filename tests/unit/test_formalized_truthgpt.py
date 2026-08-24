@@ -21,9 +21,11 @@ if sys.platform == "win32" and "pytest" not in sys.modules:
         pass
 
 # Initialize path
-current_dir = Path(__file__).resolve().parent.parent
-if str(current_dir) not in sys.path:
-    sys.path.insert(0, str(current_dir))
+project_root = Path(__file__).resolve().parent.parent.parent
+src_dir = project_root / "src"
+for p in [str(project_root), str(src_dir)]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 from truthgpt import (
     api, ask, list_papers, get_paper_info, 

@@ -43,6 +43,10 @@ def __getattr__(name: str) -> Any:
         'BaseTruthGPTOptimizer': ('.core.base_truthgpt_optimizer', 'BaseTruthGPTOptimizer'),
         'UnifiedTruthGPTOptimizer': ('.core.base_truthgpt_optimizer', 'UnifiedTruthGPTOptimizer'),
         'OptimizationLevel': ('.core.base_truthgpt_optimizer', 'OptimizationLevel'),
+        'create_generic_optimizer': ('.core.generic_optimizer', 'create_generic_optimizer'),
+        'create_optimization_core': ('.optimization_cores', 'create_optimization_core'),
+        'MCTSOptimizer': ('.core.mcts_optimization', 'MCTSOptimizer'),
+        'UnifiedOptimizerFactory': ('.unified_optimizer_factory', 'UnifiedOptimizerFactory'),
     }
     
     if name in class_map:
@@ -71,6 +75,11 @@ def create_truthgpt_optimizer(level: str = "basic", config: Dict[str, Any] = Non
     opt_level = level_map.get(level.lower(), OptimizationLevel.BASIC)
     return UnifiedTruthGPTOptimizer(config=config or {}, level=opt_level)
 
+def create_generic_optimizer(model: Any = None, optimizer_type: str = "adamw", **kwargs):
+    """Factory for generic optimizers."""
+    from .core.generic_optimizer import create_generic_optimizer as _cgo
+    return _cgo(model=model, optimizer_type=optimizer_type, **kwargs)
+
 def create_production_optimizer(config: Dict[str, Any] = None):
     from .production.production_optimizer import ProductionOptimizer
     return ProductionOptimizer(config=config or {})
@@ -78,5 +87,6 @@ def create_production_optimizer(config: Dict[str, Any] = None):
 __all__ = list(_LAZY_IMPORTS.keys()) + [
     'ProductionOptimizer', 'UnifiedOptimizer', 'BaseTruthGPTOptimizer',
     'UnifiedTruthGPTOptimizer', 'OptimizationLevel', 'create_truthgpt_optimizer',
-    'create_production_optimizer'
+    'create_generic_optimizer', 'create_production_optimizer'
 ]
+

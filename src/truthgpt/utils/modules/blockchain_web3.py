@@ -64,9 +64,9 @@ class BlockchainConfig:
     # Blockchain settings
     blockchain_type: BlockchainType = BlockchainType.ETHEREUM
     network: str = "mainnet"  # mainnet, testnet, local
-    rpc_url: str = os.environ.get("ETH_RPC_URL", "")
-    private_key: str = os.environ.get("ETH_PRIVATE_KEY", "")
-    contract_address: str = os.environ.get("TRUTHGPT_CONTRACT_ADDRESS", "")
+    rpc_url: str = ""
+    private_key: str = ""
+    contract_address: str = ""
     
     # Gas settings
     gas_limit: int = 300000
@@ -80,13 +80,13 @@ class BlockchainConfig:
     retry_delay: int = 5  # seconds
     
     # IPFS settings
-    ipfs_gateway: str = os.environ.get("IPFS_GATEWAY", "https://ipfs.io/ipfs/")
-    ipfs_api_url: str = os.environ.get("IPFS_API_URL", "http://localhost:5001")
+    ipfs_gateway: str = "https://ipfs.io/ipfs/"
+    ipfs_api_url: str = "http://localhost:5001"
     
     # Model settings
     model_compression: bool = True
     encryption_enabled: bool = True
-    encryption_key: str = os.environ.get("TRUTHGPT_ENCRYPTION_KEY", "")
+    encryption_key: str = ""
     
     def __post_init__(self):
         """Validate configuration"""
@@ -120,7 +120,7 @@ class BlockchainConnector:
         
         # Blockchain connection
         self.web3 = None
-            self.account = None
+        self.account = None
         self.contracts = {}
         
         # Initialize connection
@@ -167,7 +167,7 @@ class BlockchainConnector:
         try:
             balance_wei = self.web3.eth.get_balance(self.account.address)
             balance_eth = self.web3.from_wei(balance_wei, 'ether')
-        return float(balance_eth)
+            return float(balance_eth)
         except Exception as e:
             logger.error(f"Failed to get balance: {e}")
             return 0.0
@@ -178,16 +178,16 @@ class BlockchainConnector:
             raise ValueError("No account configured")
         
         try:
-        # Build transaction
-        transaction = {
+            # Build transaction
+            transaction = {
                 'from': self.account.address,
-            'to': to_address,
+                'to': to_address,
                 'value': self.web3.to_wei(value, 'ether'),
-            'gas': self.config.gas_limit,
+                'gas': self.config.gas_limit,
                 'gasPrice': self.web3.to_wei(self.config.gas_price, 'gwei'),
                 'nonce': self.web3.eth.get_transaction_count(self.account.address),
-            'data': data
-        }
+                'data': data
+            }
         
             # Sign transaction
             signed_txn = self.web3.eth.account.sign_transaction(transaction, self.account.key)
@@ -195,7 +195,7 @@ class BlockchainConnector:
             # Send transaction
             tx_hash = self.web3.eth.send_raw_transaction(signed_txn.rawTransaction)
             
-        return tx_hash.hex()
+            return tx_hash.hex()
     
         except Exception as e:
             logger.error(f"Failed to send transaction: {e}")
@@ -283,8 +283,8 @@ class ModelRegistryContract:
         try:
             # Prepare transaction data
             data = self._encode_register_model(model_metadata)
-        
-        # Send transaction
+            
+            # Send transaction
             tx_hash = self.connector.send_transaction(
                 to_address=self.config.contract_address,
                 value=0,
@@ -293,7 +293,7 @@ class ModelRegistryContract:
             
             if tx_hash:
                 logger.info(f"✅ Model registered: {model_metadata.model_id}")
-        return tx_hash
+                return tx_hash
             else:
                 logger.error("Failed to register model")
                 return ""
@@ -375,8 +375,7 @@ class FederatedLearningContract:
             
             logger.info(f"✅ Participant {participant_id} joined round {round_id}")
             return True
-            
-            except Exception as e:
+        except Exception as e:
             logger.error(f"Failed to join round: {e}")
             return False
     
@@ -608,21 +607,21 @@ class TruthGPTBlockchainManager:
         try:
             # Generate model ID
             model_id = self._generate_model_id(model, metadata)
-        
-        # Calculate model hash
+            
+            # Calculate model hash
             model_hash = self._calculate_model_hash(model)
-                
-                # Upload to IPFS
+            
+            # Upload to IPFS
             ipfs_hash = self.ipfs_manager.upload_model(model, metadata)
             
             if not ipfs_hash:
                 logger.error("Failed to upload model to IPFS")
                 return ""
-        
-        # Create model metadata
-        model_metadata = ModelMetadata(
+            
+            # Create model metadata
+            model_metadata = ModelMetadata(
                 model_id=model_id,
-            version=metadata.get('version', '1.0.0'),
+                version=metadata.get('version', '1.0.0'),
                 hash=model_hash,
                 size=self._calculate_model_size(model),
                 architecture=metadata.get('architecture', 'unknown'),
@@ -630,12 +629,12 @@ class TruthGPTBlockchainManager:
                 performance_metrics=metadata.get('performance_metrics', {}),
                 timestamp=time.time(),
                 creator=metadata.get('creator', 'unknown'),
-            license=metadata.get('license', 'MIT'),
+                license=metadata.get('license', 'MIT'),
                 ipfs_hash=ipfs_hash,
                 blockchain_tx_hash=''
-        )
-        
-        # Register on blockchain
+            )
+            
+            # Register on blockchain
             model_registry = self.contract_manager.get_contract(SmartContractType.MODEL_REGISTRY)
             tx_hash = model_registry.register_model(model_metadata)
             
@@ -703,7 +702,7 @@ class TruthGPTBlockchainManager:
                 }
                 logger.info(f"✅ Federated learning started: {round_id}")
                 return round_id
-        else:
+            else:
                 logger.error("Failed to start federated learning")
                 return ""
                 

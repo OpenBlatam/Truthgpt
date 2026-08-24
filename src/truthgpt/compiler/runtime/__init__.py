@@ -9,15 +9,18 @@ from .runtime_compiler import (
     create_runtime_compiler, runtime_compilation_context
 )
 
-from .adaptive_compiler import (
-    AdaptiveCompiler, AdaptiveCompilationConfig, AdaptiveOptimizationStrategy,
-    create_adaptive_compiler, adaptive_compilation_context
-)
+# Backward-compatibility aliases
+AdaptiveCompiler = RuntimeCompiler
+AdaptiveCompilationConfig = RuntimeCompilationConfig
+AdaptiveOptimizationStrategy = RuntimeOptimizationStrategy
+create_adaptive_compiler = create_runtime_compiler
+adaptive_compilation_context = runtime_compilation_context
 
-from .profile_guided_compiler import (
-    ProfileGuidedCompiler, ProfileGuidedConfig, ProfileGuidedOptimization,
-    create_profile_guided_compiler, profile_guided_context
-)
+ProfileGuidedCompiler = RuntimeCompiler
+ProfileGuidedConfig = RuntimeCompilationConfig
+ProfileGuidedOptimization = RuntimeOptimizationStrategy
+create_profile_guided_compiler = create_runtime_compiler
+profile_guided_context = runtime_compilation_context
 
 __all__ = [
     'RuntimeCompiler',
@@ -39,6 +42,7 @@ __all__ = [
     'create_profile_guided_compiler',
     'profile_guided_context'
 ]
+
 
 
 

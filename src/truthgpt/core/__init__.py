@@ -66,23 +66,23 @@ _import_cache = {}
 def __getattr__(name: str):
     """Lazy import system for core submodules."""
     if name.startswith('_'):
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+        raise AttributeError(f"module has no attribute '{name}'")
     
     if name not in _LAZY_IMPORTS:
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+        raise AttributeError(f"module has no attribute '{name}'")
     
     if name in _import_cache:
         return _import_cache[name]
     
     module_path = _LAZY_IMPORTS[name]
     try:
-        module = __import__(module_path, fromlist=[name], level=1)
+        import importlib
+        module = importlib.import_module(module_path, __package__)
         _import_cache[name] = module
         return module
     except (ImportError, AttributeError) as e:
         raise AttributeError(
-            f"module '{__name__}' has no attribute '{name}'. "
-            f"Failed to import: {e}"
+            f"Failed to import '{name}' from '{module_path}': {e}"
         ) from e
 
 

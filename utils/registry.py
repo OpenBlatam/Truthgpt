@@ -24,6 +24,21 @@ except (ImportError, ValueError):
 logger = logging.getLogger(__name__)
 
 
+class UtilityEntry(dict):
+    """Utility registration entry supporting both dict and attribute access."""
+    def __getattr__(self, item: str) -> Any:
+        try:
+            return self[item]
+        except KeyError:
+            factory = self.get("factory")
+            if factory is not None and hasattr(factory, item):
+                return getattr(factory, item)
+            raise AttributeError(f"UtilityEntry has no attribute '{item}'")
+
+    def __setattr__(self, key: str, value: Any) -> None:
+        self[key] = value
+
+
 class UtilityRegistry:
     """Thread-safe registry for discovery, configuration, and instantiation of utilities."""
 
@@ -34,15 +49,40 @@ class UtilityRegistry:
 
     def register(
         self,
-        name: str,
+        name: Any,
         factory: Optional[Union[Type[Any], Callable[..., Any]]] = None,
         category: str = "general",
         description: str = "",
         metadata: Optional[Dict[str, Any]] = None,
         override: bool = False,
         aliases: Optional[List[str]] = None,
+        **kwargs: Any,
     ) -> Any:
         """Register a utility class, function, or factory into the registry."""
+        if not isinstance(name, str):
+            comp = name
+            item_name = getattr(comp, "name", getattr(comp, "__name__", str(comp)))
+            meta = dict(metadata or {})
+            if "priority" in kwargs:
+                meta["priority"] = kwargs.pop("priority")
+            meta.update(kwargs)
+            name_key = item_name.strip().lower()
+            with self._lock:
+                entry = UtilityEntry({
+                    "name": item_name,
+                    "factory": comp,
+                    "instance": comp,
+                    "category": category,
+                    "description": description or getattr(comp, "__doc__", ""),
+                    "metadata": meta,
+                    "aliases": aliases or [],
+                })
+                self._registry[name_key] = entry
+                if aliases:
+                    for alias in aliases:
+                        self._registry[alias.strip().lower()] = entry
+            return comp
+
         def decorator(comp: Union[Type[Any], Callable[..., Any]]) -> Union[Type[Any], Callable[..., Any]]:
             name_key = name.strip().lower()
             with self._lock:
@@ -50,18 +90,19 @@ class UtilityRegistry:
                     raise RegistryError(
                         f"Utility '{name}' is already registered in category '{self._registry[name_key]['category']}'."
                     )
-                self._registry[name_key] = {
+                entry = UtilityEntry({
                     "name": name,
                     "factory": comp,
                     "category": category,
                     "description": description,
                     "metadata": metadata or {},
                     "aliases": aliases or [],
-                }
+                })
+                self._registry[name_key] = entry
                 if aliases:
                     for alias in aliases:
                         alias_key = alias.strip().lower()
-                        self._registry[alias_key] = self._registry[name_key]
+                        self._registry[alias_key] = entry
 
                 logger.debug(f"Registered utility '{name}' under category '{category}'")
             return comp
@@ -312,12 +353,18 @@ def _init_default_registry() -> None:
     UTILITY_REGISTRY.register_lazy("NeuralEvolutionaryOptimizer", "optimization_core.utils.neural_evolutionary_optimizer", "NeuralEvolutionaryOptimizer", "optimizer", "Evolutionary architecture optimizer")
 
 
+def get_utility_registry() -> UtilityRegistry:
+    """Retrieve global UtilityRegistry instance."""
+    return UTILITY_REGISTRY
+
+
 _init_default_registry()
 
 
 __all__ = [
     "UtilityRegistry",
     "UTILITY_REGISTRY",
+    "get_utility_registry",
     "register_utility",
     "create_utility",
     "list_available_utilities",

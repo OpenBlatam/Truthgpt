@@ -166,7 +166,7 @@ class RealTimeBuffer:
             # Check backpressure
             if self._should_apply_backpressure():
                 self._apply_backpressure()
-                    return False
+                return False
             
             # Add to priority queue
             self.priority_queues[event.priority].append(event)
@@ -826,17 +826,17 @@ def create_adaptive_batcher(config: RealTimeConfig) -> AdaptiveBatcher:
 if __name__ == "__main__":
     async def main():
         # Create real-time config
-    config = RealTimeConfig(
-        mode=RealTimeMode.STREAMING,
-        latency_requirement=LatencyRequirement.LOW,
+        config = RealTimeConfig(
+            mode=RealTimeMode.STREAMING,
+            latency_requirement=LatencyRequirement.LOW,
             max_latency_ms=100.0,
             batch_size=32,
             enable_adaptive_batching=True
-    )
-    
-    # Create real-time manager
-    manager = create_real_time_manager(config)
-    
+        )
+        
+        # Create real-time manager
+        manager = create_real_time_manager(config)
+        
         # Create processor
         processor = manager.create_processor("processor_1")
         
@@ -849,8 +849,8 @@ if __name__ == "__main__":
                 priority=ProcessingPriority.NORMAL
             )
             manager.route_event(event)
-    
-    # Start processing
+        
+        # Start processing
         await manager.start_all_processors()
         
         # Wait a bit
@@ -860,7 +860,7 @@ if __name__ == "__main__":
         await manager.stop_all_processors()
         
         # Get stats
-    stats = manager.get_manager_stats()
+        stats = manager.get_manager_stats()
         print(f"Real-time manager stats: {stats}")
     
     # Run example

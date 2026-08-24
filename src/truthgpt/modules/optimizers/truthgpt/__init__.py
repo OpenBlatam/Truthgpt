@@ -5,32 +5,40 @@ Optimizers specifically designed for TruthGPT models.
 """
 
 # Import TruthGPT-specific optimizers
+from ..truthgpt_dynamo_optimizer import (
     TruthGPTDynamoOptimizer,
     TruthGPTDynamoLevel,
     TruthGPTDynamoResult,
+    create_truthgpt_dynamo_optimizer,
 )
 
+from ..truthgpt_inductor_optimizer import (
     TruthGPTInductorOptimizer,
     TruthGPTInductorLevel,
     TruthGPTInductorResult,
+    create_truthgpt_inductor_optimizer,
 )
 
+from ..truthgpt_quantization_optimizer import (
     TruthGPTQuantizationOptimizer,
     TruthGPTQuantizationLevel,
     TruthGPTQuantizationResult,
+    create_truthgpt_quantization_optimizer,
 )
 
+from ..supreme_truthgpt_optimizer import (
     SupremeTruthGPTOptimizer,
     SupremeOptimizationLevel,
     SupremeOptimizationResult,
 )
 
-from ..transformer.transformer_optimizer import (
+from ..transformer_optimizer import (
     TransformerOptimizer,
 )
 
 
 # Unified factory function for TruthGPT optimizers
+def create_truthgpt_optimizer_by_type(
     optimizer_type: str = "dynamo",
     config: dict = None
 ):
@@ -50,6 +58,7 @@ from ..transformer.transformer_optimizer import (
         The requested optimizer instance
     
     Example:
+        >>> optimizer = create_truthgpt_optimizer_by_type("dynamo", {"level": "advanced"})
         >>> result = optimizer.optimize(model)
     """
     if config is None:
@@ -58,6 +67,9 @@ from ..transformer.transformer_optimizer import (
     optimizer_type = optimizer_type.lower()
     
     factory_map = {
+        "dynamo": create_truthgpt_dynamo_optimizer,
+        "inductor": create_truthgpt_inductor_optimizer,
+        "quantization": create_truthgpt_quantization_optimizer,
         "supreme": lambda cfg: SupremeTruthGPTOptimizer(cfg),
         "transformer": lambda cfg: TransformerOptimizer(cfg),
     }
@@ -74,20 +86,24 @@ from ..transformer.transformer_optimizer import (
 
 
 # Registry of all available TruthGPT optimizers
+TRUTHGPT_OPTIMIZER_REGISTRY = {
     "dynamo": {
         "class": TruthGPTDynamoOptimizer,
         "level_enum": TruthGPTDynamoLevel,
         "result_class": TruthGPTDynamoResult,
+        "factory": create_truthgpt_dynamo_optimizer,
     },
     "inductor": {
         "class": TruthGPTInductorOptimizer,
         "level_enum": TruthGPTInductorLevel,
         "result_class": TruthGPTInductorResult,
+        "factory": create_truthgpt_inductor_optimizer,
     },
     "quantization": {
         "class": TruthGPTQuantizationOptimizer,
         "level_enum": TruthGPTQuantizationLevel,
         "result_class": TruthGPTQuantizationResult,
+        "factory": create_truthgpt_quantization_optimizer,
     },
     "supreme": {
         "class": SupremeTruthGPTOptimizer,
@@ -104,9 +120,12 @@ from ..transformer.transformer_optimizer import (
 }
 
 
+def list_available_truthgpt_optimizers() -> list:
     """List all available TruthGPT optimizer types."""
+    return list(TRUTHGPT_OPTIMIZER_REGISTRY.keys())
 
 
+def get_truthgpt_optimizer_info(optimizer_type: str) -> dict:
     """
     Get information about a specific TruthGPT optimizer.
     
@@ -116,8 +135,10 @@ from ..transformer.transformer_optimizer import (
     Returns:
         Dictionary with optimizer information
     """
+    if optimizer_type not in TRUTHGPT_OPTIMIZER_REGISTRY:
         raise ValueError(f"Unknown optimizer type: {optimizer_type}")
     
+    registry_entry = TRUTHGPT_OPTIMIZER_REGISTRY[optimizer_type]
     return {
         "type": optimizer_type,
         "class": registry_entry["class"].__name__,
@@ -132,14 +153,17 @@ __all__ = [
     "TruthGPTDynamoOptimizer",
     "TruthGPTDynamoLevel",
     "TruthGPTDynamoResult",
+    "create_truthgpt_dynamo_optimizer",
     # Inductor optimizer
     "TruthGPTInductorOptimizer",
     "TruthGPTInductorLevel",
     "TruthGPTInductorResult",
+    "create_truthgpt_inductor_optimizer",
     # Quantization optimizer
     "TruthGPTQuantizationOptimizer",
     "TruthGPTQuantizationLevel",
     "TruthGPTQuantizationResult",
+    "create_truthgpt_quantization_optimizer",
     # Supreme optimizer
     "SupremeTruthGPTOptimizer",
     "SupremeOptimizationLevel",
@@ -147,7 +171,9 @@ __all__ = [
     # Transformer optimizer
     "TransformerOptimizer",
     # Unified factory
+    "create_truthgpt_optimizer_by_type",
     # Registry
+    "TRUTHGPT_OPTIMIZER_REGISTRY",
+    "list_available_truthgpt_optimizers",
+    "get_truthgpt_optimizer_info",
 ]
-
-

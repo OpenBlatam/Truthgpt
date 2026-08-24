@@ -25,6 +25,10 @@ from sklearn.metrics import accuracy_score, mean_squared_error
 import warnings
 warnings.filterwarnings('ignore')
 
+from .interfaces import BaseLearner
+from .registry import LearningRegistry
+from .exceptions import AdversarialAttackError, AdversarialDefenseError
+
 logger = logging.getLogger(__name__)
 
 class AdversarialAttackType(Enum):
@@ -818,10 +822,13 @@ class RobustnessAnalyzer:
         
         return accuracy
 
-class AdversarialLearningSystem:
+@LearningRegistry.register_learner("adversarial", aliases=["adversarial_learning", "AdversarialLearner", "AdversarialLearningSystem"], paradigm="adversarial")
+class AdversarialLearningSystem(BaseLearner):
     """Main adversarial learning system"""
     
-    def __init__(self, config: AdversarialConfig):
+    def __init__(self, config: Optional[AdversarialConfig] = None):
+        if config is None:
+            config = AdversarialConfig()
         self.config = config
         
         # Components
@@ -834,6 +841,17 @@ class AdversarialLearningSystem:
         self.adversarial_learning_history = []
         
         logger.info("✅ Adversarial Learning System initialized")
+    
+    def fit(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        """Fit implementation delegating to run_adversarial_learning."""
+        return self.run_adversarial_learning(*args, **kwargs)
+
+    def evaluate(self, *args: Any, **kwargs: Any) -> Dict[str, float]:
+        """Evaluate implementation returning robustness metrics."""
+        if self.adversarial_learning_history:
+            last = self.adversarial_learning_history[-1]
+            return {"duration": float(last.get("total_duration", 0.0))}
+        return {}
     
     def run_adversarial_learning(self, model: nn.Module, train_data: torch.Tensor, 
                                 train_labels: torch.Tensor, test_data: torch.Tensor, 
@@ -1179,8 +1197,12 @@ def example_adversarial_learning():
     
     return adversarial_system
 
+# Backward compatibility alias
+AdversarialLearner = AdversarialLearningSystem
+
 # Export utilities
 __all__ = [
+    'AdversarialLearner',
     'AdversarialAttackType',
     'GANType',
     'DefenseStrategy',
@@ -1206,3 +1228,11 @@ __all__ = [
 if __name__ == "__main__":
     example_adversarial_learning()
     print("✅ Adversarial learning example completed successfully!")
+
+import sys
+_mod = sys.modules.get(__name__)
+if _mod:
+    if __name__.startswith("optimization_core.learning."):
+        sys.modules["learning." + __name__[len("optimization_core.learning."):]] = _mod
+    elif __name__.startswith("learning."):
+        sys.modules["optimization_core.learning." + __name__[len("learning."):]] = _mod

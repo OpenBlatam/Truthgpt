@@ -1,8 +1,11 @@
+from __future__ import annotations
 import random
 import numpy as np
-from typing import List
-from ..individual import Individual
+from typing import TYPE_CHECKING, List
 from ..types import SelectionMethod
+
+if TYPE_CHECKING:
+    from ..individual import Individual
 
 def roulette_wheel_selection(population: List[Individual], population_size: int) -> List[Individual]:
     """Roulette wheel selection"""

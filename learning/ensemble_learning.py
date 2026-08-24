@@ -1142,8 +1142,14 @@ def example_ensemble_learning():
     
     return ensemble_trainer
 
+# Backward compatibility aliases
+EnsembleLearner = EnsembleTrainer
+EnsembleManager = EnsembleTrainer
+
 # Export utilities
 __all__ = [
+    'EnsembleLearner',
+    'EnsembleManager',
     'EnsembleStrategy',
     'VotingStrategy',
     'BoostingMethod',
@@ -1169,3 +1175,11 @@ __all__ = [
 if __name__ == "__main__":
     example_ensemble_learning()
     print("✅ Ensemble learning example completed successfully!")
+
+import sys
+_mod = sys.modules.get(__name__)
+if _mod:
+    if __name__.startswith("optimization_core.learning."):
+        sys.modules["learning." + __name__[len("optimization_core.learning."):]] = _mod
+    elif __name__.startswith("learning."):
+        sys.modules["optimization_core.learning." + __name__[len("learning."):]] = _mod

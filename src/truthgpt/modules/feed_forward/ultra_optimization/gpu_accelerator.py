@@ -1655,7 +1655,9 @@ if __name__ == "__main__":
         logger.info("✅ Hybrid GPU acceleration example completed")
         
         logger.info("🎉 All GPU acceleration examples completed successfully!")
-        
+    except Exception as e:
+        logger.error(f"GPU acceleration example failed: {e}")
+
 # Advanced GPU Memory Optimization
 class AdvancedGPUMemoryOptimizer:
     """Advanced GPU memory optimization with intelligent allocation strategies."""

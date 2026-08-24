@@ -27,6 +27,10 @@ from sklearn.gaussian_process.kernels import RBF, Matern, WhiteKernel, ConstantK
 import warnings
 warnings.filterwarnings('ignore')
 
+from .interfaces import BaseLearner
+from .registry import LearningRegistry
+from .exceptions import BayesianOptimizationError
+
 logger = logging.getLogger(__name__)
 
 class AcquisitionFunction(Enum):
@@ -524,10 +528,13 @@ class ConstrainedOptimizer:
                 return False
         return True
 
-class BayesianOptimizer:
+@LearningRegistry.register_learner("bayesian", aliases=["bayesian_optimization", "BayesianOptimizer"], paradigm="bayesian")
+class BayesianOptimizer(BaseLearner):
     """Main Bayesian optimizer"""
     
-    def __init__(self, config: BayesianOptimizationConfig):
+    def __init__(self, config: Optional[BayesianOptimizationConfig] = None):
+        if config is None:
+            config = BayesianOptimizationConfig()
         self.config = config
         
         # Components
@@ -542,6 +549,16 @@ class BayesianOptimizer:
         self.y_observed = []
         
         logger.info("✅ Bayesian Optimizer initialized")
+    
+    def fit(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        """Fit implementation delegating to optimize."""
+        return self.optimize(*args, **kwargs)
+
+    def evaluate(self, *args: Any, **kwargs: Any) -> Dict[str, float]:
+        """Evaluate implementation returning best observed value."""
+        if len(self.y_observed) > 0:
+            return {"best_value": float(np.min(self.y_observed))}
+        return {}
     
     def optimize(self, objective_function: Callable, 
                 bounds: List[Tuple[float, float]],
@@ -862,12 +879,16 @@ def example_bayesian_optimization():
     
     return bayesian_optimizer
 
+# Backward compatibility alias
+BayesianConfig = BayesianOptimizationConfig
+
 # Export utilities
 __all__ = [
     'AcquisitionFunction',
     'KernelType',
     'OptimizationStrategy',
     'BayesianOptimizationConfig',
+    'BayesianConfig',
     'GaussianProcessModel',
     'AcquisitionFunctionOptimizer',
     'MultiObjectiveOptimizer',
@@ -885,3 +906,11 @@ __all__ = [
 if __name__ == "__main__":
     example_bayesian_optimization()
     print("✅ Bayesian optimization example completed successfully!")
+
+import sys
+_mod = sys.modules.get(__name__)
+if _mod:
+    if __name__.startswith("optimization_core.learning."):
+        sys.modules["learning." + __name__[len("optimization_core.learning."):]] = _mod
+    elif __name__.startswith("learning."):
+        sys.modules["optimization_core.learning." + __name__[len("learning."):]] = _mod

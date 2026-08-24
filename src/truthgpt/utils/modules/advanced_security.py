@@ -219,18 +219,18 @@ class AdvancedEncryption:
     
     def _init_aes_encryption(self):
         """Initialize AES encryption"""
-            # Generate symmetric key
-            self.symmetric_key = Fernet.generate_key()
+        # Generate symmetric key
+        self.symmetric_key = Fernet.generate_key()
         self.logger.info("Initialized AES-256 encryption")
             
     def _init_rsa_encryption(self):
         """Initialize RSA encryption"""
-            # Generate RSA key pair
-            self.private_key = rsa.generate_private_key(
-                public_exponent=65537,
+        # Generate RSA key pair
+        self.private_key = rsa.generate_private_key(
+            public_exponent=65537,
             key_size=4096
-            )
-            self.public_key = self.private_key.public_key()
+        )
+        self.public_key = self.private_key.public_key()
         self.logger.info("Initialized RSA-4096 encryption")
     
     def _init_chacha20_encryption(self):
@@ -244,10 +244,10 @@ class AdvancedEncryption:
         if self.config.encryption_type == EncryptionType.AES_256:
             return self._encrypt_aes(data, key)
         elif self.config.encryption_type == EncryptionType.RSA_4096:
-                return self._encrypt_rsa(data)
+            return self._encrypt_rsa(data)
         elif self.config.encryption_type == EncryptionType.CHACHA20_POLY1305:
             return self._encrypt_chacha20(data, key)
-            else:
+        else:
             return self._encrypt_aes(data, key)
     
     def _encrypt_aes(self, data: bytes, key: Optional[bytes] = None) -> bytes:
@@ -345,14 +345,14 @@ class AdvancedEncryption:
             raise Exception("No RSA private key available")
         
         try:
-        return self.private_key.decrypt(
+            return self.private_key.decrypt(
                 encrypted_data,
-            padding.OAEP(
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                algorithm=hashes.SHA256(),
-                label=None
+                padding.OAEP(
+                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                    algorithm=hashes.SHA256(),
+                    label=None
+                )
             )
-        )
         except Exception:
             # Try hybrid decryption
             return self._hybrid_decrypt(encrypted_data)
@@ -556,21 +556,21 @@ class AccessControlManager:
     def authenticate_user(self, username: str, password: str, 
                          ip_address: str = None) -> Optional[User]:
         """Authenticate user"""
-            # Find user
-            user = None
+        # Find user
+        user = None
         for u in self.users.values():
             if u.username == username:
                 user = u
-                    break
+                break
             
-            if not user:
+        if not user:
             self._log_security_event(SecurityEvent.LOGIN_FAILURE, None, "user_not_found", ip_address)
-                return None
+            return None
             
         # Check if user is locked
         if user.is_locked:
             self._log_security_event(SecurityEvent.LOGIN_FAILURE, user.user_id, "account_locked", ip_address)
-                return None
+            return None
             
         # Verify password
         if not self._verify_password(password, user.password_hash):
@@ -599,7 +599,7 @@ class AccessControlManager:
         """Check user access to resource"""
         if user_id not in self.users:
             self._log_security_event(SecurityEvent.ACCESS_DENIED, user_id, "user_not_found")
-                return False
+            return False
             
         user = self.users[user_id]
         
@@ -607,12 +607,12 @@ class AccessControlManager:
         if not self._has_permission(user, resource, action):
             self._log_security_event(SecurityEvent.ACCESS_DENIED, user_id, "insufficient_permissions", 
                                    details={"resource": resource, "action": action})
-                return False
+            return False
             
         # Check additional context-based policies
         if context and not self._check_context_policies(user, resource, action, context):
             self._log_security_event(SecurityEvent.ACCESS_DENIED, user_id, "context_policy_violation")
-                return False
+            return False
             
         # Log access granted
         self._log_security_event(SecurityEvent.ACCESS_GRANTED, user_id, "access_granted",
@@ -631,7 +631,7 @@ class AccessControlManager:
             if action in role_permissions:
                 return True
             
-            return False
+        return False
             
     def _check_context_policies(self, user: User, resource: str, action: str, 
                               context: Dict[str, Any]) -> bool:
@@ -640,7 +640,7 @@ class AccessControlManager:
         if "time_restriction" in context:
             current_hour = datetime.now().hour
             if not (9 <= current_hour <= 17):  # Business hours
-            return False
+                return False
     
         # IP-based access
         if "ip_whitelist" in context:
@@ -654,7 +654,7 @@ class AccessControlManager:
             # Simplified location check
             pass
         
-                return True
+        return True
             
     def _hash_password(self, password: str) -> str:
         """Hash password using bcrypt"""
@@ -779,8 +779,7 @@ class IntrusionDetectionSystem:
                     })
                 
                 await asyncio.sleep(1.0)
-            
-        except Exception as e:
+            except Exception as e:
                 self.logger.error(f"Network monitoring error: {e}")
                 await asyncio.sleep(1.0)
     
@@ -842,8 +841,7 @@ class IntrusionDetectionSystem:
                     await self._generate_threat_alert(threat)
                 
                 await asyncio.sleep(30.0)
-            
-        except Exception as e:
+            except Exception as e:
                 self.logger.error(f"Threat analysis error: {e}")
                 await asyncio.sleep(30.0)
     
@@ -1349,8 +1347,7 @@ class TruthGPTSecurityManager:
                     self.encryption.rotate_keys()
                 
                 await asyncio.sleep(60.0)  # Check every minute
-            
-        except Exception as e:
+            except Exception as e:
                 self.logger.error(f"Security monitoring error: {e}")
                 await asyncio.sleep(60.0)
     
@@ -1452,14 +1449,14 @@ if __name__ == "__main__":
         # Create security config
         config = SecurityConfig(
             security_level=SecurityLevel.HIGH,
-        encryption_type=EncryptionType.AES_256,
-        access_control_type=AccessControlType.RBAC,
-        enable_intrusion_detection=True
-    )
-    
-    # Create security manager
-    security_manager = create_security_manager(config)
-    
+            encryption_type=EncryptionType.AES_256,
+            access_control_type=AccessControlType.RBAC,
+            enable_intrusion_detection=True
+        )
+        
+        # Create security manager
+        security_manager = create_security_manager(config)
+        
         # Start security
         await security_manager.start_security()
         

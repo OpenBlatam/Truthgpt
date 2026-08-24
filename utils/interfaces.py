@@ -46,10 +46,13 @@ class BaseOptimizationModel(BaseModel):
 class BaseUtility(ABC):
     """Abstract Base Class for all utility components in optimization_core."""
 
-    @abstractmethod
+    def __init__(self, name: str = "", version: str = "1.0.0", *args: Any, **kwargs: Any) -> None:
+        self.name = name or self.__class__.__name__
+        self.version = version
+
     def initialize(self, *args: Any, **kwargs: Any) -> None:
         """Initialize utility resources."""
-        raise NotImplementedError
+        pass
 
     def shutdown(self) -> None:
         """Release allocated resources."""

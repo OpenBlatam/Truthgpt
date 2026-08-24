@@ -27,6 +27,10 @@ from sklearn.neighbors import NearestNeighbors
 import warnings
 warnings.filterwarnings('ignore')
 
+from .interfaces import BaseLearner
+from .registry import LearningRegistry
+from .exceptions import ActiveLearningError
+
 logger = logging.getLogger(__name__)
 
 class ActiveLearningStrategy(Enum):
@@ -534,10 +538,13 @@ class BatchActiveLearning:
         
         return diversity_scores
 
-class ActiveLearningSystem:
+@LearningRegistry.register_learner("active", aliases=["active_learning", "ActiveLearner", "ActiveLearningSystem"], paradigm="active")
+class ActiveLearningSystem(BaseLearner):
     """Main active learning system"""
     
-    def __init__(self, config: ActiveLearningConfig):
+    def __init__(self, config: Optional[ActiveLearningConfig] = None):
+        if config is None:
+            config = ActiveLearningConfig()
         self.config = config
         
         # Components
@@ -554,6 +561,17 @@ class ActiveLearningSystem:
         self.unlabeled_data = []
         
         logger.info("✅ Active Learning System initialized")
+    
+    def fit(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        """Fit implementation delegating to run_active_learning."""
+        return self.run_active_learning(*args, **kwargs)
+
+    def evaluate(self, *args: Any, **kwargs: Any) -> Dict[str, float]:
+        """Evaluate implementation returning summary metrics."""
+        return {
+            "labeled_count": float(len(self.labeled_data)),
+            "unlabeled_count": float(len(self.unlabeled_data)),
+        }
     
     def run_active_learning(self, model: nn.Module, initial_data: np.ndarray, 
                            initial_labels: np.ndarray, unlabeled_data: np.ndarray,
@@ -916,8 +934,12 @@ def example_active_learning():
     
     return active_learning_system
 
+# Backward compatibility alias
+ActiveLearner = ActiveLearningSystem
+
 # Export utilities
 __all__ = [
+    'ActiveLearner',
     'ActiveLearningStrategy',
     'UncertaintyMeasure',
     'QueryStrategy',
@@ -941,3 +963,11 @@ __all__ = [
 if __name__ == "__main__":
     example_active_learning()
     print("✅ Active learning example completed successfully!")
+
+import sys
+_mod = sys.modules.get(__name__)
+if _mod:
+    if __name__.startswith("optimization_core.learning."):
+        sys.modules["learning." + __name__[len("optimization_core.learning."):]] = _mod
+    elif __name__.startswith("learning."):
+        sys.modules["optimization_core.learning." + __name__[len("learning."):]] = _mod

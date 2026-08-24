@@ -148,6 +148,7 @@ from .exceptions import (
 from .registry import (
     UtilityRegistry,
     UTILITY_REGISTRY,
+    get_utility_registry,
     register_utility,
     create_utility,
     list_available_utilities,
@@ -553,6 +554,7 @@ __all__ = [
     # Registry APIs
     "UtilityRegistry",
     "UTILITY_REGISTRY",
+    "get_utility_registry",
     "register_utility",
     "create_utility",
     "list_available_utilities",

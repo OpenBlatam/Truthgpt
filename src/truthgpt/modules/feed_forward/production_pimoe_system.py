@@ -767,7 +767,7 @@ def run_production_demo():
     stats = system.get_production_stats()
     
     print(f"  System Stats:")
-    print(f"    System Type: {stats['system']['system_type']")
+    print(f"    System Type: {stats['system']['system_type']}")
     print(f"    Hidden Size: {stats['system']['hidden_size']}")
     print(f"    Number of Experts: {stats['system']['num_experts']}")
     

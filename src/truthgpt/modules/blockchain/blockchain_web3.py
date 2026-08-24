@@ -608,21 +608,21 @@ class TruthGPTBlockchainManager:
         try:
             # Generate model ID
             model_id = self._generate_model_id(model, metadata)
-        
-        # Calculate model hash
+            
+            # Calculate model hash
             model_hash = self._calculate_model_hash(model)
-                
-                # Upload to IPFS
+            
+            # Upload to IPFS
             ipfs_hash = self.ipfs_manager.upload_model(model, metadata)
             
             if not ipfs_hash:
                 logger.error("Failed to upload model to IPFS")
                 return ""
-        
-        # Create model metadata
-        model_metadata = ModelMetadata(
+            
+            # Create model metadata
+            model_metadata = ModelMetadata(
                 model_id=model_id,
-            version=metadata.get('version', '1.0.0'),
+                version=metadata.get('version', '1.0.0'),
                 hash=model_hash,
                 size=self._calculate_model_size(model),
                 architecture=metadata.get('architecture', 'unknown'),
@@ -630,12 +630,12 @@ class TruthGPTBlockchainManager:
                 performance_metrics=metadata.get('performance_metrics', {}),
                 timestamp=time.time(),
                 creator=metadata.get('creator', 'unknown'),
-            license=metadata.get('license', 'MIT'),
+                license=metadata.get('license', 'MIT'),
                 ipfs_hash=ipfs_hash,
                 blockchain_tx_hash=''
-        )
-        
-        # Register on blockchain
+            )
+            
+            # Register on blockchain
             model_registry = self.contract_manager.get_contract(SmartContractType.MODEL_REGISTRY)
             tx_hash = model_registry.register_model(model_metadata)
             

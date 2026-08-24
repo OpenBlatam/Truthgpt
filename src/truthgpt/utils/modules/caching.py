@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Optional, Tuple, Union, Callable
 import time
 import logging
 from enum import Enum
-from dataclasses import dataclass, field
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 from abc import ABC, abstractmethod
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -57,9 +57,10 @@ class SessionState(Enum):
     SUSPENDED = "suspended"
     TERMINATED = "terminated"
 
-@dataclass
-class CacheConfig:
+class CacheConfig(BaseModel):
     """Configuration for caching system"""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
     # Backend settings
     backend: CacheBackend = CacheBackend.MEMORY
     max_size: int = 1000
@@ -77,23 +78,26 @@ class CacheConfig:
     redis_password: str = os.environ.get("REDIS_PASSWORD", "")
     
     # Memcached settings
-    memcached_servers: List[str] = field(default_factory=lambda: os.environ.get("MEMCACHED_SERVERS", "localhost:11211").split(","))
+    memcached_servers: List[str] = Field(default_factory=lambda: os.environ.get("MEMCACHED_SERVERS", "localhost:11211").split(","))
     
     # Performance settings
     enable_statistics: bool = True
     enable_persistence: bool = False
     persistence_path: str = "cache.db"
     
-    def __post_init__(self):
+    @model_validator(mode='after')
+    def validate_config(self) -> 'CacheConfig':
         """Validate configuration"""
         if self.max_size <= 0:
             raise ValueError("Max size must be positive")
         if self.default_ttl <= 0:
             raise ValueError("Default TTL must be positive")
+        return self
 
-@dataclass
-class CacheEntry:
+class CacheEntry(BaseModel):
     """Cache entry"""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
     key: str
     value: Any
     created_at: float
@@ -103,9 +107,10 @@ class CacheEntry:
     size: int = 0
     compressed: bool = False
 
-@dataclass
-class SessionConfig:
+class SessionConfig(BaseModel):
     """Configuration for session management"""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
     # Session settings
     session_timeout: int = 3600  # 1 hour
     max_sessions: int = 10000
@@ -121,23 +126,26 @@ class SessionConfig:
     enable_persistence: bool = True
     persistence_path: str = "sessions.db"
     
-    def __post_init__(self):
+    @model_validator(mode='after')
+    def validate_config(self) -> 'SessionConfig':
         """Validate configuration"""
         if self.session_timeout <= 0:
             raise ValueError("Session timeout must be positive")
         if self.max_sessions <= 0:
             raise ValueError("Max sessions must be positive")
+        return self
 
-@dataclass
-class Session:
+class Session(BaseModel):
     """Session information"""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
     session_id: str
     user_id: str
     created_at: float
     last_accessed: float
     expires_at: float
     state: SessionState
-    data: Dict[str, Any] = field(default_factory=dict)
+    data: Dict[str, Any] = Field(default_factory=dict)
     ip_address: str = ""
     user_agent: str = ""
 
@@ -181,7 +189,7 @@ class MemoryCache:
                 del self.cache[key]
                 self.access_order.remove(key)
                 self.stats['misses'] += 1
-        return None
+                return None
     
             # Update access information
             entry.access_count += 1
@@ -268,16 +276,16 @@ class MemoryCache:
         if not self.cache:
             return
         
-            if self.config.strategy == CacheStrategy.LRU:
-                # Remove least recently used
+        if self.config.strategy == CacheStrategy.LRU:
+            # Remove least recently used
             if self.access_order:
                 key_to_remove = self.access_order.popleft()
                 if key_to_remove in self.cache:
                     del self.cache[key_to_remove]
                     del self.access_counts[key_to_remove]
         
-            elif self.config.strategy == CacheStrategy.LFU:
-                # Remove least frequently used
+        elif self.config.strategy == CacheStrategy.LFU:
+            # Remove least frequently used
             if self.access_counts:
                 key_to_remove = min(self.access_counts.items(), key=lambda x: x[1])[0]
                 del self.cache[key_to_remove]
@@ -340,10 +348,11 @@ class RedisCache:
             )
             
             # Test connection
-            self.redis_client.ping()
-            logger.info("✅ Redis connection established")
+            if self.redis_client:
+                self.redis_client.ping()
+                logger.info("✅ Redis connection established")
             
-                except Exception as e:
+        except Exception as e:
             logger.error(f"Failed to initialize Redis: {e}")
             self.redis_client = None
             
@@ -351,7 +360,7 @@ class RedisCache:
         """Get value from Redis cache"""
         try:
             if not self.redis_client:
-            return None
+                return None
     
             data = self.redis_client.get(key)
             if data:
@@ -389,7 +398,7 @@ class RedisCache:
             result = self.redis_client.delete(key)
             return result > 0
             
-                except Exception as e:
+        except Exception as e:
             logger.error(f"Failed to delete from Redis: {e}")
             return False
     
@@ -398,7 +407,7 @@ class RedisCache:
         try:
             if self.redis_client:
                 self.redis_client.flushdb()
-                except Exception as e:
+        except Exception as e:
             logger.error(f"Failed to clear Redis cache: {e}")
 
 class TruthGPTCache:
@@ -465,8 +474,8 @@ class TruthGPTCache:
     def get_stats(self) -> Dict[str, Any]:
         """Get cache statistics"""
         backend_stats = self.cache_backend.get_stats()
-            
-            return {
+        
+        return {
             **self.stats,
             **backend_stats,
             'hit_rate': self.stats['cache_hits'] / max(self.stats['total_requests'], 1)
@@ -498,8 +507,9 @@ class TruthGPTSessionManager:
         """Initialize session storage"""
         try:
             if self.config.enable_persistence:
-                self.db_connection = sqlite3.connect(self.config.persistence_path, check_same_thread=False)
-                cursor = self.db_connection.cursor()
+                self.db_connection = sqlite3.connect(float(self.config.persistence_path) if isinstance(self.config.persistence_path, (int, float)) else self.config.persistence_path, check_same_thread=False)
+                if self.db_connection:
+                    cursor = self.db_connection.cursor()
                 
                 cursor.execute('''
                 CREATE TABLE IF NOT EXISTS sessions (
@@ -515,7 +525,8 @@ class TruthGPTSessionManager:
                     )
                 ''')
                 
-                self.db_connection.commit()
+                if self.db_connection:
+                    self.db_connection.commit()
                 logger.info("✅ Session database initialized")
             
         except Exception as e:
@@ -524,11 +535,11 @@ class TruthGPTSessionManager:
     def _start_cleanup_thread(self):
         """Start session cleanup thread"""
         def cleanup_sessions():
-        while True:
-            try:
-                self._cleanup_expired_sessions()
+            while True:
+                try:
+                    self._cleanup_expired_sessions()
                     time.sleep(self.config.cleanup_interval)
-            except Exception as e:
+                except Exception as e:
                     logger.error(f"Session cleanup failed: {e}")
                     time.sleep(60)
         
@@ -560,17 +571,20 @@ class TruthGPTSessionManager:
             
             # Store in database
             if self.db_connection:
-                cursor = self.db_connection.cursor()
-                cursor.execute('''
-                    INSERT INTO sessions 
-                    (session_id, user_id, created_at, last_accessed, expires_at, 
-                     state, data, ip_address, user_agent)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    session_id, user_id, current_time, current_time, expires_at,
-                    SessionState.ACTIVE.value, json.dumps({}), ip_address, user_agent
-                ))
-                self.db_connection.commit()
+                try:
+                    cursor = self.db_connection.cursor()
+                    cursor.execute('''
+                        INSERT INTO sessions 
+                        (session_id, user_id, created_at, last_accessed, expires_at, 
+                         state, data, ip_address, user_agent)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        session_id, user_id, current_time, current_time, expires_at,
+                        SessionState.ACTIVE.value, json.dumps({}), ip_address, user_agent
+                    ))
+                    self.db_connection.commit()
+                except sqlite3.Error as e:
+                    logger.error(f"Database error during session creation: {e}")
             
             logger.info(f"✅ Session created: {session_id} for user {user_id}")
             return session_id
@@ -586,16 +600,26 @@ class TruthGPTSessionManager:
                 return None
             
             session = self.sessions[session_id]
-                
-                # Check if session is expired
             if time.time() > session.expires_at:
                 session.state = SessionState.EXPIRED
-                    return None
+                return None
                 
             # Update last accessed
             session.last_accessed = time.time()
-                
-                return session
+            
+            # Sync with database
+            if self.db_connection:
+                try:
+                    cursor = self.db_connection.cursor()
+                    cursor.execute(
+                        "UPDATE sessions SET last_accessed = ? WHERE session_id = ?",
+                        (session.last_accessed, session_id)
+                    )
+                    self.db_connection.commit()
+                except sqlite3.Error as e:
+                    logger.error(f"Database error during session access update: {e}")
+
+            return session
             
         except Exception as e:
             logger.error(f"Failed to get session: {e}")
@@ -608,16 +632,19 @@ class TruthGPTSessionManager:
                 return False
             
             session = self.sessions[session_id]
-                session.data.update(data)
+            session.data.update(data)
             
             # Update in database
             if self.db_connection:
-                cursor = self.db_connection.cursor()
-                cursor.execute('''
-                    UPDATE sessions SET data = ?, last_accessed = ?
-                    WHERE session_id = ?
-                ''', (json.dumps(session.data), session.last_accessed, session_id))
-                self.db_connection.commit()
+                try:
+                    cursor = self.db_connection.cursor()
+                    cursor.execute('''
+                        UPDATE sessions SET data = ?, last_accessed = ?
+                        WHERE session_id = ?
+                    ''', (json.dumps(session.data), session.last_accessed, session_id))
+                    self.db_connection.commit()
+                except sqlite3.Error as e:
+                    logger.error(f"Database error during session data update: {e}")
             
             return True
             
@@ -640,12 +667,15 @@ class TruthGPTSessionManager:
             
             # Update in database
             if self.db_connection:
-                cursor = self.db_connection.cursor()
-                cursor.execute('''
-                    UPDATE sessions SET expires_at = ?, last_accessed = ?
-                    WHERE session_id = ?
-                ''', (session.expires_at, session.last_accessed, session_id))
-                self.db_connection.commit()
+                try:
+                    cursor = self.db_connection.cursor()
+                    cursor.execute('''
+                        UPDATE sessions SET expires_at = ?, last_accessed = ?
+                        WHERE session_id = ?
+                    ''', (session.expires_at, session.last_accessed, session_id))
+                    self.db_connection.commit()
+                except sqlite3.Error as e:
+                    logger.error(f"Database error during session extension: {e}")
             
             return True
             
@@ -663,17 +693,20 @@ class TruthGPTSessionManager:
             session.state = SessionState.TERMINATED
             
             # Remove from memory
-            del self.sessions[session_id]
+            self.sessions.pop(session_id, None)
             if session.user_id in self.user_sessions:
                 self.user_sessions[session.user_id].remove(session_id)
             
             # Update in database
             if self.db_connection:
-                cursor = self.db_connection.cursor()
-                cursor.execute('''
-                    UPDATE sessions SET state = ? WHERE session_id = ?
-                ''', (SessionState.TERMINATED.value, session_id))
-                self.db_connection.commit()
+                try:
+                    cursor = self.db_connection.cursor()
+                    cursor.execute('''
+                        UPDATE sessions SET state = ? WHERE session_id = ?
+                    ''', (SessionState.TERMINATED.value, session_id))
+                    self.db_connection.commit()
+                except sqlite3.Error as e:
+                    logger.error(f"Database error during session termination: {e}")
             
             logger.info(f"✅ Session terminated: {session_id}")
             return True
@@ -695,6 +728,15 @@ class TruthGPTSessionManager:
             for session_id in expired_sessions:
                 self.terminate_session(session_id)
             
+            # Cleanup database
+            if self.db_connection:
+                try:
+                    cursor = self.db_connection.cursor()
+                    cursor.execute('DELETE FROM sessions WHERE expires_at < ?', (current_time,))
+                    self.db_connection.commit()
+                except sqlite3.Error as e:
+                    logger.error(f"Database error during session cleanup: {e}")
+            
             if expired_sessions:
                 logger.info(f"✅ Cleaned up {len(expired_sessions)} expired sessions")
             
@@ -712,7 +754,7 @@ class TruthGPTSessionManager:
     
     def get_session_stats(self) -> Dict[str, Any]:
         """Get session statistics"""
-            return {
+        return {
             'total_sessions': len(self.sessions),
             'active_sessions': len([s for s in self.sessions.values() if s.state == SessionState.ACTIVE]),
             'expired_sessions': len([s for s in self.sessions.values() if s.state == SessionState.EXPIRED]),
@@ -751,7 +793,7 @@ class TruthGPTCacheManager:
         """Get cached model inference result"""
         try:
             cache_key = f"inference:{model_id}:{input_hash}"
-        return self.cache.get(cache_key)
+            return self.cache.get(cache_key)
     
         except Exception as e:
             logger.error(f"Failed to get cached inference: {e}")
@@ -771,7 +813,7 @@ class TruthGPTCacheManager:
         """Get cached model weights"""
         try:
             cache_key = f"weights:{model_id}:{version}"
-        return self.cache.get(cache_key)
+            return self.cache.get(cache_key)
     
         except Exception as e:
             logger.error(f"Failed to get cached weights: {e}")

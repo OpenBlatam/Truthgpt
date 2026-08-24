@@ -178,10 +178,10 @@ def formal_contract(
                         f"Postcondition Violated: {func.__name__} returned an invalid result: {result}"
                     )
 
-            return result
-
-        return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
+        import inspect
+        return async_wrapper if inspect.iscoroutinefunction(func) else sync_wrapper
     return decorator
+
 
 
 # ---------------------------------------------------------------------------
@@ -359,7 +359,6 @@ class TruthGPT_API:
                 "verification_engine": "Fallback Heuristic"
             }
 
-
 # Singleton Instance
 api = TruthGPT_API()
 
@@ -379,3 +378,39 @@ def apply_paper(paper_id: str) -> Any:
 def verify_system_integrity() -> Dict[str, Any]:
     """Execute formal verification of all system variables and paper catalogs."""
     return api.verify_integrity()
+
+# Version metadata
+__version__ = "2.0.0"
+__author__ = "Frontier-Model-Run Team"
+__license__ = "MIT"
+
+def __getattr__(name: str) -> Any:
+    """Dynamically resolve subpackages and classes from src.truthgpt."""
+    try:
+        import src.truthgpt as _pkg
+        return getattr(_pkg, name)
+    except Exception as e:
+        raise AttributeError(f"module 'truthgpt' has no attribute '{name}': {e}") from e
+
+def __dir__() -> List[str]:
+    """Expose symbols from src.truthgpt in dir() introspection."""
+    try:
+        import src.truthgpt as _pkg
+        return sorted(list(set(globals().keys()) | set(dir(_pkg))))
+    except Exception:
+        return sorted(list(globals().keys()))
+
+__all__ = [
+    "TruthGPT_API",
+    "FormalContractError",
+    "formal_contract",
+    "api",
+    "ask",
+    "list_papers",
+    "get_paper_info",
+    "apply_paper",
+    "verify_system_integrity",
+    "__version__",
+    "__author__",
+    "__license__",
+]

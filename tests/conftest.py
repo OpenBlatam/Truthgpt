@@ -1,240 +1,211 @@
 """
-Pytest configuration for TruthGPT optimization core tests
-Provides shared fixtures and configuration for all tests
+Pytest Configuration and Shared Fixtures for TruthGPT Optimization Core.
 """
 
-import pytest
-import torch
+from __future__ import annotations
+
 import sys
 from pathlib import Path
+import pytest
+import torch
 
-# Ensure parent directory (TruthGPT-main) is at head of sys.path
+# Ensure optimization_core root and its parent are on sys.path so that both
+# `import optimization_core` and `import tests` (as a sub-package) resolve.
 _project_dir = Path(__file__).parent.parent
 _parent_dir = _project_dir.parent
 
-if str(_project_dir) in sys.path:
-    sys.path.remove(str(_project_dir))
-if str(_parent_dir) in sys.path:
-    sys.path.remove(str(_parent_dir))
+if str(_project_dir) not in sys.path:
+    sys.path.insert(0, str(_project_dir))
+if str(_parent_dir) not in sys.path:
+    sys.path.insert(0, str(_parent_dir))
 
-sys.path.insert(0, str(_parent_dir))
-sys.path.insert(0, str(_project_dir))
+# Bootstrap the 'tests' package in sys.modules before importing from it.
+# Pytest loads conftest.py before the normal module system has initialized
+# the parent package, so sub-package imports like 'tests.fixtures' would fail.
+import types as _types_mod
+_tests_dir = Path(__file__).parent
+if "tests" not in sys.modules or not hasattr(sys.modules.get("tests"), "__path__"):
+    _pkg = _types_mod.ModuleType("tests")
+    _pkg.__path__ = [str(_tests_dir)]
+    _pkg.__file__ = str(_tests_dir / "__init__.py")
+    _pkg.__package__ = "tests"
+    sys.modules["tests"] = _pkg
 
+from tests.fixtures.test_data import TestDataFactory
+from tests.fixtures.mock_components import (
+    MockModel,
+    MockOptimizer,
+    MockAttention,
+    MockMLP,
+    MockKVCache,
+    MockDataset,
+    MockTokenizer,
+    MockTrainer,
+    MockCompiler,
+    MockAgent,
+    MockEvaluator,
+)
+from tests.fixtures.test_utils import (
+    TestUtils,
+    PerformanceProfiler,
+    MemoryTracker,
+    TestAssertions,
+)
 
-if "core" in sys.modules:
-    _core_mod = sys.modules["core"]
-    if not hasattr(_core_mod, "list_available_core_modules"):
-        del sys.modules["core"]
-
-import core  # Force import of optimization_core/core
-
-if "tests" in sys.modules:
-    _tests_mod = sys.modules["tests"]
-    if getattr(_tests_mod, "__file__", None) and "optimization_core" not in getattr(_tests_mod, "__file__", ""):
-        del sys.modules["tests"]
-
-if "optimization_core" in sys.modules:
-    _mod = sys.modules["optimization_core"]
-    if getattr(_mod, "__file__", None) and "optimization_core\\optimization_core" in getattr(_mod, "__file__", ""):
-        del sys.modules["optimization_core"]
-
-try:
-    from tests.fixtures.test_data import TestDataFactory
-    from tests.fixtures.mock_components import MockModel, MockOptimizer, MockAttention, MockMLP, MockKVCache, MockDataset
-    from tests.fixtures.test_utils import TestUtils, PerformanceProfiler, MemoryTracker
-except (ModuleNotFoundError, ImportError):
-    from .fixtures.test_data import TestDataFactory
-    from .fixtures.mock_components import MockModel, MockOptimizer, MockAttention, MockMLP, MockKVCache, MockDataset
-    from .fixtures.test_utils import TestUtils, PerformanceProfiler, MemoryTracker
 
 @pytest.fixture(scope="session")
-def test_data_factory():
-    """Provide test data factory for all tests"""
+def backend_availability() -> dict[str, bool]:
+    """Inspect and return available native polyglot backends."""
+    availability = {
+        "rust": False,
+        "cpp": False,
+        "julia": False,
+        "python": True,
+        "cuda": torch.cuda.is_available(),
+        "mps": hasattr(torch.backends, "mps") and torch.backends.mps.is_available(),
+    }
+    try:
+        import truthgpt_rust  # type: ignore
+        availability["rust"] = True
+    except (ImportError, ModuleNotFoundError):
+        pass
+
+    try:
+        import _cpp_core  # type: ignore
+        availability["cpp"] = True
+    except (ImportError, ModuleNotFoundError):
+        pass
+
+    try:
+        from julia import TruthGPTCore  # type: ignore
+        availability["julia"] = True
+    except (ImportError, ModuleNotFoundError):
+        pass
+
+    return availability
+
+
+@pytest.fixture(scope="session")
+def test_data_factory() -> TestDataFactory:
+    """Provide TestDataFactory instance."""
     return TestDataFactory()
 
+
 @pytest.fixture(scope="session")
-def test_utils():
-    """Provide test utilities for all tests"""
+def test_utils() -> TestUtils:
+    """Provide TestUtils helper class instance."""
     return TestUtils()
 
-@pytest.fixture(scope="function")
-def profiler():
-    """Provide performance profiler for each test"""
-    return PerformanceProfiler()
 
 @pytest.fixture(scope="function")
-def memory_tracker():
-    """Provide memory tracker for each test"""
-    return MemoryTracker()
+def profiler() -> PerformanceProfiler:
+    """Provide a fresh PerformanceProfiler per test function."""
+    p = PerformanceProfiler()
+    yield p
+    p.reset()
+
 
 @pytest.fixture(scope="function")
-def mock_model():
-    """Provide mock model for testing"""
+def memory_tracker() -> MemoryTracker:
+    """Provide a fresh MemoryTracker per test function."""
+    m = MemoryTracker()
+    yield m
+    m.reset()
+
+
+@pytest.fixture(scope="function")
+def mock_model() -> MockModel:
+    """Provide standard MockModel instance."""
     return MockModel(input_size=512, hidden_size=1024, output_size=512)
 
+
 @pytest.fixture(scope="function")
-def mock_optimizer():
-    """Provide mock optimizer for testing"""
+def mock_optimizer() -> MockOptimizer:
+    """Provide standard MockOptimizer instance."""
     return MockOptimizer(learning_rate=0.001)
 
+
 @pytest.fixture(scope="function")
-def mock_attention():
-    """Provide mock attention for testing"""
+def mock_attention() -> MockAttention:
+    """Provide standard MockAttention instance."""
     return MockAttention(d_model=512, n_heads=8)
 
+
 @pytest.fixture(scope="function")
-def mock_mlp():
-    """Provide mock MLP for testing"""
+def mock_mlp() -> MockMLP:
+    """Provide standard MockMLP instance."""
     return MockMLP(input_size=512, hidden_size=2048, output_size=512)
 
+
 @pytest.fixture(scope="function")
-def mock_kv_cache():
-    """Provide mock KV cache for testing"""
+def mock_kv_cache() -> MockKVCache:
+    """Provide standard MockKVCache instance."""
     return MockKVCache(max_size=1000)
 
+
 @pytest.fixture(scope="function")
-def mock_dataset():
-    """Provide mock dataset for testing"""
+def mock_dataset() -> MockDataset:
+    """Provide standard MockDataset instance."""
     return MockDataset(size=100, input_size=512, output_size=512)
 
-@pytest.fixture(scope="function")
-def test_config():
-    """Provide test configuration"""
-    return TestUtils.create_test_config()
 
 @pytest.fixture(scope="function")
-def attention_data(test_data_factory):
-    """Provide attention test data"""
+def mock_tokenizer() -> MockTokenizer:
+    """Provide standard MockTokenizer instance."""
+    return MockTokenizer(vocab_size=1000)
+
+
+@pytest.fixture(scope="function")
+def sample_texts(test_data_factory: TestDataFactory) -> list[str]:
+    """Provide sample synthetic text strings."""
+    return test_data_factory.create_text_samples(num_samples=10)
+
+
+@pytest.fixture(scope="function")
+def sample_tensors(test_data_factory: TestDataFactory) -> dict[str, torch.Tensor]:
+    """Provide sample attention tensors."""
     return test_data_factory.create_attention_data()
 
-@pytest.fixture(scope="function")
-def mlp_data(test_data_factory):
-    """Provide MLP test data"""
-    return test_data_factory.create_mlp_data()
 
-@pytest.fixture(scope="function")
-def optimization_data(test_data_factory):
-    """Provide optimization test data"""
-    return test_data_factory.create_optimization_data()
+@pytest.fixture(scope="session")
+def device() -> torch.device:
+    """Return primary torch device for testing."""
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    return torch.device("cpu")
 
-@pytest.fixture(scope="function")
-def kv_cache_data(test_data_factory):
-    """Provide KV cache test data"""
-    return test_data_factory.create_kv_cache_data()
-
-@pytest.fixture(scope="function")
-def transformer_data(test_data_factory):
-    """Provide transformer test data"""
-    return test_data_factory.create_transformer_data()
-
-@pytest.fixture(scope="function")
-def quantization_data(test_data_factory):
-    """Provide quantization test data"""
-    return test_data_factory.create_quantization_data()
-
-@pytest.fixture(scope="function")
-def benchmark_data(test_data_factory):
-    """Provide benchmark test data"""
-    return test_data_factory.create_benchmark_data()
-
-@pytest.fixture(scope="function")
-def error_cases(test_data_factory):
-    """Provide error test cases"""
-    return test_data_factory.create_error_cases()
-
-@pytest.fixture(scope="function")
-def performance_data(test_data_factory):
-    """Provide performance test data"""
-    return test_data_factory.create_performance_data()
 
 @pytest.fixture(autouse=True)
 def setup_test_environment():
-    """Set up test environment before each test"""
-    # Set random seed for reproducibility
+    """Set random seed and clear device caches before and after each test."""
     torch.manual_seed(42)
-    
-    # Clear CUDA cache if available
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
-    
     yield
-    
-    # Cleanup after each test
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-@pytest.fixture(scope="session")
-def device():
-    """Provide device for testing"""
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    else:
-        return torch.device("cpu")
 
-@pytest.fixture(scope="function")
-def temp_model():
-    """Provide temporary model for testing"""
-    model = MockModel(input_size=256, hidden_size=512, output_size=256)
-    yield model
-    # Cleanup is automatic
-
-@pytest.fixture(scope="function")
-def temp_optimizer():
-    """Provide temporary optimizer for testing"""
-    optimizer = MockOptimizer(learning_rate=0.001)
-    yield optimizer
-    # Cleanup is automatic
-
-@pytest.fixture(scope="function")
-def temp_cache():
-    """Provide temporary cache for testing"""
-    cache = MockKVCache(max_size=100)
-    yield cache
-    # Cleanup is automatic
-
-# Pytest configuration
 def pytest_configure(config):
-    """Configure pytest"""
-    config.addinivalue_line(
-        "markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')"
-    )
-    config.addinivalue_line(
-        "markers", "performance: marks tests as performance tests"
-    )
-    config.addinivalue_line(
-        "markers", "integration: marks tests as integration tests"
-    )
-    config.addinivalue_line(
-        "markers", "unit: marks tests as unit tests"
-    )
+    """Register custom markers."""
+    config.addinivalue_line("markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')")
+    config.addinivalue_line("markers", "performance: marks tests as performance benchmarks")
+    config.addinivalue_line("markers", "integration: marks tests as integration tests")
+    config.addinivalue_line("markers", "unit: marks tests as unit tests")
+    config.addinivalue_line("markers", "requires_rust: requires rust native backend")
+    config.addinivalue_line("markers", "requires_cpp: requires cpp native backend")
+    config.addinivalue_line("markers", "requires_julia: requires julia native backend")
+    config.addinivalue_line("markers", "requires_cuda: requires CUDA GPU acceleration")
+
 
 def pytest_collection_modifyitems(config, items):
-    """Modify test collection"""
+    """Categorize and tag collected tests."""
     for item in items:
-        # Add markers based on file path
-        if "performance" in str(item.fspath):
+        path_str = str(item.fspath).lower()
+        if "performance" in path_str or "benchmark" in path_str:
             item.add_marker(pytest.mark.performance)
-        elif "integration" in str(item.fspath):
+            item.add_marker(pytest.mark.slow)
+        elif "integration" in path_str:
             item.add_marker(pytest.mark.integration)
         else:
             item.add_marker(pytest.mark.unit)
-        
-        # Add slow marker for tests that take longer
-        if "benchmark" in str(item.fspath) or "performance" in str(item.fspath):
-            item.add_marker(pytest.mark.slow)
-
-# Test configuration
-pytest_plugins = []
-
-# Global test configuration
-TEST_CONFIG = {
-    "verbose": True,
-    "parallel": False,
-    "coverage": True,
-    "performance": True,
-    "integration": True
-}
-
-
-
-

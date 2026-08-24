@@ -1066,8 +1066,14 @@ def example_transfer_learning():
     
     return transfer_trainer
 
+# Backward compatibility aliases
+TransferLearner = TransferTrainer
+TransferLearningManager = TransferTrainer
+
 # Export utilities
 __all__ = [
+    'TransferLearner',
+    'TransferLearningManager',
     'TransferStrategy',
     'DomainAdaptationMethod',
     'KnowledgeDistillationType',

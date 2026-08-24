@@ -1,26 +1,36 @@
 import sys
 import os
+from pathlib import Path
 
-# Add project root to path
-project_root = os.path.abspath("c:/blatam-academy/agents/backend/onyx/server/features/Frontier-Model-run/scripts/TruthGPT-main")
-if project_root not in sys.path:
-    sys.path.append(project_root)
-    
-# Also add optimization_core to path to resolve absolute imports within it if necessary
-opt_core_path = os.path.join(project_root, "optimization_core")
-if opt_core_path not in sys.path:
-    sys.path.append(opt_core_path)
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
 
-try:
-    from optimization_core.learning.evolutionary_computing import example_evolutionary_computing
-    
-    print("✅ Successfully imported evolutionary_computing package")
-    
-    optimizer = example_evolutionary_computing()
-    
-    print("✅ Verification successful!")
-except Exception as e:
-    print("X Verification failed: " + str(e))
-    import traceback
-    traceback.print_exc()
-    sys.exit(1)
+# Add project root and src to path
+curr_dir = Path(__file__).resolve().parent
+src_dir = curr_dir.parent
+root_dir = src_dir.parent
+
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
+
+def verify():
+    try:
+        from truthgpt.learning.evolutionary_computing import example_evolutionary_computing
+        print("✅ Successfully imported evolutionary_computing package")
+        optimizer = example_evolutionary_computing()
+        print("✅ Verification successful!")
+        return True
+    except Exception as e:
+        print("❌ Verification failed: " + str(e))
+        import traceback
+        traceback.print_exc()
+        return False
+
+if __name__ == "__main__":
+    success = verify()
+    if not success:
+        sys.exit(1)

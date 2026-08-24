@@ -12,9 +12,11 @@ from rich.console import Console
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.application import Application
 from prompt_toolkit.formatted_text import ANSI
-from prompt_toolkit.styles import Style
+try:
+    from .core import USER_PREFS
+except ImportError:
+    from truthgpt.interface.core import USER_PREFS
 
-from truthgpt.interface.core import USER_PREFS
 
 
 class BaseTUIApp:

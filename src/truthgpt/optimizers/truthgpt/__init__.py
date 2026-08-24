@@ -5,34 +5,34 @@ Optimizers specifically designed for TruthGPT models.
 """
 
 # Import TruthGPT-specific optimizers
-from ..truthgpt_dynamo_optimizer import (
+from ..specialized.truthgpt_dynamo_optimizer import (
     TruthGPTDynamoOptimizer,
     TruthGPTDynamoLevel,
     TruthGPTDynamoResult,
     create_truthgpt_dynamo_optimizer,
 )
 
-from ..truthgpt_inductor_optimizer import (
+from ..specialized.truthgpt_inductor_optimizer import (
     TruthGPTInductorOptimizer,
     TruthGPTInductorLevel,
     TruthGPTInductorResult,
     create_truthgpt_inductor_optimizer,
 )
 
-from ..truthgpt_quantization_optimizer import (
+from ..specialized.truthgpt_quantization_optimizer import (
     TruthGPTQuantizationOptimizer,
     TruthGPTQuantizationLevel,
     TruthGPTQuantizationResult,
     create_truthgpt_quantization_optimizer,
 )
 
-from ..supreme_truthgpt_optimizer import (
+from ..advanced.supreme_truthgpt_optimizer import (
     SupremeTruthGPTOptimizer,
     SupremeOptimizationLevel,
     SupremeOptimizationResult,
 )
 
-from ..transformer_optimizer import (
+from ..specialized.transformer_optimizer import (
     TransformerOptimizer,
 )
 

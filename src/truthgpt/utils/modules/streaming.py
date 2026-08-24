@@ -10,8 +10,10 @@ from typing import Dict, Any, List, Optional, Tuple, Union, Callable
 import time
 import logging
 from enum import Enum
-from dataclasses import dataclass, field
+from pydantic import BaseModel, Field, model_validator, ConfigDict
 from abc import ABC, abstractmethod
+
+from ..common.base_advanced_system import BaseAdvancedSystem
 import threading
 from concurrent.futures import ThreadPoolExecutor
 import queue
@@ -57,9 +59,10 @@ class MessageType(Enum):
     ERROR = "error"
     CONTROL = "control"
 
-@dataclass
-class StreamConfig:
+class StreamConfig(BaseModel):
     """Configuration for streaming"""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
     # Server settings
     host: str = "0.0.0.0"
     port: int = 8080
@@ -88,15 +91,16 @@ class StreamConfig:
     batch_size: int = 100
     batch_timeout: float = 0.1
     
-    def __post_init__(self):
+    @model_validator(mode='after')
+    def validate_config(self) -> 'StreamConfig':
         """Validate configuration"""
         if self.port <= 0 or self.port > 65535:
             raise ValueError("Port must be between 1 and 65535")
         if self.max_connections <= 0:
             raise ValueError("Max connections must be positive")
+        return self
 
-@dataclass
-class StreamMessage:
+class StreamMessage(BaseModel):
     """Stream message"""
     message_id: str
     message_type: MessageType
@@ -104,10 +108,9 @@ class StreamMessage:
     timestamp: float
     sender_id: str = ""
     recipient_id: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
-@dataclass
-class ConnectionInfo:
+class ConnectionInfo(BaseModel):
     """Connection information"""
     connection_id: str
     stream_type: StreamType
@@ -118,17 +121,18 @@ class ConnectionInfo:
     user_agent: str = ""
     user_id: str = ""
 
-class TruthGPTStreamManager:
+class TruthGPTStreamManager(BaseAdvancedSystem):
     """Main stream manager for real-time communication"""
     
     def __init__(self, config: StreamConfig):
-        self.config = config
+        super().__init__(config, "TruthGPTStreamManager")
         self.logger = logging.getLogger(self.__class__.__name__)
         
         # Stream state
-        self.connections = {}
-        self.message_queue = queue.Queue(maxsize=config.message_queue_size)
-        self.subscribers = defaultdict(set)
+        self.connections: Dict[str, ConnectionInfo] = {}
+        self.subscribers: Dict[str, Set[str]] = defaultdict(set)
+        self.message_queue = asyncio.Queue(maxsize=config.message_queue_size)
+        self.is_monitoring = False
         
         # Stream handlers
         self.websocket_handler = None
@@ -148,12 +152,10 @@ class TruthGPTStreamManager:
     
     def start(self):
         """Start stream manager"""
+        self.start_monitoring()
         try:
-            # Start WebSocket handler
-            self._start_websocket_handler()
-            
-            # Start SSE handler
-            self._start_sse_handler()
+            # Start connection monitor (Async)
+            self._start_connection_monitor()
             
             # Start message processor
             self._start_message_processor()
@@ -165,6 +167,7 @@ class TruthGPTStreamManager:
     
     def stop(self):
         """Stop stream manager"""
+        self.stop_monitoring()
         try:
             # Close all connections
             for connection_id in list(self.connections.keys()):
@@ -179,8 +182,8 @@ class TruthGPTStreamManager:
                 ip_address: str = "", user_agent: str = "", user_id: str = "") -> bool:
         """Connect new client"""
         try:
-        connection_info = ConnectionInfo(
-            connection_id=connection_id,
+            connection_info = ConnectionInfo(
+                connection_id=connection_id,
                 stream_type=stream_type,
                 state=ConnectionState.CONNECTED,
                 connected_at=time.time(),
@@ -188,9 +191,9 @@ class TruthGPTStreamManager:
                 ip_address=ip_address,
                 user_agent=user_agent,
                 user_id=user_id
-        )
-        
-        self.connections[connection_id] = connection_info
+            )
+            
+            self.connections[connection_id] = connection_info
             self.stats['total_connections'] += 1
             self.stats['active_connections'] += 1
             
@@ -224,7 +227,7 @@ class TruthGPTStreamManager:
             logger.error(f"Failed to disconnect client: {e}")
             return False
     
-    def send_message(self, connection_id: str, message: StreamMessage) -> bool:
+    async def send_message(self, connection_id: str, message: StreamMessage) -> bool:
         """Send message to specific connection"""
         try:
             if connection_id not in self.connections:
@@ -238,9 +241,9 @@ class TruthGPTStreamManager:
             
             # Send message based on stream type
             if connection.stream_type == StreamType.WEBSOCKET:
-                return self._send_websocket_message(connection_id, message)
+                return await self._send_websocket_message_async(connection_id, message)
             elif connection.stream_type == StreamType.SERVER_SENT_EVENTS:
-                return self._send_sse_message(connection_id, message)
+                return await self._send_sse_message_async(connection_id, message)
             else:
                 logger.warning(f"Unsupported stream type: {connection.stream_type}")
                 return False
@@ -249,22 +252,24 @@ class TruthGPTStreamManager:
             logger.error(f"Failed to send message: {e}")
             return False
     
-    def broadcast_message(self, message: StreamMessage, topic: str = None) -> int:
+    async def broadcast_message(self, message: StreamMessage, topic: str = None) -> int:
         """Broadcast message to all connections or topic subscribers"""
         try:
             sent_count = 0
+            tasks = []
             
             if topic:
                 # Send to topic subscribers
                 subscribers = self.subscribers.get(topic, set())
                 for connection_id in subscribers:
-                    if self.send_message(connection_id, message):
-                        sent_count += 1
-        else:
+                    tasks.append(self.send_message(connection_id, message))
+            else:
                 # Send to all connections
                 for connection_id in self.connections:
-                    if self.send_message(connection_id, message):
-                        sent_count += 1
+                    tasks.append(self.send_message(connection_id, message))
+            
+            results = await asyncio.gather(*tasks)
+            sent_count = sum(1 for r in results if r)
             
             self.stats['messages_sent'] += sent_count
             logger.info(f"✅ Message broadcasted to {sent_count} connections")
@@ -302,32 +307,63 @@ class TruthGPTStreamManager:
             logger.error(f"Failed to unsubscribe: {e}")
             return False
     
-    def _start_websocket_handler(self):
-        """Start WebSocket handler"""
-        logger.info("✅ WebSocket handler started")
+    async def _monitor_connections(self):
+        """Monitor active connections for health and timeouts."""
+        while self.is_monitoring:
+            try:
+                current_time = time.time()
+                to_disconnect = []
+                
+                for conn_id, conn in self.connections.items():
+                    # Check for timeout (default 60s)
+                    if current_time - conn.last_activity > self.config.connection_timeout:
+                        self.logger.info(f"Connection timeout: {conn_id} ({conn.stream_type.value})")
+                        to_disconnect.append(conn_id)
+                    
+                    # Real-time heartbeat for SSE
+                    if conn.stream_type == StreamType.SERVER_SENT_EVENTS:
+                        if current_time - conn.last_activity >= self.config.heartbeat_interval:
+                            msg = StreamMessage(
+                                message_id=str(uuid.uuid4()),
+                                message_type=MessageType.HEARTBEAT,
+                                sender_id="system",
+                                data="ping",
+                                timestamp=current_time
+                            )
+                            await self._send_sse_message_async(conn_id, msg)
+                
+                for conn_id in to_disconnect:
+                    self.disconnect(conn_id)
+                    
+            except Exception as e:
+                self.logger.error(f"Monitoring error: {e}")
+            
+            await asyncio.sleep(5)
     
-    def _start_sse_handler(self):
-        """Start Server-Sent Events handler"""
-        logger.info("✅ SSE handler started")
+    def _start_connection_monitor(self):
+        """Initialize the connection monitoring task."""
+        self.is_monitoring = True
+        asyncio.create_task(self._monitor_connections())
+        logger.info("✅ Connection monitor started (Async Flow)")
     
     def _start_message_processor(self):
-        """Start message processor thread"""
-        def process_messages():
-            while True:
-                try:
-                    message = self.message_queue.get(timeout=1)
-                    self._process_message(message)
-                except queue.Empty:
-                    continue
-                except Exception as e:
-                    logger.error(f"Message processing failed: {e}")
-        
-        processor_thread = threading.Thread(target=process_messages, daemon=True)
-        processor_thread.start()
-        logger.info("✅ Message processor started")
+        """Start message processor task"""
+        asyncio.create_task(self._process_messages_loop())
+        logger.info("✅ Async message processor started")
+
+    async def _process_messages_loop(self):
+        """Asynchronous message processing loop."""
+        while self.is_monitoring:
+            try:
+                message = await self.message_queue.get()
+                await self._process_message_async(message)
+                self.message_queue.task_done()
+            except Exception as e:
+                self.logger.error(f"Message processing failed: {e}")
+                await asyncio.sleep(1)
     
-    def _process_message(self, message: StreamMessage):
-        """Process incoming message"""
+    async def _process_message_async(self, message: StreamMessage):
+        """Process incoming message asynchronously"""
         try:
             # Update stats
             self.stats['messages_received'] += 1
@@ -340,7 +376,7 @@ class TruthGPTStreamManager:
             else:
                 self._handle_data_message(message)
                 
-            except Exception as e:
+        except Exception as e:
             logger.error(f"Failed to process message: {e}")
     
     def _handle_control_message(self, message: StreamMessage):
@@ -366,25 +402,45 @@ class TruthGPTStreamManager:
         # Process data message
         logger.debug(f"Processing data message: {message.message_id}")
     
-    def _send_websocket_message(self, connection_id: str, message: StreamMessage) -> bool:
-        """Send WebSocket message"""
-        # Simplified implementation
-        logger.debug(f"Sending WebSocket message to {connection_id}")
-        return True
-    
-    def _send_sse_message(self, connection_id: str, message: StreamMessage) -> bool:
-        """Send SSE message"""
-        # Simplified implementation
-        logger.debug(f"Sending SSE message to {connection_id}")
-        return True
+    async def _send_websocket_message_async(self, connection_id: str, message: StreamMessage) -> bool:
+        """Asynchronously dispatch WebSocket message."""
+        try:
+            # In a production environment, this would use the actual websocket object
+            # For now, we ensure the logic path is async-safe and activity is tracked.
+            self.logger.debug(f"Dispatching WS packet {message.message_id} to {connection_id}")
+            if connection_id in self.connections:
+                self.connections[connection_id].last_activity = time.time()
+                return True
+            return False
+        except Exception:
+            return False
+
+    async def _send_sse_message_async(self, connection_id: str, message: StreamMessage) -> bool:
+        """Asynchronously dispatch SSE message."""
+        try:
+            self.logger.debug(f"Dispatching SSE event {message.message_id} to {connection_id}")
+            if connection_id in self.connections:
+                self.connections[connection_id].last_activity = time.time()
+                return True
+            return False
+        except Exception:
+            return False
     
     def get_stream_stats(self) -> Dict[str, Any]:
         """Get stream statistics"""
+        base_stats = self.get_stats()
         return {
+            **base_stats,
             **self.stats,
             'active_topics': len(self.subscribers),
             'topic_subscribers': {topic: len(subscribers) for topic, subscribers in self.subscribers.items()}
         }
+        
+    def update_metrics(self):
+        """Update metrics for BaseAdvancedSystem."""
+        self.metrics.throughput = self.stats['messages_sent'] + self.stats['messages_received']
+        self.metrics.efficiency = 1.0 if self.stats['active_connections'] > 0 else 0.0
+        self.metrics.stability = 1.0
 
 class TruthGPTServerSentEvents:
     """Server-Sent Events handler"""
@@ -542,7 +598,7 @@ class TruthGPTRealTimeManager:
             logger.info(f"✅ Live inference request queued: {request_id}")
             return request_id
                 
-            except Exception as e:
+        except Exception as e:
             logger.error(f"Failed to queue live inference: {e}")
             return ""
     
@@ -656,7 +712,7 @@ class TruthGPTRealTimeManager:
                     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
                     criterion = nn.MSELoss()
                     
-            for epoch in range(10):
+                    for epoch in range(10):
                         epoch_loss = 0.0
                         batch_count = 0
                         
@@ -813,7 +869,7 @@ def quick_streaming_setup() -> TruthGPTRealTimeManager:
 # Example usage
 def example_streaming():
     """Example of streaming features"""
-        # Create real-time manager
+    # Create real-time manager
     manager = quick_streaming_setup()
     
     # Start manager

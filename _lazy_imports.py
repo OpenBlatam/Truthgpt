@@ -485,6 +485,96 @@ _ENTERPRISE_LAZY_IMPORTS: Dict[str, str] = {
     'get_monitor': '.utils.enterprise_monitor',
 }
 
+# Learning module lazy imports
+_LEARNING_LAZY_IMPORTS: Dict[str, str] = {
+    # Active Learning
+    'ActiveLearner': '.learning',
+    'ActiveLearningStrategy': '.learning',
+    'UncertaintyMeasure': '.learning',
+    'create_active_learner': '.learning',
+    
+    # Adaptive Learning
+    'AdaptiveLearner': '.learning',
+    'AdaptiveLearningStrategy': '.learning',
+    'create_adaptive_learner': '.learning',
+    
+    # Adversarial Learning
+    'AdversarialLearner': '.learning',
+    'AdversarialAttack': '.learning',
+    'create_adversarial_learner': '.learning',
+    
+    # Bayesian Optimization
+    'BayesianOptimizer': '.learning',
+    'AcquisitionFunction': '.learning',
+    'create_bayesian_optimizer': '.learning',
+    
+    # Causal Inference
+    'CausalInference': '.learning',
+    'CausalInferenceSystem': '.learning',
+    'CausalMethod': '.learning',
+    'create_causal_system': '.learning',
+    
+    # Continual Learning
+    'ContinualLearner': '.learning',
+    'CLStrategy': '.learning',
+    'create_cl_trainer': '.learning',
+    
+    # Ensemble Learning
+    'EnsembleLearner': '.learning',
+    'EnsembleStrategy': '.learning',
+    'create_ensemble_trainer': '.learning',
+    
+    # Evolutionary Computing
+    'EvolutionaryOptimizer': '.learning',
+    'create_evolutionary_optimizer': '.learning',
+    
+    # Federated Learning
+    'FederatedLearner': '.learning',
+    'FederatedLearningSystem': '.learning',
+    'create_federated_learning_system': '.learning',
+    
+    # Hyperparameter Optimization
+    'HyperparameterOptimizer': '.learning',
+    'HpoManager': '.learning',
+    'create_hpo_manager': '.learning',
+    
+    # Meta Learning
+    'MetaLearner': '.learning',
+    'MetaLearningAlgorithm': '.learning',
+    'create_meta_learner': '.learning',
+    
+    # Multitask Learning
+    'MultitaskLearner': '.learning',
+    'MultiTaskTrainer': '.learning',
+    'create_multitask_trainer': '.learning',
+    
+    # Neural Architecture Search
+    'NASOptimizer': '.learning',
+    'EvolutionaryNAS': '.learning',
+    'create_evolutionary_nas': '.learning',
+    
+    # Reinforcement Learning
+    'ReinforcementLearner': '.learning',
+    'RLTrainingManager': '.learning',
+    'create_rl_training_manager': '.learning',
+    
+    # Self-Supervised Learning
+    'SelfSupervisedLearner': '.learning',
+    'SSLTrainer': '.learning',
+    'create_ssl_trainer': '.learning',
+    
+    # Transfer Learning
+    'TransferLearner': '.learning',
+    'TransferTrainer': '.learning',
+    'create_transfer_trainer': '.learning',
+    
+    # Pipeline & Registry
+    'LearningRegistry': '.learning',
+    'LearningPipelineBuilder': '.learning',
+    'create_learning_module': '.learning',
+    'list_available_learning_modules': '.learning',
+}
+
 # Combine all lazy imports
 _ALL_LAZY_IMPORTS: Dict[str, str] = {
     **_LAZY_IMPORTS,
@@ -492,6 +582,7 @@ _ALL_LAZY_IMPORTS: Dict[str, str] = {
     **_COMPILER_LAZY_IMPORTS,
     **_MODELS_LAZY_IMPORTS,
     **_ENTERPRISE_LAZY_IMPORTS,
+    **_LEARNING_LAZY_IMPORTS,
 }
 
 __all__ = [
@@ -500,6 +591,7 @@ __all__ = [
     '_COMPILER_LAZY_IMPORTS',
     '_MODELS_LAZY_IMPORTS',
     '_ENTERPRISE_LAZY_IMPORTS',
+    '_LEARNING_LAZY_IMPORTS',
     '_ALL_LAZY_IMPORTS',
 ]
 

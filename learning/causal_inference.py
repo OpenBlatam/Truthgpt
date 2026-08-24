@@ -28,6 +28,10 @@ from sklearn.svm import SVR, SVC
 import warnings
 warnings.filterwarnings('ignore')
 
+from .interfaces import BaseLearner
+from .registry import LearningRegistry
+from .exceptions import CausalInferenceError
+
 logger = logging.getLogger(__name__)
 
 class CausalMethod(Enum):
@@ -625,10 +629,13 @@ class RobustnessChecker:
             'parallel_trends_assumption': trend_difference < 0.1
         }
 
-class CausalInferenceSystem:
+@LearningRegistry.register_learner("causal", aliases=["causal_inference", "CausalInference", "CausalInferenceSystem"], paradigm="causal")
+class CausalInferenceSystem(BaseLearner):
     """Main causal inference system"""
     
-    def __init__(self, config: CausalConfig):
+    def __init__(self, config: Optional[CausalConfig] = None):
+        if config is None:
+            config = CausalConfig()
         self.config = config
         
         # Components
@@ -641,6 +648,17 @@ class CausalInferenceSystem:
         self.causal_inference_history = []
         
         logger.info("✅ Causal Inference System initialized")
+    
+    def fit(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        """Fit implementation delegating to run_causal_inference."""
+        return self.run_causal_inference(*args, **kwargs)
+
+    def evaluate(self, *args: Any, **kwargs: Any) -> Dict[str, float]:
+        """Evaluate implementation returning causal metrics."""
+        if self.causal_inference_history:
+            last = self.causal_inference_history[-1]
+            return {"duration": float(last.get("total_duration", 0.0))}
+        return {}
     
     def run_causal_inference(self, data: np.ndarray, treatment: np.ndarray, 
                             outcome: np.ndarray, covariates: np.ndarray = None,
@@ -915,8 +933,14 @@ def example_causal_inference():
     
     return causal_system
 
+# Backward compatibility aliases
+CausalInference = CausalInferenceSystem
+CausalInferenceEngine = CausalInferenceSystem
+
 # Export utilities
 __all__ = [
+    'CausalInference',
+    'CausalInferenceEngine',
     'CausalMethod',
     'CausalEffectType',
     'CausalConfig',
@@ -937,3 +961,11 @@ __all__ = [
 if __name__ == "__main__":
     example_causal_inference()
     print("✅ Causal inference example completed successfully!")
+
+import sys
+_mod = sys.modules.get(__name__)
+if _mod:
+    if __name__.startswith("optimization_core.learning."):
+        sys.modules["learning." + __name__[len("optimization_core.learning."):]] = _mod
+    elif __name__.startswith("learning."):
+        sys.modules["optimization_core.learning." + __name__[len("learning."):]] = _mod

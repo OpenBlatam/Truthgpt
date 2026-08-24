@@ -4,12 +4,18 @@ Base compiler classes and interfaces
 """
 
 import enum
+import hashlib
 import logging
-from typing import Dict, List, Optional, Any, Union, Callable
-from dataclasses import dataclass
+import time
+from typing import Dict, List, Optional, Any, Union, Callable, Type
+from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
-import torch
-import numpy as np
+
+try:
+    import psutil
+    _HAS_PSUTIL = True
+except ImportError:
+    _HAS_PSUTIL = False
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +37,41 @@ class OptimizationLevel(enum.Enum):
     EXTREME = 4
     QUANTUM = 5
 
+def coerce_enum(val: Any, enum_cls: type) -> Any:
+    """Coerce a value (string, int, or enum instance) to an enum instance of enum_cls.
+    
+    If coercion fails or value is None, returns the original value.
+    """
+    if val is None or isinstance(val, enum_cls):
+        return val
+    if isinstance(val, str):
+        val_clean = val.strip()
+        # Try lookup by name uppercase
+        try:
+            return enum_cls[val_clean.upper()]
+        except (KeyError, AttributeError):
+            pass
+        # Try lookup by value lowercased
+        try:
+            return enum_cls(val_clean.lower())
+        except (ValueError, TypeError):
+            pass
+        # Try direct value match
+        try:
+            return enum_cls(val_clean)
+        except (ValueError, TypeError):
+            pass
+    elif isinstance(val, int):
+        try:
+            return enum_cls(val)
+        except (ValueError, TypeError):
+            pass
+    return val
+
+
+coerce_enum_field = coerce_enum
+
+
 @dataclass
 class CompilationConfig:
     """Configuration for compilation process"""
@@ -42,11 +83,20 @@ class CompilationConfig:
     memory_limit: Optional[int] = None
     timeout: Optional[float] = None
     debug_mode: bool = False
-    custom_flags: Dict[str, Any] = None
+    custom_flags: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
-        if self.custom_flags is None:
-            self.custom_flags = {}
+        if type(self) is CompilationConfig:
+            self.target = coerce_enum(self.target, CompilationTarget)
+            self.optimization_level = coerce_enum(self.optimization_level, OptimizationLevel)
+
+def resolve_config(config: Any, config_cls: type) -> Any:
+    """Helper to resolve a config argument (None, dict, or instance) to a config dataclass instance."""
+    if config is None:
+        return config_cls()
+    if isinstance(config, dict):
+        return config_cls(**config)
+    return config
 
 @dataclass
 class CompilationResult:
@@ -71,58 +121,108 @@ class CompilationResult:
             self.metadata = {}
 
 class CompilationError(Exception):
-    """Exception raised during compilation"""
+    """Base exception raised during compilation"""
     pass
 
+class CompilerConfigError(CompilationError):
+    """Exception raised for invalid compiler configurations"""
+    pass
+
+class ModelValidationError(CompilationError):
+    """Exception raised when model validation fails"""
+    pass
+
+class CompilationTargetError(CompilationError):
+    """Exception raised for invalid or unsupported compilation targets"""
+    pass
+
+class CompilationTimeoutError(CompilationError):
+    """Exception raised when compilation times out"""
+    pass
+
+class OptimizationError(CompilationError):
+    """Exception raised during optimization pass failures"""
+    pass
+
+class PluginError(CompilationError):
+    """Exception raised for compiler plugin errors"""
+    pass
+
+class KernelCompilationError(CompilationError):
+    """Exception raised for kernel compilation errors"""
+    pass
+
+class DistributedCompilationError(CompilationError):
+    """Exception raised during distributed compilation errors"""
+    pass
+
+
 class CompilationContext:
-    """Context manager for compilation process"""
-    
+    """Context manager for compilation process.
+
+    On exit, ``elapsed`` (seconds) and ``memory_used`` (bytes) are stored as
+    instance attributes so that callers can reference them after the ``with``
+    block completes.
+    """
+
     def __init__(self, config: CompilationConfig):
         self.config = config
-        self.start_time = None
-        self.memory_start = None
-        
+        self.start_time: Optional[float] = None
+        self.memory_start: Optional[int] = None
+        self.elapsed: float = 0.0
+        self.memory_used: int = 0
+
     def __enter__(self):
-        import time
-        import psutil
-        
         self.start_time = time.time()
-        self.memory_start = psutil.Process().memory_info().rss
+        if _HAS_PSUTIL:
+            self.memory_start = psutil.Process().memory_info().rss
+        else:
+            self.memory_start = 0
         logger.info(f"Starting compilation with target: {self.config.target}")
         return self
-        
+
     def __exit__(self, exc_type, exc_val, exc_tb):
-        import time
-        import psutil
-        
-        if self.start_time:
-            elapsed = time.time() - self.start_time
-            memory_used = psutil.Process().memory_info().rss - self.memory_start
-            logger.info(f"Compilation completed in {elapsed:.2f}s, memory used: {memory_used / 1024 / 1024:.2f}MB")
+        if self.start_time is not None:
+            self.elapsed = time.time() - self.start_time
+            if _HAS_PSUTIL and self.memory_start is not None:
+                self.memory_used = psutil.Process().memory_info().rss - self.memory_start
+            else:
+                self.memory_used = 0
+            logger.info(
+                f"Compilation completed in {self.elapsed:.2f}s, "
+                f"memory used: {self.memory_used / 1024 / 1024:.2f}MB"
+            )
 
 class CompilerCore(ABC):
     """Base class for all compiler implementations"""
-    
+
+    _DEFAULT_PROFILE: Dict[str, Any] = {
+        "execution_count": 0,
+        "total_time": 0.0,
+        "last_execution": 0.0,
+        "optimization_level": 0,
+    }
+
     def __init__(self, config: CompilationConfig):
         self.config = config
         self.logger = logging.getLogger(self.__class__.__name__)
-        
+
     @abstractmethod
     def compile(self, model: Any, input_spec: Optional[Dict] = None) -> CompilationResult:
         """Compile a model for the target platform"""
         pass
-        
+
     @abstractmethod
     def optimize(self, model: Any, optimization_passes: List[str] = None) -> CompilationResult:
         """Apply optimizations to a model"""
         pass
-        
+
     def validate_input(self, model: Any) -> bool:
         """Validate input model"""
         if model is None:
             raise CompilationError("Model cannot be None")
         return True
-        
+
     def get_compilation_info(self) -> Dict[str, Any]:
         """Get information about the compiler"""
         return {
@@ -132,6 +232,30 @@ class CompilerCore(ABC):
             "quantization_enabled": self.config.enable_quantization,
             "fusion_enabled": self.config.enable_fusion
         }
+
+    @staticmethod
+    def generate_cache_key(model: Any, config: Any, input_spec: Optional[Dict] = None) -> str:
+        """Generate a deterministic cache key for a model/config/input_spec triple."""
+        model_str = str(id(model))
+        config_str = str(config.__dict__) if hasattr(config, '__dict__') else str(config)
+        input_str = str(input_spec) if input_spec else ""
+        combined = f"{model_str}_{config_str}_{input_str}"
+        return hashlib.sha256(combined.encode()).hexdigest()
+
+    def get_or_create_profile(
+        self,
+        profiles: Dict[int, Dict[str, Any]],
+        model: Any,
+        extra_fields: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Return the execution profile for *model*, creating one if absent."""
+        model_id = id(model)
+        if model_id not in profiles:
+            profile = dict(self._DEFAULT_PROFILE)
+            if extra_fields:
+                profile.update(extra_fields)
+            profiles[model_id] = profile
+        return profiles[model_id]
 
 class TruthGPTCompilerCore(CompilerCore):
     """Specialized compiler core for TruthGPT models"""
@@ -156,16 +280,13 @@ class TruthGPTCompilerCore(CompilerCore):
             self.validate_input(model)
             
             with CompilationContext(self.config) as ctx:
-                # Apply TruthGPT-specific optimizations
                 optimized_model = self._apply_truthgpt_optimizations(model)
-                
-                # Compile for target platform
                 compiled_model = self._compile_for_target(optimized_model)
                 
                 return CompilationResult(
                     success=True,
                     compiled_model=compiled_model,
-                    compilation_time=ctx.elapsed if hasattr(ctx, 'elapsed') else 0.0,
+                    compilation_time=ctx.elapsed,
                     optimization_metrics=self._get_optimization_metrics(),
                     metadata=self.get_compilation_info()
                 )
@@ -195,6 +316,7 @@ class TruthGPTCompilerCore(CompilerCore):
             )
             
         except Exception as e:
+            self.logger.error(f"Optimization failed: {str(e)}")
             return CompilationResult(
                 success=False,
                 errors=[str(e)]
@@ -221,37 +343,26 @@ class TruthGPTCompilerCore(CompilerCore):
         return True
     
     def _optimize_attention_fusion(self, model: Any) -> Any:
-        """Optimize attention mechanisms with fusion"""
-        # Implementation for attention fusion
         self.logger.info("Applying attention fusion optimization")
         return model
     
     def _optimize_mlp_fusion(self, model: Any) -> Any:
-        """Optimize MLP layers with fusion"""
-        # Implementation for MLP fusion
         self.logger.info("Applying MLP fusion optimization")
         return model
     
     def _optimize_quantization(self, model: Any) -> Any:
-        """Apply quantization optimization"""
-        # Implementation for quantization
         self.logger.info("Applying quantization optimization")
         return model
     
     def _optimize_memory(self, model: Any) -> Any:
-        """Apply memory optimization"""
-        # Implementation for memory optimization
         self.logger.info("Applying memory optimization")
         return model
     
     def _optimize_parallel_processing(self, model: Any) -> Any:
-        """Apply parallel processing optimization"""
-        # Implementation for parallel processing
         self.logger.info("Applying parallel processing optimization")
         return model
     
     def _compile_for_target(self, model: Any) -> Any:
-        """Compile model for specific target platform"""
         if self.config.target == CompilationTarget.GPU:
             return self._compile_for_gpu(model)
         elif self.config.target == CompilationTarget.CPU:
@@ -262,22 +373,18 @@ class TruthGPTCompilerCore(CompilerCore):
             return model
     
     def _compile_for_gpu(self, model: Any) -> Any:
-        """Compile for GPU execution"""
         self.logger.info("Compiling for GPU execution")
         return model
     
     def _compile_for_cpu(self, model: Any) -> Any:
-        """Compile for CPU execution"""
         self.logger.info("Compiling for CPU execution")
         return model
     
     def _compile_for_tpu(self, model: Any) -> Any:
-        """Compile for TPU execution"""
         self.logger.info("Compiling for TPU execution")
         return model
     
     def _get_optimization_metrics(self) -> Dict[str, float]:
-        """Get optimization metrics"""
         return {
             "optimization_level": self.config.optimization_level.value,
             "quantization_enabled": float(self.config.enable_quantization),
@@ -285,15 +392,34 @@ class TruthGPTCompilerCore(CompilerCore):
             "parallelization_enabled": float(self.config.enable_parallelization)
         }
 
-def create_compiler_core(config: CompilationConfig) -> CompilerCore:
-    """Create a compiler core instance"""
+def create_compiler_core(config: Optional[Union[CompilationConfig, dict]] = None) -> CompilerCore:
+    """Create a compiler core instance."""
+    if config is None:
+        config = CompilationConfig()
+    elif isinstance(config, dict):
+        config = CompilationConfig(**config)
     return TruthGPTCompilerCore(config)
 
-def compilation_context(config: CompilationConfig):
-    """Create a compilation context"""
+def compilation_context(config: Optional[Union[CompilationConfig, dict]] = None) -> CompilationContext:
+    """Create a compilation context."""
+    if config is None:
+        config = CompilationConfig()
+    elif isinstance(config, dict):
+        config = CompilationConfig(**config)
     return CompilationContext(config)
 
+def make_factory(config_cls: Type, compiler_cls: Type) -> Callable:
+    """Generate a standard create_* factory function for a compiler."""
+    def factory(config=None):
+        resolved = resolve_config(config, config_cls)
+        return compiler_cls(resolved)
+    factory.__doc__ = f"Create a {compiler_cls.__name__} instance."
+    return factory
 
-
-
-
+def make_context_factory(config_cls: Type) -> Callable:
+    """Generate a standard *_compilation_context factory function."""
+    def context_factory(config=None):
+        resolved = resolve_config(config, config_cls)
+        return CompilationContext(resolved)
+    context_factory.__doc__ = f"Create a CompilationContext for {config_cls.__name__}."
+    return context_factory

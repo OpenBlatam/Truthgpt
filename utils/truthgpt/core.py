@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 class OptimizationLevel(str, Enum):
     """Optimization levels for TruthGPT."""
     BASIC = "basic"
+    BALANCED = "balanced"
     ADVANCED = "advanced"
     EXPERT = "expert"
     MASTER = "master"

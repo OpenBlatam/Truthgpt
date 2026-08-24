@@ -600,8 +600,12 @@ def example_meta_learning():
     
     return meta_learner
 
+# Backward compatibility alias
+MetaConfig = MetaLearningConfig
+
 # Export utilities
 __all__ = [
+    'MetaConfig',
     'MetaLearningAlgorithm',
     'TaskDistribution',
     'MetaLearningConfig',
@@ -617,4 +621,13 @@ __all__ = [
 if __name__ == "__main__":
     example_meta_learning()
     print("✅ Meta-learning example completed successfully!")
+
+import sys
+_mod = sys.modules.get(__name__)
+if _mod:
+    if __name__.startswith("optimization_core.learning."):
+        sys.modules["learning." + __name__[len("optimization_core.learning."):]] = _mod
+    elif __name__.startswith("learning."):
+        sys.modules["optimization_core.learning." + __name__[len("learning."):]] = _mod
+
 

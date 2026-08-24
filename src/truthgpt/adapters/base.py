@@ -24,8 +24,19 @@ from pydantic import BaseModel, Field, computed_field
 try:
     from optimization_core.agents.framework.tools.tools import BaseTool, ToolResult
 except (ImportError, ValueError, KeyError):
-    # Fallback for environments where optimization_core is the root
-    from truthgpt.agents.framework.tools.tools import BaseTool, ToolResult
+    try:
+        from truthgpt.agents.framework.tools.tools import BaseTool, ToolResult
+    except (ImportError, ValueError, KeyError):
+        try:
+            from agents.framework.tools.tools import BaseTool, ToolResult
+        except (ImportError, ValueError, KeyError):
+            class BaseTool:  # type: ignore[no-redef]
+                """Fallback BaseTool definition."""
+                pass
+
+            class ToolResult:  # type: ignore[no-redef]
+                """Fallback ToolResult definition."""
+                pass
 
 logger = logging.getLogger(__name__)
 

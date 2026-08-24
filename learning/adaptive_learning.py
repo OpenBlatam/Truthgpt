@@ -22,6 +22,10 @@ from collections import deque
 import threading
 import queue
 
+from .interfaces import BaseLearner
+from .registry import LearningRegistry
+from .exceptions import AdaptiveLearningError
+
 logger = logging.getLogger(__name__)
 
 class LearningMode(Enum):
@@ -454,10 +458,13 @@ class SelfImprovementEngine:
             'patience_counter': self.improvement_patience_counter
         }
 
-class AdaptiveLearningSystem:
+@LearningRegistry.register_learner("adaptive", aliases=["adaptive_learning", "AdaptiveLearner", "AdaptiveLearningSystem"], paradigm="adaptive")
+class AdaptiveLearningSystem(BaseLearner):
     """Main adaptive learning system"""
     
-    def __init__(self, config: AdaptiveLearningConfig):
+    def __init__(self, config: Optional[AdaptiveLearningConfig] = None):
+        if config is None:
+            config = AdaptiveLearningConfig()
         self.config = config
         self.performance_tracker = PerformanceTracker(config)
         self.meta_learner = MetaLearner(config)
@@ -466,6 +473,21 @@ class AdaptiveLearningSystem:
         self.adaptation_history = []
         
         logger.info("✅ Adaptive Learning System initialized")
+    
+    def fit(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        """Fit implementation delegating to adapt."""
+        if "model" in kwargs and "performance_metrics" in kwargs:
+            adapted_model = self.adapt(kwargs["model"], kwargs["performance_metrics"])
+            return {"adapted_model": adapted_model, "stats": self.get_learning_statistics()}
+        elif len(args) >= 2:
+            adapted_model = self.adapt(args[0], args[1])
+            return {"adapted_model": adapted_model, "stats": self.get_learning_statistics()}
+        return {"stats": self.get_learning_statistics()}
+
+    def evaluate(self, *args: Any, **kwargs: Any) -> Dict[str, float]:
+        """Evaluate implementation returning tracker metrics."""
+        summary = self.performance_tracker.get_performance_summary()
+        return {"current_performance": float(summary.get("current_performance", 0.0))}
     
     def adapt(self, model: nn.Module, performance_metrics: Dict[str, float]) -> nn.Module:
         """Adapt model based on performance metrics"""
@@ -671,8 +693,14 @@ def example_adaptive_learning():
     
     return model
 
+# Backward compatibility aliases
+AdaptiveLearner = AdaptiveLearningSystem
+AdaptiveLearningStrategy = LearningMode
+
 # Export utilities
 __all__ = [
+    'AdaptiveLearner',
+    'AdaptiveLearningStrategy',
     'LearningMode',
     'AdaptiveLearningConfig',
     'PerformanceTracker',
@@ -687,6 +715,15 @@ __all__ = [
 if __name__ == "__main__":
     example_adaptive_learning()
     print("✅ Adaptive learning example completed successfully!")
+
+import sys
+_mod = sys.modules.get(__name__)
+if _mod:
+    if __name__.startswith("optimization_core.learning."):
+        sys.modules["learning." + __name__[len("optimization_core.learning."):]] = _mod
+    elif __name__.startswith("learning."):
+        sys.modules["optimization_core.learning." + __name__[len("learning."):]] = _mod
+
 
 
 

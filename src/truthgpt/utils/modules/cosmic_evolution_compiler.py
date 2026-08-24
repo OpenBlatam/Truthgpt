@@ -490,7 +490,6 @@ class CosmicEvolutionCompiler:
                 growth_transcendence=self._calculate_growth_transcendence(),
                 compilation_time=compilation_time,
                 evolution_acceleration=self._calculate_evolution_acceleration(),
-                adaptation_efficiency=self.adaptation_engine.adaptation_efficiency,
                 cosmic_processing_power=self._calculate_cosmic_processing_power(),
                 cosmic_evolution=self._calculate_cosmic_evolution(),
                 universal_adaptation=self._calculate_universal_adaptation(),
@@ -508,7 +507,6 @@ class CosmicEvolutionCompiler:
                 infinite_growths=infinite_growths,
                 evolution_transcendences=evolution_transcendences,
                 cosmic_evolutions=cosmic_evolutions,
-                universal_evolutions=universal_evolutions,
                 infinite_evolutions=infinite_evolutions,
                 transcendent_evolutions=transcendent_evolutions
             )
@@ -540,7 +538,6 @@ class CosmicEvolutionCompiler:
                 growth_transcendence=0.0,
                 compilation_time=0.0,
                 evolution_acceleration=0.0,
-                adaptation_efficiency=0.0,
                 cosmic_processing_power=0.0,
                 cosmic_evolution=0.0,
                 universal_adaptation=0.0,
