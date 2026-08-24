@@ -190,10 +190,70 @@ class LearningRegistry:
             return target_cls
         return decorator
 
+    _BUILTIN_LEARNERS: Dict[str, tuple[str, str]] = {
+        'active': ('.active_learning', 'ActiveLearningSystem'),
+        'adaptive': ('.adaptive_learning', 'AdaptiveLearningSystem'),
+        'adversarial': ('.adversarial_learning', 'AdversarialLearningSystem'),
+        'bayesian': ('.bayesian_optimization', 'BayesianOptimizer'),
+        'causal': ('.causal_inference', 'CausalInferenceSystem'),
+        'continual': ('.continual_learning', 'CLTrainer'),
+        'ensemble': ('.ensemble_learning', 'EnsembleTrainer'),
+        'evolutionary': ('.evolutionary_computing', 'create_evolutionary_optimizer'),
+        'federated': ('.federated_learning', 'FederatedLearningSystem'),
+        'hpo': ('.hyperparameter_optimization', 'HpoManager'),
+        'meta': ('.meta_learning', 'MetaLearner'),
+        'multitask': ('.multitask_learning', 'MultiTaskTrainer'),
+        'nas': ('.nas', 'EvolutionaryNAS'),
+        'reinforcement': ('.reinforcement_learning', 'RLTrainingManager'),
+        'self_supervised': ('.self_supervised_learning', 'SSLTrainer'),
+        'transfer': ('.transfer_learning', 'TransferTrainer'),
+    }
+
+    _BUILTIN_ALIASES: Dict[str, str] = {
+        'active_learning': 'active',
+        'activelearner': 'active',
+        'adaptive_learning': 'adaptive',
+        'adaptivelearner': 'adaptive',
+        'adversarial_learning': 'adversarial',
+        'adversariallearner': 'adversarial',
+        'bayesian_optimization': 'bayesian',
+        'bayesianoptimizer': 'bayesian',
+        'causal_inference': 'causal',
+        'causalinference': 'causal',
+        'continual_learning': 'continual',
+        'continuallearner': 'continual',
+        'ensemble_learning': 'ensemble',
+        'ensemblelearner': 'ensemble',
+        'evolutionary_computing': 'evolutionary',
+        'evolutionaryoptimizer': 'evolutionary',
+        'federated_learning': 'federated',
+        'federatedlearner': 'federated',
+        'hyperparameter_optimization': 'hpo',
+        'hyperparameteroptimizer': 'hpo',
+        'hpomanager': 'hpo',
+        'meta_learning': 'meta',
+        'metalearner': 'meta',
+        'multitask_learning': 'multitask',
+        'multitasklearner': 'multitask',
+        'neural_architecture_search': 'nas',
+        'nasoptimizer': 'nas',
+        'evolutionarynas': 'nas',
+        'reinforcement_learning': 'reinforcement',
+        'reinforcementlearner': 'reinforcement',
+        'rltrainingmanager': 'reinforcement',
+        'self_supervised_learning': 'self_supervised',
+        'selfsupervisedlearner': 'self_supervised',
+        'ssltrainer': 'self_supervised',
+        'transfer_learning': 'transfer',
+        'transferlearner': 'transfer',
+        'transfertrainer': 'transfer',
+    }
+
     @classmethod
     def _resolve_name(cls, name: str) -> str:
-        key = name.lower()
-        return cls._aliases.get(key, key)
+        key = name.lower().replace('-', '_')
+        resolved = cls._aliases.get(key, key)
+        return cls._BUILTIN_ALIASES.get(resolved, resolved)
 
     @classmethod
     def get_learner(cls, name: Union[str, LearningStrategyType]) -> Any:
@@ -203,6 +263,19 @@ class LearningRegistry:
         with cls._lock:
             if key in cls._learners:
                 return cls._learners[key]
+            
+            if key in cls._BUILTIN_LEARNERS:
+                mod_path, symbol = cls._BUILTIN_LEARNERS[key]
+                import importlib
+                pkg = "learning" if "learning" in sys.modules else __package__
+                try:
+                    module = importlib.import_module(mod_path, pkg)
+                except ModuleNotFoundError:
+                    module = importlib.import_module(f"optimization_core.learning{mod_path}")
+                obj = getattr(module, symbol)
+                cls._learners[key] = obj
+                return obj
+
         raise LearnerNotFoundError(
             f"Learner '{name}' not found in registry. "
             f"Available: {cls.list_learners()}"
@@ -218,6 +291,8 @@ class LearningRegistry:
                 return cls._optimizers[key]
             if key in cls._learners:
                 return cls._learners[key]
+            if key in cls._BUILTIN_LEARNERS:
+                return cls.get_learner(name)
         raise StrategyNotSupportedError(
             f"Optimizer '{name}' not found in registry. "
             f"Available: {cls.list_optimizers()}"
@@ -239,13 +314,14 @@ class LearningRegistry:
         """Get metadata about a registered learning module."""
         key = cls._resolve_name(name)
         with cls._lock:
-            return cls._metadata.get(key, {"name": key, "description": "No metadata"})
+            return cls._metadata.get(key, {"name": key, "description": f"Learning module {key}"})
 
     @classmethod
     def list_learners(cls) -> List[str]:
         """List all registered learner identifiers."""
         with cls._lock:
-            return sorted(list(cls._learners.keys()))
+            all_keys = set(cls._learners.keys()) | set(cls._BUILTIN_LEARNERS.keys())
+            return sorted(list(all_keys))
 
     @classmethod
     def list_optimizers(cls) -> List[str]:

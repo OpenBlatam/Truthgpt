@@ -25,6 +25,10 @@ from sklearn.metrics import accuracy_score, mean_squared_error
 import warnings
 warnings.filterwarnings('ignore')
 
+from .interfaces import BaseLearner
+from .registry import LearningRegistry
+from .exceptions import MultiTaskLearningError
+
 logger = logging.getLogger(__name__)
 
 class TaskType(Enum):
@@ -479,10 +483,13 @@ class MultiTaskNetwork:
         
         return weighted_loss
 
-class MultiTaskTrainer:
+@LearningRegistry.register_learner("multitask", aliases=["multitask_learning", "MultitaskLearner", "MultiTaskTrainer", "MultiTaskLearner"], paradigm="multitask")
+class MultiTaskTrainer(BaseLearner):
     """Multi-task learning trainer"""
     
-    def __init__(self, config: MultiTaskConfig):
+    def __init__(self, config: Optional[MultiTaskConfig] = None):
+        if config is None:
+            config = MultiTaskConfig()
         self.config = config
         
         # Components
@@ -495,6 +502,14 @@ class MultiTaskTrainer:
         self.task_performance = {}
         
         logger.info("✅ Multi-Task Trainer initialized")
+    
+    def fit(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        """Fit implementation delegating to train."""
+        return self.train(*args, **kwargs)
+
+    def evaluate(self, *args: Any, **kwargs: Any) -> Dict[str, float]:
+        """Evaluate implementation returning task performance metrics."""
+        return {str(k): float(v) for k, v in self.task_performance.items()}
     
     def train(self, train_data: Dict[TaskType, Tuple[torch.Tensor, torch.Tensor]], 
               val_data: Dict[TaskType, Tuple[torch.Tensor, torch.Tensor]] = None) -> Dict[str, Any]:

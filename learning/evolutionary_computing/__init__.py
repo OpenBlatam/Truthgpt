@@ -58,8 +58,8 @@ def example_evolutionary_computing():
     # Generate report
     optimization_report = generate_optimization_report(config, optimization_results)
     
-    print(f"✅ Evolutionary Computing Example Complete!")
-    print(f"\n📋 Evolutionary Computing Report:")
+    print("[OK] Evolutionary Computing Example Complete!")
+    print("\n--- Evolutionary Computing Report ---")
     print(optimization_report)
     
     return evolutionary_optimizer

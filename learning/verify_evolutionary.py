@@ -16,13 +16,14 @@ if str(opt_core) not in sys.path:
 try:
     from optimization_core.learning.evolutionary_computing import example_evolutionary_computing
     
-    print("✅ Successfully imported evolutionary_computing package")
+    print("[OK] Successfully imported evolutionary_computing package")
     
     optimizer = example_evolutionary_computing()
     
-    print("✅ Verification successful!")
+    print("[OK] Verification successful!")
 except Exception as e:
-    print("X Verification failed: " + str(e))
+    print("[FAIL] Verification failed: " + str(e))
     import traceback
     traceback.print_exc()
     sys.exit(1)
+

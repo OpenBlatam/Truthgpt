@@ -565,11 +565,89 @@ class HPOExperimentResult:
 class PipelineStageResult:
     """Execution summary of an individual stage in a LearningPipeline."""
     stage_name: str
-    paradigm: LearningParadigm = LearningParadigm.PIPELINE
-    status: LearningStatus = LearningStatus.COMPLETED
+    paradigm: Union[LearningParadigm, str] = LearningParadigm.PIPELINE
+    status: Union[LearningStatus, str] = LearningStatus.COMPLETED
     metrics: Dict[str, Any] = field(default_factory=dict)
     duration_sec: float = 0.0
+    duration_seconds: float = 0.0
+    strategy_type: Optional[str] = None
+    output_data: Any = None
     error: Optional[str] = None
+    error_message: Optional[str] = None
+    timestamp: float = field(default_factory=time.time)
+
+
+@dataclass
+class EvaluationResult:
+    """Standardized evaluation metric mapping."""
+    metrics: Dict[str, float] = field(default_factory=dict)
+    loss: float = 0.0
+    accuracy: Optional[float] = None
+    num_samples: int = 0
+    duration_seconds: float = 0.0
+    timestamp: float = field(default_factory=time.time)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self.metrics.get(key, default)
+
+
+@dataclass
+class LearningStepResult:
+    """Telemetry data emitted from a single training or adaptation step."""
+    step: int
+    loss: float
+    metrics: Dict[str, float] = field(default_factory=dict)
+    learning_rate: float = 0.0
+    grad_norm: Optional[float] = None
+    step_duration_seconds: float = 0.0
+    timestamp: float = field(default_factory=time.time)
+
+
+@dataclass
+class SampleQuery:
+    """Active learning query recommendation."""
+    indices: List[int] = field(default_factory=list)
+    uncertainty_scores: List[float] = field(default_factory=list)
+    diversity_scores: Optional[List[float]] = None
+    query_strategy: Optional[Any] = None
+    timestamp: float = field(default_factory=time.time)
+
+
+@dataclass
+class TaskMetrics:
+    """Performance metrics for a specific multi-task or continual task ID."""
+    task_id: Union[int, str]
+    metrics: Dict[str, float] = field(default_factory=dict)
+    loss: float = 0.0
+    sample_count: int = 0
+
+
+@dataclass
+class LearnerState:
+    """Comprehensive snapshot of a learner's internal state."""
+    strategy: Any = None
+    stage: Any = None
+    step_count: int = 0
+    epoch_count: int = 0
+    best_score: Optional[float] = None
+    metrics_history: List[Dict[str, float]] = field(default_factory=list)
+    hyperparameters: Dict[str, Any] = field(default_factory=dict)
+    timestamp: float = field(default_factory=time.time)
+
+
+@dataclass
+class ModelSnapshot:
+    """Lightweight reference to a model state or weight checkpoint."""
+    model_name: str
+    iteration: int
+    score: float
+    state_dict_ref: Optional[Any] = None
+    file_path: Optional[str] = None
+    created_at: float = field(default_factory=time.time)
+
+
+LearningStage = LearningStatus
 
 
 # ==========================================
@@ -946,6 +1024,13 @@ __all__ = [
     'StepState',
     'LearningMetrics',
     'OptimizationResult',
+    'EvaluationResult',
+    'LearningStepResult',
+    'SampleQuery',
+    'TaskMetrics',
+    'LearnerState',
+    'ModelSnapshot',
+    'LearningStage',
     'QueryResult',
     'ActiveLearningResult',
     'CausalEffectResult',
