@@ -273,6 +273,7 @@ _LAZY_IMPORTS: Dict[str, str] = {
 
     # 5. Causal Inference
     'CausalInference': '.causal_inference',
+    'CausalInferenceEngine': '.causal_inference',
     'CausalInferenceSystem': '.causal_inference',
     'CausalDiscovery': '.causal_inference',
     'CausalEffectEstimator': '.causal_inference',

@@ -25,6 +25,10 @@ from sklearn.metrics import accuracy_score, mean_squared_error
 import warnings
 warnings.filterwarnings('ignore')
 
+from .interfaces import BaseLearner
+from .registry import LearningRegistry
+from .exceptions import SelfSupervisedError
+
 logger = logging.getLogger(__name__)
 
 class SSLMethod(Enum):
