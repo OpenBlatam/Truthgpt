@@ -377,42 +377,91 @@ class LearningRegistry:
             cls._metadata.clear()
 
 
+    @classmethod
+    def is_registered(cls, name: Union[str, LearningStrategyType]) -> bool:
+        """Check if a learning strategy is registered."""
+        key = name.value if isinstance(name, LearningStrategyType) else str(name).lower()
+        with cls._lock:
+            return (
+                key in cls._learners
+                or key in cls._optimizers
+                or key in cls._strategies
+                or key in cls._BUILTIN_LEARNERS
+                or key in cls._aliases
+                or key in cls._metadata
+            )
+
+    @classmethod
+    def get_module_info(cls, name: Union[str, LearningStrategyType]) -> Dict[str, Any]:
+        """Get formatted metadata about a registered learning module."""
+        return cls.get_info(name)
+
+
 # Global Singleton Alias
+learning_registry = LearningRegistry
 LEARNING_REGISTRY = LearningRegistry
 
 
 # Convenience Module Functions
-def register_learning_module(name: str, factory: Any, description: Optional[str] = None) -> Any:
-    return LearningRegistry.register(name, factory, description=description)
+def register_learning_module(
+    name: Union[str, LearningStrategyType],
+    target: Optional[Any] = None,
+    category: str = "general",
+    description: Optional[str] = None,
+    **kwargs: Any
+) -> Any:
+    """Register a learning module or decorator."""
+    def decorator(cls_or_fn: Any) -> Any:
+        desc = description or cls_or_fn.__doc__ or f"Learning module {name}"
+        LearningRegistry.register_learner(name, description=desc, category=category, **kwargs)(cls_or_fn)
+        return cls_or_fn
+
+    if target is not None:
+        return decorator(target)
+    return decorator
 
 
 def list_available_learning_modules() -> List[str]:
     return LearningRegistry.list_learners()
 
 
-def get_learning_module_info(name: str) -> Dict[str, Any]:
+def get_learning_module_info(name: Union[str, LearningStrategyType]) -> Dict[str, Any]:
     return LearningRegistry.get_info(name)
 
 
-def create_learning_module(module_type: str, config: Any = None, **kwargs: Any) -> Any:
+def create_learning_module(module_type: Union[str, LearningStrategyType], config: Any = None, **kwargs: Any) -> Any:
     """Unified factory function to instantiate any learning module."""
-    learner_factory = LearningRegistry.get_learner(module_type)
-    if config is not None:
-        return learner_factory(config=config, **kwargs)
-    return learner_factory(**kwargs)
+    from .factory import create_learning_module as _create
+    return _create(module_type, config=config, **kwargs)
 
 
 def create_learner(strategy_type: Union[str, LearningStrategyType], config: Any = None, **kwargs: Any) -> Any:
     """Instantiate a learner using strategy type and optional configuration."""
-    return create_learning_module(str(strategy_type), config=config, **kwargs)
+    return create_learning_module(strategy_type, config=config, **kwargs)
+
+
+def create_learning_optimizer(optimizer_type: Union[str, LearningStrategyType], config: Any = None, **kwargs: Any) -> Any:
+    """Instantiate an optimizer using optimizer type and optional configuration."""
+    from .factory import create_learning_optimizer as _create_opt
+    return _create_opt(optimizer_type, config=config, **kwargs)
+
+
+def create_learning_config(config_type: Union[str, LearningStrategyType], **kwargs: Any) -> Any:
+    """Instantiate a domain-specific learning configuration dataclass."""
+    from .factory import create_learning_config as _create_cfg
+    return _create_cfg(config_type, **kwargs)
 
 
 __all__ = [
     'LearningRegistry',
+    'learning_registry',
     'LEARNING_REGISTRY',
     'register_learning_module',
     'list_available_learning_modules',
     'get_learning_module_info',
     'create_learning_module',
     'create_learner',
+    'create_learning_optimizer',
+    'create_learning_config',
 ]
+

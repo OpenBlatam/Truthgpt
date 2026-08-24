@@ -595,13 +595,22 @@ def create_nas_config(**kwargs) -> NASConfig:
     """Create NAS configuration"""
     return NASConfig(**kwargs)
 
-def create_evolutionary_nas(config: NASConfig) -> EvolutionaryNAS:
-    """Create evolutionary NAS instance"""
+def create_evolutionary_nas(config: Optional[Union[NASConfig, Dict[str, Any]]] = None, **kwargs: Any) -> EvolutionaryNAS:
+    """Create evolutionary NAS instance with flexible config binding."""
+    if config is None:
+        config = NASConfig(**kwargs)
+    elif isinstance(config, dict):
+        config = NASConfig(**config)
     return EvolutionaryNAS(config)
 
-def create_differentiable_nas(config: NASConfig) -> DifferentiableNAS:
-    """Create differentiable NAS instance"""
+def create_differentiable_nas(config: Optional[Union[NASConfig, Dict[str, Any]]] = None, **kwargs: Any) -> DifferentiableNAS:
+    """Create differentiable NAS instance with flexible config binding."""
+    if config is None:
+        config = NASConfig(**kwargs)
+    elif isinstance(config, dict):
+        config = NASConfig(**config)
     return DifferentiableNAS(config)
+
 
 # Example usage
 def example_neural_architecture_search():

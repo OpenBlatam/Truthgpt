@@ -758,10 +758,13 @@ class MultiTaskAdapter:
         self.training_history.append(adaptation_result)
         return adaptation_result
 
-class TransferTrainer:
+@LearningRegistry.register_learner("transfer", aliases=["transfer_learning", "TransferLearner", "TransferTrainer", "TransferLearningManager"], paradigm="transfer")
+class TransferTrainer(BaseLearner):
     """Main transfer learning trainer"""
     
-    def __init__(self, config: TransferLearningConfig):
+    def __init__(self, config: Optional[TransferLearningConfig] = None):
+        if config is None:
+            config = TransferLearningConfig()
         self.config = config
         
         # Components
@@ -775,6 +778,17 @@ class TransferTrainer:
         self.transfer_history = []
         
         logger.info("✅ Transfer Learning Trainer initialized")
+    
+    def fit(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        """Fit implementation delegating to train_transfer_learning."""
+        return self.train_transfer_learning(*args, **kwargs)
+
+    def evaluate(self, *args: Any, **kwargs: Any) -> Dict[str, float]:
+        """Evaluate implementation returning transfer metrics."""
+        if self.transfer_history:
+            last = self.transfer_history[-1]
+            return {"duration": float(last.get("total_duration", 0.0))}
+        return {}
     
     def train_transfer_learning(self, source_data: torch.Tensor, source_labels: torch.Tensor,
                                target_data: torch.Tensor, target_labels: torch.Tensor = None) -> Dict[str, Any]:
