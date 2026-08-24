@@ -21,6 +21,10 @@ import random
 from collections import defaultdict
 import itertools
 
+from .interfaces import BaseLearner
+from .registry import LearningRegistry
+from .exceptions import MetaLearningError
+
 logger = logging.getLogger(__name__)
 
 class MetaLearningAlgorithm(Enum):

@@ -370,17 +370,26 @@ def __getattr__(name: str) -> Any:
             return _import_cache[name]
 
         module_path = _LAZY_IMPORTS[name]
+        pkg = __name__
         try:
-            pkg = __package__ or "optimization_core.learning"
             module = importlib.import_module(module_path, pkg)
             obj = getattr(module, name)
             _import_cache[name] = obj
             return obj
         except (ImportError, AttributeError) as e:
-            raise AttributeError(
-                f"module '{__name__}' has no attribute '{name}'. "
-                f"Failed to import from '{module_path}': {e}"
-            ) from e
+            # Fallback across alternate namespace root (learning vs optimization_core.learning)
+            try:
+                rel = module_path.lstrip('.')
+                alt_mod = f"optimization_core.learning.{rel}" if "optimization_core" not in pkg else f"learning.{rel}"
+                module = importlib.import_module(alt_mod)
+                obj = getattr(module, name)
+                _import_cache[name] = obj
+                return obj
+            except Exception:
+                raise AttributeError(
+                    f"module '{__name__}' has no attribute '{name}'. "
+                    f"Failed to import from '{module_path}': {e}"
+                ) from e
 
 
 def __dir__() -> List[str]:

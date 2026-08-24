@@ -169,6 +169,9 @@ class MultiTaskError(LearningBaseException):
     pass
 
 
+MultiTaskLearningError = MultitaskLearningError
+
+
 class ArchitectureSearchError(LearningBaseException):
     """Raised when neural architecture generation or evaluation fails."""
     pass
@@ -245,6 +248,7 @@ __all__ = [
     'HPOError',
     'MetaLearningError',
     'MultitaskLearningError',
+    'MultiTaskLearningError',
     'MultiTaskError',
     'ArchitectureSearchError',
     'NASError',
