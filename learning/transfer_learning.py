@@ -62,6 +62,7 @@ class KnowledgeDistillationType(Enum):
     RELATION_DISTILLATION = "relation_distillation"
     SELF_DISTILLATION = "self_distillation"
 
+@dataclass
 class TransferLearningConfig:
     """Configuration for transfer learning system"""
     # Basic settings
@@ -998,9 +999,14 @@ def create_multi_task_adapter(config: TransferLearningConfig) -> MultiTaskAdapte
     """Create multi-task adapter"""
     return MultiTaskAdapter(config)
 
-def create_transfer_trainer(config: TransferLearningConfig) -> TransferTrainer:
-    """Create transfer learning trainer"""
+def create_transfer_trainer(config: Optional[Union[TransferLearningConfig, Dict[str, Any]]] = None, **kwargs: Any) -> TransferTrainer:
+    """Create transfer learning trainer with flexible config binding."""
+    if config is None:
+        config = TransferLearningConfig(**kwargs)
+    elif isinstance(config, dict):
+        config = TransferLearningConfig(**config)
     return TransferTrainer(config)
+
 
 # Example usage
 def example_transfer_learning():

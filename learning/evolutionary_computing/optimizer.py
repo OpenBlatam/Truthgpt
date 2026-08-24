@@ -15,7 +15,11 @@ logger = logging.getLogger(__name__)
 class EvolutionaryOptimizer(BaseLearner):
     """Main evolutionary optimizer"""
     
-    def __init__(self, config: Optional[Union[EvolutionaryConfig, Dict[str, Any]]] = None):
+    def __init__(self, config: Optional[Union[EvolutionaryConfig, Dict[str, Any]]] = None, **kwargs: Any):
+        if config is None and kwargs:
+            config = kwargs
+        elif isinstance(config, dict) and kwargs:
+            config = {**config, **kwargs}
         if config is None:
             from .types import create_evolutionary_config
             config = create_evolutionary_config()
