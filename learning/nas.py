@@ -21,6 +21,10 @@ import random
 from collections import deque
 import itertools
 
+from .interfaces import BaseLearner
+from .registry import LearningRegistry
+from .exceptions import NASError
+
 logger = logging.getLogger(__name__)
 
 class SearchStrategy(Enum):
