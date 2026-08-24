@@ -3,14 +3,6 @@ import random
 import logging
 from typing import List, Tuple
 from .types import MutationMethod
-from .strategies.mutation import (
-    gaussian_mutation,
-    uniform_mutation,
-    polynomial_mutation,
-    non_uniform_mutation,
-    boundary_mutation,
-    creep_mutation
-)
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +27,14 @@ class Individual:
                mutation_strength: float, bounds: List[Tuple[float, float]] = None):
         """Mutate the individual"""
         if random.random() < mutation_rate:
+            from .strategies.mutation import (
+                gaussian_mutation,
+                uniform_mutation,
+                polynomial_mutation,
+                non_uniform_mutation,
+                boundary_mutation,
+                creep_mutation
+            )
             if mutation_method == MutationMethod.GAUSSIAN:
                 gaussian_mutation(self, mutation_strength)
             elif mutation_method == MutationMethod.UNIFORM:

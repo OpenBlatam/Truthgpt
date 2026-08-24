@@ -1,8 +1,11 @@
+from __future__ import annotations
 import random
 import numpy as np
-from typing import Tuple
-from ..individual import Individual
+from typing import TYPE_CHECKING, Tuple
 from ..types import CrossoverMethod
+
+if TYPE_CHECKING:
+    from ..individual import Individual
 
 def single_point_crossover(parent1: Individual, parent2: Individual) -> Tuple[Individual, Individual]:
     """Single point crossover"""
@@ -11,10 +14,11 @@ def single_point_crossover(parent1: Individual, parent2: Individual) -> Tuple[In
     child1_genes = np.concatenate([parent1.genes[:crossover_point], parent2.genes[crossover_point:]])
     child2_genes = np.concatenate([parent2.genes[:crossover_point], parent1.genes[crossover_point:]])
     
-    child1 = Individual(child1_genes)
-    child2 = Individual(child2_genes)
+    child1 = type(parent1)(child1_genes)
+    child2 = type(parent2)(child2_genes)
     
     return child1, child2
+
 
 def two_point_crossover(parent1: Individual, parent2: Individual) -> Tuple[Individual, Individual]:
     """Two point crossover"""
@@ -32,8 +36,8 @@ def two_point_crossover(parent1: Individual, parent2: Individual) -> Tuple[Indiv
         parent2.genes[point2:]
     ])
     
-    child1 = Individual(child1_genes)
-    child2 = Individual(child2_genes)
+    child1 = type(parent1)(child1_genes)
+    child2 = type(parent2)(child2_genes)
     
     return child1, child2
 
@@ -50,8 +54,8 @@ def uniform_crossover(parent1: Individual, parent2: Individual) -> Tuple[Individ
             child1_genes[i] = parent2.genes[i]
             child2_genes[i] = parent1.genes[i]
     
-    child1 = Individual(child1_genes)
-    child2 = Individual(child2_genes)
+    child1 = type(parent1)(child1_genes)
+    child2 = type(parent2)(child2_genes)
     
     return child1, child2
 
@@ -62,8 +66,8 @@ def arithmetic_crossover(parent1: Individual, parent2: Individual) -> Tuple[Indi
     child1_genes = alpha * parent1.genes + (1 - alpha) * parent2.genes
     child2_genes = (1 - alpha) * parent1.genes + alpha * parent2.genes
     
-    child1 = Individual(child1_genes)
-    child2 = Individual(child2_genes)
+    child1 = type(parent1)(child1_genes)
+    child2 = type(parent2)(child2_genes)
     
     return child1, child2
 
@@ -82,8 +86,8 @@ def blend_crossover(parent1: Individual, parent2: Individual) -> Tuple[Individua
         child1_genes[i] = random.uniform(low, high)
         child2_genes[i] = random.uniform(low, high)
     
-    child1 = Individual(child1_genes)
-    child2 = Individual(child2_genes)
+    child1 = type(parent1)(child1_genes)
+    child2 = type(parent2)(child2_genes)
     
     return child1, child2
 
@@ -122,7 +126,7 @@ def simulated_binary_crossover(parent1: Individual, parent2: Individual) -> Tupl
             child1_genes[i] = parent1.genes[i]
             child2_genes[i] = parent2.genes[i]
     
-    child1 = Individual(child1_genes)
-    child2 = Individual(child2_genes)
+    child1 = type(parent1)(child1_genes)
+    child2 = type(parent2)(child2_genes)
     
     return child1, child2

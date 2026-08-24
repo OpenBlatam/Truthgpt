@@ -27,6 +27,10 @@ from sklearn.gaussian_process.kernels import RBF, Matern, WhiteKernel
 import warnings
 warnings.filterwarnings('ignore')
 
+from .interfaces import BaseLearner
+from .registry import LearningRegistry
+from .exceptions import HyperparameterOptimizationError
+
 logger = logging.getLogger(__name__)
 
 class HpoAlgorithm(Enum):
@@ -813,10 +817,13 @@ class MultiObjectiveOptimizer:
         """Check if obj1 dominates obj2"""
         return all(o1 >= o2 for o1, o2 in zip(obj1, obj2)) and any(o1 > o2 for o1, o2 in zip(obj1, obj2))
 
-class HpoManager:
+@LearningRegistry.register_learner("hpo", aliases=["hyperparameter_optimization", "HyperparameterOptimizer", "HpoManager"], paradigm="hpo")
+class HpoManager(BaseLearner):
     """Main hyperparameter optimization manager"""
     
-    def __init__(self, config: HpoConfig):
+    def __init__(self, config: Optional[HpoConfig] = None):
+        if config is None:
+            config = HpoConfig()
         self.config = config
         
         # Components
@@ -831,6 +838,17 @@ class HpoManager:
         self.hpo_history = []
         
         logger.info("✅ HPO Manager initialized")
+    
+    def fit(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        """Fit implementation delegating to optimize_hyperparameters."""
+        return self.optimize_hyperparameters(*args, **kwargs)
+
+    def evaluate(self, *args: Any, **kwargs: Any) -> Dict[str, float]:
+        """Evaluate implementation returning best HPO metrics."""
+        if self.hpo_history:
+            last = self.hpo_history[-1]
+            return {"duration": float(last.get("total_duration", 0.0))}
+        return {}
     
     def optimize_hyperparameters(self, objective_function: Callable, 
                                search_space: Dict[str, Any]) -> Dict[str, Any]:
