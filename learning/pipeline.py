@@ -149,19 +149,25 @@ class LearningPipeline(BaseLearningPipeline):
         """Convenience alias for fluent add_stage chaining."""
         return self.add_stage(stage_name, module, **kwargs)
 
-    def execute(self, initial_data: Any = None, **kwargs: Any) -> Dict[str, Any]:
+    def execute(self, initial_data: Any = None, context: Optional[Dict[str, Any]] = None, **kwargs: Any) -> Dict[str, Any]:
         """
         Execute all configured pipeline stages in sequence.
         
         Args:
             initial_data: Initial dataset, model, or parameters.
+            context: Optional initial execution context dictionary.
             
         Returns:
             Dict[str, Any]: Consolidated execution summary and outputs.
         """
         total_start = time.time()
         self._execution_history.clear()
-        context: Dict[str, Any] = {"initial_data": initial_data, "stage_results": {}}
+        ctx: Dict[str, Any] = {"initial_data": initial_data, "stage_results": {}}
+        if context:
+            ctx.update(context)
+        if kwargs:
+            ctx.update(kwargs)
+        context = ctx
         current_data = initial_data
 
         logger.info("🚀 Starting Learning Pipeline: '%s' (%d stages)", self.config.pipeline_name, len(self._stages))
