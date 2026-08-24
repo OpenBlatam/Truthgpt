@@ -665,8 +665,10 @@ def create_ppo_agent(state_dim: int, action_dim: int, config: RLConfig) -> PPOAg
     """Create PPO agent"""
     return PPOAgent(state_dim, action_dim, config)
 
-def create_rl_training_manager(config: RLConfig) -> RLTrainingManager:
+def create_rl_training_manager(config: Optional[RLConfig] = None) -> RLTrainingManager:
     """Create RL training manager"""
+    if config is None:
+        config = RLConfig()
     return RLTrainingManager(config)
 
 # Example usage

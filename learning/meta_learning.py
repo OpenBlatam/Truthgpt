@@ -556,9 +556,17 @@ def create_meta_learning_config(**kwargs) -> MetaLearningConfig:
     """Create meta-learning configuration"""
     return MetaLearningConfig(**kwargs)
 
-def create_meta_learner(model: nn.Module, config: MetaLearningConfig) -> MetaLearner:
-    """Create meta-learner instance"""
-    return MetaLearner(model, config)
+def create_meta_learner(config: Optional[Union[MetaLearningConfig, Dict[str, Any], nn.Module]] = None, model: Optional[nn.Module] = None, **kwargs: Any) -> MetaLearner:
+    """Create meta-learner instance with flexible argument binding."""
+    if isinstance(config, nn.Module) and model is None:
+        model = config
+        config = None
+    if config is None:
+        config = MetaLearningConfig(**kwargs)
+    elif isinstance(config, dict):
+        config = MetaLearningConfig(**config)
+    return MetaLearner(model=model, config=config)
+
 
 # Example usage
 def example_meta_learning():
