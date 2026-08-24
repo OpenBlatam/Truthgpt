@@ -111,10 +111,65 @@ def create_learning_optimizer(
     return create_learning_module(optimizer_type, config=config, **kwargs)
 
 
+def create_learning_config(
+    config_type: Union[str, LearningStrategyType],
+    **kwargs: Any
+) -> Any:
+    """Factory to construct domain-specific learning configuration dataclasses."""
+    from .config import (
+        ActiveLearningConfig,
+        AdaptiveLearningConfig,
+        AdversarialConfig,
+        BayesianConfig,
+        CausalConfig,
+        ContinualConfig,
+        EnsembleConfig,
+        EvolutionaryConfig,
+        FederatedConfig,
+        HPOConfig,
+        MetaConfig,
+        MultitaskConfig,
+        NASConfig,
+        RLConfig,
+        SelfSupervisedConfig,
+        TransferLearningConfig,
+        PipelineConfig,
+        LearningConfig,
+    )
+    
+    mapping = {
+        "active": ActiveLearningConfig,
+        "adaptive": AdaptiveLearningConfig,
+        "adversarial": AdversarialConfig,
+        "bayesian": BayesianConfig,
+        "causal": CausalConfig,
+        "continual": ContinualConfig,
+        "ensemble": EnsembleConfig,
+        "evolutionary": EvolutionaryConfig,
+        "federated": FederatedConfig,
+        "hpo": HPOConfig,
+        "meta": MetaConfig,
+        "multitask": MultitaskConfig,
+        "nas": NASConfig,
+        "reinforcement": RLConfig,
+        "rl": RLConfig,
+        "self_supervised": SelfSupervisedConfig,
+        "ssl": SelfSupervisedConfig,
+        "transfer": TransferLearningConfig,
+        "pipeline": PipelineConfig,
+        "unified": LearningConfig,
+    }
+    
+    key = config_type.value if isinstance(config_type, LearningStrategyType) else str(config_type).lower()
+    cfg_cls = mapping.get(key, LearningConfig)
+    return cfg_cls(**kwargs)
+
+
 __all__ = [
     'LearningFactory',
     'create_learning_module',
     'create_learner',
     'create_learning_optimizer',
+    'create_learning_config',
 ]
 

@@ -764,10 +764,13 @@ class MemoryBank:
         else:
             return self.get_negative_samples(num_samples)
 
-class SSLTrainer:
+@LearningRegistry.register_learner("self_supervised", aliases=["self_supervised_learning", "SelfSupervisedLearner", "SSLTrainer", "SelfSupervisedTrainer"], paradigm="self_supervised")
+class SSLTrainer(BaseLearner):
     """Self-supervised learning trainer"""
     
-    def __init__(self, config: SSLConfig):
+    def __init__(self, config: Optional[SSLConfig] = None):
+        if config is None:
+            config = SSLConfig()
         self.config = config
         self.contrastive_learner = ContrastiveLearner(config)
         self.pretext_task_model = PretextTaskModel(config)
@@ -776,6 +779,17 @@ class SSLTrainer:
         self.memory_bank = MemoryBank(config) if config.enable_memory_bank else None
         self.training_history = []
         logger.info("✅ SSL Trainer initialized")
+    
+    def fit(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        """Fit implementation delegating to train_ssl."""
+        return self.train_ssl(*args, **kwargs)
+
+    def evaluate(self, *args: Any, **kwargs: Any) -> Dict[str, float]:
+        """Evaluate implementation returning SSL training metrics."""
+        if self.training_history:
+            last = self.training_history[-1]
+            return {"duration": float(last.get("total_duration", 0.0))}
+        return {}
     
     def train_ssl(self, data: torch.Tensor, labels: torch.Tensor = None) -> Dict[str, Any]:
         """Train self-supervised learning"""
