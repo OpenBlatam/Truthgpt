@@ -1,62 +1,60 @@
 # KV-Cache Acceleration & Management
 
-In LLM autoregressive inference, generating tokens requires attending to the Key and Value states of all previous tokens. Storing these tensors in naive contiguous buffers leads to severe memory fragmentation, high latency, and early out-of-memory errors under concurrent workloads.
-
-TruthGPT integrates **Paged KV-Cache**, **Chunked Prefill**, and **Quantized KV-Cache (FP8 / INT8)** (`optimizers/kv_cache/`).
+In LLM autoregressive token generation, storing Key and Value states across thousands of context tokens represents the primary consumer of GPU VRAM. TruthGPT integrates **Paged KV-Cache**, **Chunked Prefill**, and **Quantized KV-Cache (FP8 / INT8)** to maximize concurrency and throughput.
 
 ---
 
-## 🧠 The Memory Fragmentation Problem vs Paged KV-Cache
+## 💾 The Memory Fragmentation Problem vs Paged KV-Cache
 
-In traditional systems, memory for maximum sequence length (e.g. 4096 tokens) must be pre-allocated contiguously for each request. If a request terminates after 200 tokens, 95% of allocated memory is trapped in internal fragmentation.
-
-**Paged KV-Cache** models GPU memory after OS Virtual Memory Paging:
+Standard KV-Cache allocation reserves contiguous virtual GPU memory blocks for maximum potential sequence lengths. This leads to **internal fragmentation** (reserved memory unused) and **external fragmentation** (unusable gaps between allocations).
 
 ```mermaid
 graph TD
-    subgraph "Logical Token Sequence"
-        Req1["Request 1: Tokens 0-15 (Page 0) -> Tokens 16-31 (Page 1) -> Tokens 32-47 (Page 2)"]
+    subgraph "Standard Contiguous Allocation (60-80% Wasted VRAM)"
+        ALLOC1["Req 1: [Allocated 2048 Slots (Current: 120 Tokens) | 1928 Wasted Slots]"]
+        ALLOC2["Req 2: [Allocated 2048 Slots (Current: 350 Tokens) | 1698 Wasted Slots]"]
     end
 
-    subgraph "Physical GPU Memory Blocks"
-        Block0["Physical Block 0 (Page 0)"]
-        Block1["Physical Block 1 (Other Req)"]
-        Block2["Physical Block 2 (Page 2)"]
-        Block3["Physical Block 3 (Page 1)"]
+    subgraph "TruthGPT Paged KV-Cache (Virtual Memory Page Table)"
+        PT["Global Block Table (Page Size: 16 Tokens)"]
+        PT --> B1["Block #01 (16 Tok)"]
+        PT --> B2["Block #02 (16 Tok)"]
+        PT --> B3["Block #03 (16 Tok)"]
+        PT --> B4["Block #04 (16 Tok)"]
     end
-
-    Req1 -.-> Block0
-    Req1 -.-> Block3
-    Req1 -.-> Block2
-```
-
-- Keys and Values are stored in fixed-size blocks (e.g. 16 or 32 tokens).
-- Physical blocks are allocated on-demand as new tokens are generated.
-- When a request finishes, blocks are returned to the free list instantaneously without memory copying.
-
----
-
-## ⚡ Quantized KV-Cache (FP8 / INT8)
-
-By quantizing cached Key/Value vectors from FP16 (16 bits) to FP8 (8 bits) or INT8 with per-channel scale factors, TruthGPT achieves:
-- **50%–75% reduction in KV-cache VRAM consumption**.
-- **2x–3x increase in maximum concurrent request batch size**.
-- Zero perceptible drop in generation perplexity for modern foundation models.
-
-```yaml
-inference:
-  kv_cache:
-    backend: "paged"
-    block_size: 16
-    quantization: "fp8"          # fp8 | int8 | none
-    max_num_seqs: 64
-    gpu_memory_utilization: 0.90 # Dedicate 90% free VRAM to KV blocks
 ```
 
 ---
 
-## 🚀 Chunked Prefill & Iteration-Level Scheduling
+## ⚡ Quantized KV-Cache (INT8 & FP8)
 
-When long prompt inputs arrive simultaneously with ongoing token generation, prompt computation (prefill) can starve decoding tokens, introducing large latency spikes.
+To serve long context windows (32K - 128K tokens) with minimal VRAM:
 
-TruthGPT breaks long prefill prompts into smaller chunks (e.g. 512 tokens) and co-schedules prefill chunks alongside decode steps in the same batch iteration. This stabilizes Time-to-First-Token (TTFT) and Inter-Token Latency (ITL).
+| KV Precision | Memory per Token/Layer | Max Concurrent Requests (24GB VRAM) | Perplexity Impact |
+| :--- | :--- | :--- | :--- |
+| **FP16 / BF16** | 128 bytes | ~32 requests | 0% (Baseline) |
+| **FP8 (E4M3)** | 64 bytes | ~64 requests (2x) | < 0.05% |
+| **INT8 Per-Head** | 64 bytes | ~64 requests (2x) | < 0.08% |
+| **INT4 Quantized** | 32 bytes | ~128 requests (4x) | < 0.25% |
+
+---
+
+## 💻 Python Usage Example
+
+```python
+from inference.kv_cache import PagedKVCacheManager, CacheConfig
+
+# Configure Paged KV Cache with FP8 compression
+cache_config = CacheConfig(
+    block_size=16,
+    num_gpu_blocks=4096,
+    dtype="fp8",
+    max_context_len=8192
+)
+
+cache_manager = PagedKVCacheManager(config=cache_config)
+
+# Allocate memory blocks dynamically during token streaming
+sequence_id = "req_1001"
+cache_manager.allocate(sequence_id, prompt_tokens_len=512)
+```

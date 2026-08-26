@@ -379,95 +379,62 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             {
                 section: "Overview",
                 items: [
-                    { title: "Documentation Hub", path: "index.md" }
+                    { title: "Documentation Hub", path: "index.md" },
+                    { title: "Documentation Map", path: "README.md" }
                 ]
             },
             {
                 section: "Getting Started",
                 items: [
-                    { title: "Quick Start Guide", path: "getting-started/quickstart.md" },
-                    { title: "Installation Guide", path: "getting-started/installation.md" },
-                    { title: "Configuration System", path: "getting-started/configuration.md" },
-                    { title: "Health & Diagnostics", path: "getting-started/health_and_diagnostics.md" }
+                    { title: "Overview Portal", path: "getting_started/index.md" },
+                    { title: "Installation Guide", path: "getting_started/installation.md" },
+                    { title: "Quickstart: LLM Training", path: "getting_started/quickstart_training.md" },
+                    { title: "Quickstart: OpenClaw Agents", path: "getting_started/quickstart_agents.md" },
+                    { title: "Quickstart: Compiler & Acceleration", path: "getting_started/quickstart_compiler.md" }
                 ]
             },
             {
-                section: "Core Architecture",
+                section: "Architecture & Design",
                 items: [
-                    { title: "System Architecture", path: "core-architecture/overview.md" },
-                    { title: "Training Engine", path: "core-architecture/trainers.md" },
-                    { title: "Data Pipeline", path: "core-architecture/data_pipeline.md" },
-                    { title: "Models & Layer Design", path: "core-architecture/models_and_layers.md" },
-                    { title: "Physics-Informed MoE", path: "core-architecture/pimoe.md" }
-                ]
-            },
-            {
-                section: "Optimization & Acceleration",
-                items: [
-                    { title: "Hardware Acceleration & AMP", path: "optimization/acceleration_guide.md" },
-                    { title: "Optimizers & Schedulers", path: "optimization/optimizers.md" },
-                    { title: "KV-Cache Acceleration", path: "optimization/kv_cache.md" },
-                    { title: "Custom Triton/CUDA Kernels", path: "optimization/custom_kernels.md" }
-                ]
-            },
-            {
-                section: "Inference Engine",
-                items: [
-                    { title: "High-Throughput Serving", path: "inference/inference_engine.md" },
-                    { title: "Speculative Decoding", path: "inference/speculative_decoding.md" },
-                    { title: "APIs & Endpoints", path: "inference/api_and_endpoints.md" }
-                ]
-            },
-            {
-                section: "Compiler Subsystem",
-                items: [
-                    { title: "Compiler System & JIT", path: "compiler/compiler_system.md" },
-                    { title: "Compiler Runtime", path: "compiler/compiler_runtime.md" }
-                ]
-            },
-            {
-                section: "Agents & Swarm",
-                items: [
-                    { title: "OpenClaw SDK", path: "agents-and-swarm/openclaw_sdk.md" },
-                    { title: "Swarm Orchestration", path: "agents-and-swarm/swarm_orchestration.md" },
-                    { title: "Messaging Integrations", path: "agents-and-swarm/messaging_integrations.md" },
-                    { title: "Agent Scheduler", path: "agents-and-swarm/agent_scheduler.md" }
-                ]
-            },
-            {
-                section: "Polyglot Systems",
-                items: [
-                    { title: "Native Language Bridges", path: "polyglot/polyglot_subsystem.md" }
-                ]
-            },
-            {
-                section: "Deployment & Ops",
-                items: [
-                    { title: "Production Deployment", path: "deployment-and-ops/production_deployment.md" },
-                    { title: "Monitoring & Tracing", path: "deployment-and-ops/monitoring_and_tracing.md" }
+                    { title: "System Architecture", path: "architecture/overview.md" },
+                    { title: "Polyglot Core Engine", path: "architecture/polyglot_core.md" },
+                    { title: "Compiler Runtime Architecture", path: "architecture/compiler_runtime.md" },
+                    { title: "Physics-Informed MoE (PiMoE)", path: "architecture/pimoe.md" },
+                    { title: "OpenClaw Agent Framework", path: "architecture/agent_framework.md" }
                 ]
             },
             {
                 section: "API Reference",
                 items: [
-                    { title: "Master Catalog", path: "api-reference/index.md" },
-                    { title: "Trainer API", path: "api-reference/trainer_api.md" },
-                    { title: "Inference API", path: "api-reference/inference_api.md" },
-                    { title: "Agents API", path: "api-reference/agents_api.md" },
-                    { title: "Optimizers API", path: "api-reference/optimizers_api.md" },
-                    { title: "Compiler API", path: "api-reference/compiler_api.md" },
-                    { title: "Models & Modules API", path: "api-reference/models_api.md" },
-                    { title: "Configuration API", path: "api-reference/configuration_api.md" },
-                    { title: "Polyglot Bridge API", path: "api-reference/polyglot_api.md" }
+                    { title: "API Directory", path: "api/index.md" },
+                    { title: "Trainers & Checkpointing", path: "api/trainers.md" },
+                    { title: "Models & Modules", path: "api/models_modules.md" },
+                    { title: "Optimizers & Schedulers", path: "api/optimizers.md" },
+                    { title: "Compiler & Acceleration", path: "api/compiler.md" },
+                    { title: "OpenClaw Agents SDK", path: "api/agents.md" },
+                    { title: "Polyglot Core Bindings", path: "api/polyglot.md" },
+                    { title: "Configuration Schema", path: "api/configuration.md" },
+                    { title: "Research Papers Registry", path: "api/papers.md" },
+                    { title: "Utilities & Diagnostics", path: "api/utilities.md" }
                 ]
             },
             {
-                section: "Tutorials & Guides",
+                section: "Guides & Deep Dives",
                 items: [
-                    { title: "LoRA / QLoRA Finetuning", path: "tutorials/lora_finetuning_tutorial.md" },
-                    { title: "Building Custom Agents", path: "tutorials/building_custom_agents.md" },
-                    { title: "Distributed Training", path: "tutorials/distributed_training.md" },
-                    { title: "Troubleshooting & FAQ", path: "tutorials/troubleshooting_and_faq.md" }
+                    { title: "Optimization & Performance Tuning", path: "guides/optimization_tuning.md" },
+                    { title: "Distributed Training Guide", path: "guides/distributed_training.md" },
+                    { title: "Custom Agent Development", path: "guides/custom_agent_development.md" },
+                    { title: "Compiler & Custom Kernels", path: "guides/compiler_and_kernels.md" },
+                    { title: "Production Deployment & Serving", path: "guides/deployment_production.md" },
+                    { title: "Troubleshooting & Diagnostics", path: "guides/troubleshooting.md" }
+                ]
+            },
+            {
+                section: "Examples & Benchmarks",
+                items: [
+                    { title: "End-to-End LLM Fine-Tuning", path: "examples/basic_training.md" },
+                    { title: "Autonomous Research Swarm", path: "examples/agent_swarms.md" },
+                    { title: "Compiler & Kernel Benchmarks", path: "examples/compiler_benchmarks.md" }
                 ]
             }
         ];

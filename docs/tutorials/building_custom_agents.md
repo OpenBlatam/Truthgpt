@@ -1,52 +1,29 @@
-# Tutorial: Building Custom Autonomous Agents & Tools
+# Tutorial: Building Custom OpenClaw Agents
 
-In this tutorial, you will create a custom OpenClaw agent equipped with domain-specific Python tools, connect it to vector memory, and deploy it inside the OpenClaw Swarm.
-
----
-
-## 🛠️ Step 1: Define a Custom Tool
-
-Create a custom tool class inheriting from `BaseTool`:
-
-```python
-from agents.framework.tools.base_tool import BaseTool
-
-class GPUStatTool(BaseTool):
-    name: str = "gpu_stat"
-    description: str = "Queries active GPU temperature, VRAM allocation, and utilization percentage."
-
-    async def execute(self, device_id: int = 0) -> str:
-        import torch
-        if not torch.cuda.is_available():
-            return "No CUDA GPU detected on current host."
-        
-        allocated = torch.cuda.memory_allocated(device_id) / (1024 ** 3)
-        reserved = torch.cuda.memory_reserved(device_id) / (1024 ** 3)
-        device_name = torch.cuda.get_device_name(device_id)
-        
-        return f"Device: {device_name} | VRAM Allocated: {allocated:.2f} GB | Reserved: {reserved:.2f} GB"
-```
+This tutorial demonstrates creating a custom autonomous agent from scratch with custom domain knowledge, system prompts, and tool execution capabilities.
 
 ---
 
-## 🤖 Step 2: Implement the Domain Agent
+## 🛠️ Step 1: Subclass `BaseAgent`
 
-Inherit from `BaseAgent`:
+Create `agents/domains/database_admin.py`:
 
 ```python
-from agents.framework.architectures.base_agent import BaseAgent
-from agents.framework.models import AgentResponse
+from optimization_core.agents.framework.architectures.base_agent import BaseAgent
+from optimization_core.agents.framework.models import AgentResponse
 
-class InfrastructureAgent(BaseAgent):
+class DatabaseAdminAgent(BaseAgent):
     def __init__(self):
-        super().__init__(name="InfrastructureAgent", role="DevOps & GPU Cluster Diagnostics")
-        self.register_tool(GPUStatTool())
+        super().__init__(
+            name="DatabaseAdminAgent",
+            role="Specialist in SQL schema optimization and query indexing"
+        )
 
     async def process(self, query: str, context: dict = None) -> AgentResponse:
-        # ReAct reasoning loop
-        response_text = await self.reason_and_act(query, max_steps=4)
+        # Custom reasoning and SQL plan inspection
+        analysis = f"Inspected SQL query for optimization: {query}\nRecommendation: Add composite B-Tree index on (user_id, created_at)."
         return AgentResponse(
-            content=response_text,
+            content=analysis,
             agent_name=self.name,
             action_type="final_answer"
         )
@@ -54,26 +31,21 @@ class InfrastructureAgent(BaseAgent):
 
 ---
 
-## 🐝 Step 3: Register Agent with OpenClaw Swarm
+## 🐝 Step 2: Register Agent with Swarm
 
 ```python
-import asyncio
-from agents.framework.client import AgentClient
-from agents.domains.unified_agent_registry import UNIFIED_AGENT_REGISTRY
+from openclaw import AgentClient
+from agents.domains.database_admin import DatabaseAdminAgent
 
-# Register custom agent
-UNIFIED_AGENT_REGISTRY.register("infrastructure", InfrastructureAgent)
+client = AgentClient(use_swarm=True)
+client.register_agent(DatabaseAdminAgent())
 
-async def test_agent():
-    client = AgentClient(use_swarm=True)
-    
-    # Query is automatically routed to InfrastructureAgent
-    result = await client.run(
-        user_id="sre_engineer_1",
-        prompt="Check GPU memory allocation on device 0 and recommend batch size adjustments."
-    )
-    print(f"Agent [{result.agent_name}] output:\n{result.content}")
+# Test query routing
+response = await client.run(
+    user_id="dev_1",
+    prompt="My Postgres query on user transactions is taking 4 seconds. How can I optimize it?"
+)
 
-if __name__ == "__main__":
-    asyncio.run(test_agent())
+print(f"Handled by: {response.agent_name}")
+print(response.content)
 ```
