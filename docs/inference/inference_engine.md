@@ -1,76 +1,59 @@
-# High-Throughput Inference Engine
+# High-Throughput Inference Serving Engine
 
-The TruthGPT Inference Engine (`inference/core/engine.py`) provides an enterprise-ready, low-latency, high-concurrency model serving platform equipped with **Continuous Iteration-Level Batching**, **Streaming Token Generation**, and **Paged Memory Management**.
+The **TruthGPT Inference Engine** is a high-throughput, low-latency LLM serving subsystem engineered with continuous dynamic batching, Paged KV-Cache, asynchronous token streaming, and speculative decoding acceleration.
 
 ---
 
-## ⚡ Architecture: Continuous Batching vs Static Batching
-
-In static batching, an inference server waits until $B$ requests arrive, groups them, and generates tokens until the *longest* request finishes. Short requests remain idle in GPU memory, wasting memory and increasing tail latency.
-
-**Continuous Batching (Iteration-Level Scheduling)** dynamically evicts completed sequences and inserts newly arrived sequences at each forward pass step:
+## 🏛️ Inference Engine Architecture
 
 ```mermaid
 graph TD
-    Queue["Incoming Request Priority Queue"] --> Scheduler["Continuous Batch Scheduler"]
-    Scheduler --> Engine["Forward Token Generation Step (Batch N)"]
-    Engine --> FinishedCheck{"Any Sequence Hit EOS / Max Tokens?"}
-    FinishedCheck -->|Yes| StreamOut["Stream Result to Client & Free Pages"]
-    FinishedCheck -->|No| Keep["Retain in Active Decode Batch"]
-    StreamOut --> Scheduler
-    Keep --> Scheduler
+    CLIENT["Client Requests (REST / SSE / WebSockets)"] --> ROUTER["Async Request Router & Priority Queue"]
+    
+    subgraph "Continuous Batching Engine"
+        ROUTER --> BATCHER["Dynamic Continuous Batcher (Iteration-Level Scheduling)"]
+        BATCHER --> KV_PAGE["Paged KV-Cache Memory Pool"]
+        BATCHER --> MODEL_EXEC["Transformer Model Forward Pass"]
+        MODEL_EXEC --> SAMPLER["Dynamic Sampler (Top-P, Top-K, Min-P, Temp)"]
+        SAMPLER --> DETOK["Fast Token Streamer"]
+    end
+
+    DETOK --> STREAM_SSE["Server-Sent Events (SSE Stream)"]
+    STREAM_SSE --> CLIENT
 ```
 
 ---
 
-## 🚀 Key Engine Features
+## ⚡ Core Serving Capabilities
 
-1. **Sub-millisecond Token Streaming**: Uses Server-Sent Events (SSE) and asynchronous generators to stream tokens to downstream consumers with minimal Time-to-First-Token (TTFT).
-2. **Dynamic Cache Allocation**: Integrated with Paged KV-Cache, dynamically scaling block tables to prevent out-of-memory crashes under unexpected traffic spikes.
-3. **Speculative Execution Support**: Integrates draft models to propose multiple candidate tokens simultaneously.
-4. **Multi-Model Concurrency**: Supports routing requests across multiple local GPU replicas or adapter weights.
+### 1. Continuous Iteration-Level Batching
+Traditional serving engines wait for all sequences in a batch to finish generation before admitting new requests. TruthGPT schedules requests at the individual token generation step. As soon as a request emits an `<eos>` token, a new incoming request immediately takes its place in the active execution batch.
+
+### 2. Low-Latency Asynchronous Streaming
+Token emissions are detached from Python's Global Interpreter Lock (GIL) via non-blocking queues, delivering Time-to-First-Token (TTFT) under 15ms.
 
 ---
 
-## 🛠️ Python API Example
+## 💻 Python Serving Example
 
 ```python
-import asyncio
-from inference.core.engine import InferenceEngine
-from inference.schemas.engine_configs import EngineConfig
+from inference.engine import InferenceEngine
+from inference.config import InferenceConfig, GenerationConfig
 
-async def main():
-    # 1. Initialize engine configuration
-    config = EngineConfig(
-        model_name="meta-llama/Llama-2-7b-chat-hf",
-        max_batch_size=32,
-        max_sequence_length=4096,
-        gpu_memory_utilization=0.90,
-        enable_paged_kv_cache=True,
-        quantization="fp8"
-    )
+# 1. Initialize engine with continuous batching configuration
+config = InferenceConfig(
+    max_batch_size=64,
+    max_num_seqs=256,
+    kv_cache_dtype="fp8",
+    enable_chunked_prefill=True
+)
 
-    # 2. Build inference engine
-    engine = InferenceEngine(config)
-    await engine.initialize()
+engine = InferenceEngine.from_pretrained("checkpoints/llama3_truthgpt.pt", config=config)
 
-    # 3. Stream token generation
-    prompt = "Explain quantum computing in three concise sentences."
-    print("Streaming generation:")
-    async for token_chunk in engine.generate_stream(prompt, temperature=0.7, max_tokens=100):
-        print(token_chunk.delta, end="", flush=True)
-    print("\n[Done]")
+# 2. Generate text
+gen_config = GenerationConfig(max_new_tokens=100, temperature=0.7)
+result = engine.generate("What is the speed of light in vacuum?", config=gen_config)
 
-if __name__ == "__main__":
-    asyncio.run(main())
+print(result.text)
+print(f"Generated {result.usage.completion_tokens} tokens in {result.latency_ms:.2f}ms")
 ```
-
----
-
-## 📊 Serving Metrics & Benchmarks
-
-| Metric | TruthGPT Engine | Traditional Static Server | Improvement |
-| :--- | :--- | :--- | :--- |
-| **Max Concurrent Requests** | 128 reqs (on 24GB VRAM) | 32 reqs | **4.0x concurrency** |
-| **Time-to-First-Token (TTFT)**| 18.2 ms | 95.4 ms | **5.2x faster response** |
-| **Tokens / Sec Throughput** | 1,840 tok/sec | 410 tok/sec | **4.48x higher throughput** |

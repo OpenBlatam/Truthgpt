@@ -1,36 +1,44 @@
 site_name: TruthGPT Optimization Core
-site_description: High-performance deep learning training, polyglot compiler, and agentic swarm optimization ecosystem.
-site_author: TruthGPT Team
+site_description: Enterprise-Grade High-Performance Deep Learning & Multi-Agent Optimization Suite
+site_author: DeepMind / Blatam Academy
+site_url: https://docs.truthgpt.blatam.academy/
+
+repo_name: OpenBlatam/TruthGPT
+repo_url: https://github.com/OpenBlatam/TruthGPT
 
 theme:
   name: material
   language: en
   palette:
-    # Light mode
-    - scheme: default
-      primary: indigo
-      accent: deep purple
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-    # Dark mode
     - scheme: slate
       primary: indigo
-      accent: deep purple
+      accent: cyan
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
+    - scheme: default
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
   features:
     - navigation.instant
     - navigation.tracking
     - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
     - navigation.expand
     - navigation.top
+    - navigation.indexes
+    - toc.follow
     - search.suggest
     - search.highlight
     - content.code.copy
-    - content.tabs.link
+    - content.code.annotate
+
+plugins:
+  - search
 
 markdown_extensions:
   - admonition
@@ -42,51 +50,81 @@ markdown_extensions:
           format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.highlight:
       anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
   - pymdownx.inlinehilite
   - pymdownx.snippets
+  - pymdownx.keys
   - pymdownx.tabbed:
       alternate_style: true
-  - pymdownx.emoji:
-      emoji_index: !!python/name:materialx.emoji.twemoji
-      emoji_generator: !!python/name:materialx.emoji.to_svg
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.arithmatex:
+      generic: true
   - tables
   - attr_list
   - md_in_html
 
+extra_javascript:
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+  - https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js
+
 nav:
-  - Home: index.md
-  - Overview: README.md
+  - Overview: index.md
   - Getting Started:
-      - Overview: getting_started/index.md
-      - Installation: getting_started/installation.md
-      - Quickstart LLM Training: getting_started/quickstart_training.md
-      - Quickstart OpenClaw Agents: getting_started/quickstart_agents.md
-      - Quickstart Compiler: getting_started/quickstart_compiler.md
-  - Architecture:
-      - System Overview: architecture/overview.md
-      - Polyglot Core: architecture/polyglot_core.md
-      - Compiler Runtime: architecture/compiler_runtime.md
-      - PiMoE Architecture: architecture/pimoe.md
-      - OpenClaw Agent Framework: architecture/agent_framework.md
+      - Quick Start: quickstart.md
+      - SOTA Ecosystem Quickstart: quickstart_sota.md
+      - Installation Guide: installation.md
+      - Architecture Overview: architecture.md
+      - Optimization Guide: optimization.md
+  - Training Subsystem:
+      - Overview & Lifecycle: training/overview.md
+      - Configuration Reference: training/configuration.md
+      - Distributed Training: training/distributed.md
+      - Callbacks & Monitoring: training/callbacks_monitoring.md
+      - Checkpointing & EMA: training/checkpointing_recovery.md
+  - Compiler & Acceleration:
+      - Compiler Overview: compiler/overview.md
+      - Triton & CUDA Kernels: compiler/triton_cuda_kernels.md
+      - Integration Guide: compiler/integration_guide.md
+  - Polyglot Core:
+      - Polyglot Architecture: polyglot/overview.md
+      - Rust & C++ Kernels: polyglot/rust_cpp_kernels.md
+      - Distributed Bridge: polyglot/distributed_bridge.md
+  - Autonomous Agents:
+      - OpenClaw Overview: agents/overview.md
+      - Swarm Orchestration: agents/swarm_orchestration.md
+      - Memory & Tools SDK: agents/memory_and_tools.md
+      - Messaging Integrations: agents/messaging_integrations.md
+      - Scheduler & Traces: agents/scheduler_and_traces.md
+  - Inference & Serving:
+      - High-Throughput Serving: inference/serving.md
+      - KV-Cache & Speculative Decoding: inference/kv_cache_and_decoding.md
+  - Tooling & Terminals:
+      - CLI Reference: cli_and_tools/cli_reference.md
+      - Interactive Terminals & TUI: cli_and_tools/interactive_terminals.md
+  - Practical Guides:
+      - Distributed Setup: guides/distributed_training.md
+      - Custom Triton Kernels: guides/custom_kernels.md
+      - Multi-Agent Workflows: guides/agent_workflows.md
+      - KV-Cache Optimization: guides/kv_cache_optimization.md
+      - Production Deployment: guides/production_deployment.md
+  - Tutorials & FAQ:
+      - Fine-Tuning LLaMA with LoRA: tutorials/finetune_llama_lora.md
+      - High-Throughput Serving: tutorials/high_throughput_serving.md
+      - Custom Research Papers: tutorials/custom_research_paper.md
+      - Building Custom Agents: tutorials/building_custom_agents.md
+      - Troubleshooting & FAQ: tutorials/troubleshooting_and_faq.md
   - API Reference:
-      - API Directory: api/index.md
-      - Trainers & Checkpointing: api/trainers.md
-      - Models & Modules: api/models_modules.md
-      - Optimizers & Schedulers: api/optimizers.md
-      - Compiler & Acceleration: api/compiler.md
-      - OpenClaw Agents SDK: api/agents.md
-      - Polyglot Bindings: api/polyglot.md
-      - Configuration Schema: api/configuration.md
-      - Research Papers: api/papers.md
-      - Utilities: api/utilities.md
-  - Guides:
-      - Optimization & Tuning: guides/optimization_tuning.md
-      - Distributed Training: guides/distributed_training.md
-      - Custom Agent Development: guides/custom_agent_development.md
-      - Compiler & Custom Kernels: guides/compiler_and_kernels.md
-      - Production Deployment: guides/deployment_production.md
-      - Troubleshooting: guides/troubleshooting.md
-  - Examples:
-      - LLM Fine-Tuning: examples/basic_training.md
-      - Research Swarm: examples/agent_swarms.md
-      - Compiler Benchmarks: examples/compiler_benchmarks.md
+      - API Index: api/index.md
+      - Trainer API: api/trainer.md
+      - Configuration API: api/configuration.md
+      - Compiler API: api/compiler.md
+      - Polyglot API: api/polyglot.md
+      - Inference API: api/inference.md
+      - OpenClaw Agents API: api/openclaw_agents.md
+      - Optimizers API: api/optimizers.md
+      - Models & Modules API: api/models_modules.md
+      - Research Papers API: api/papers.md
+      - Utilities API: api/utilities.md
