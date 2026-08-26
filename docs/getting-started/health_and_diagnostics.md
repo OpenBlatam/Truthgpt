@@ -1,68 +1,59 @@
 # Health Checks & Environment Diagnostics
 
-TruthGPT includes a comprehensive diagnostic suite to audit system readiness, verify CUDA driver compatibility, monitor GPU memory allocations, and diagnose bottlenecks before launching compute-intensive jobs.
+TruthGPT includes a comprehensive diagnostic suite to audit system readiness, verify CUDA driver compatibility, detect hardware bottlenecks, and ensure optimal training and inference efficiency.
 
 ---
 
-## 🩺 Built-In Diagnostic Tools
+## 🔍 Built-In Diagnostic Tools
 
 ### 1. Master Environment Health Check
 
-Run the top-level audit tool:
+Run the top-level audit tool before starting any compute workload:
 
 ```bash
 python utils/health_check.py
 ```
 
-#### What It Audits:
-- **Python Runtime**: Verifies Python 3.8+ (recommends 3.10+).
-- **Core ML Frameworks**: Checks `torch`, `transformers`, `accelerate`, `peft`, `safetensors`.
-- **CUDA & GPU Architecture**:
-  - Validates CUDA driver vs PyTorch runtime build.
-  - Queries GPU Compute Capability (e.g. 8.0 for A100, 8.9 for RTX 4090, 9.0 for H100).
-  - Tests TF32 and BF16 availability.
-- **Module Resolution & Imports**: Audits internal factories, registries, and trainers.
-- **Disk & VRAM Availability**: Checks writable cache and checkpoint directories.
+#### Diagnostic Audit Checks
+The health check systematically evaluates:
+1. **Python Environment**: Version check, virtual environment isolation, critical package integrity.
+2. **CUDA & GPU Subsystems**: Device count, CUDA runtime version, driver capability, NVLink status, VRAM availability.
+3. **Hardware Accelerators**: FlashAttention-2 availability, Triton compiler readiness, bitsandbytes quantization libraries.
+4. **Polyglot Engines**: Rust native dynamic libraries (`.so` / `.dll` / `.dylib`), C++20 binary interfaces, Go cluster binaries.
+5. **Disk & I/O Performance**: Fast NVMe read/write benchmark for data streaming pipelines.
 
 ---
 
-## 📊 2. Real-Time Training Monitor
+## 🧪 Latency & Throughput Benchmark
 
-Monitor active training runs from a second terminal window or SSH session:
+Measure raw tensor operations, attention throughput, and memory bandwidth across your GPU hardware:
 
 ```bash
-# Monitor directory for checkpoint writes, loss, and throughput
-python utils/monitor_training.py runs/llama2_enterprise
+# Run comprehensive latency benchmark
+python latency_optimizations.py --benchmark-all
 ```
 
-### Metrics Displayed:
-- Current Step & Epoch progress bar.
-- Instantaneous and smoothed Loss.
-- Tokens per Second (Throughput).
-- GPU VRAM Utilization and Temperature.
-- Checkpoint commit timestamps and disk sizes.
-
----
-
-## 📈 3. Post-Training Visualization & Reporting
-
-Analyze completed experiments and loss convergence:
-
-```bash
-# Print summary of best loss, training duration, and saved checkpoints
-python utils/visualize_training.py runs/llama2_enterprise --summary
-
-# Generate loss convergence plot image
-python utils/visualize_training.py runs/llama2_enterprise --plot
+Sample output:
+```text
+======================================================================
+ TRUTHGPT HARDWARE PERFORMANCE BENCHMARK
+======================================================================
+ [Attention] Standard Scaled Dot-Product:     4.82 ms (Baseline)
+ [Attention] FlashAttention-2 Fused Kernel:   1.14 ms (4.23x Speedup)
+ [Optimizer] PyTorch Standard AdamW:         2.41 ms / step
+ [Optimizer] TruthGPT Fused SOAP:            0.98 ms / step (2.45x Speedup)
+ [Compiler]  TorchInductor Graph Execution:  1.32x Throughput Boost
+ [KV-Cache]  PagedAttention 4-Bit Int:       3.8x Memory Reduction
+======================================================================
 ```
 
 ---
 
-## 🔍 4. Troubleshooting Diagnostic Matrix
+## 🛠️ Automated Diagnostic Verification Script
 
-| Health Check Diagnostic | Root Cause | Solution |
-| :--- | :--- | :--- |
-| `CUDA is available: False` | PyTorch CPU-only binary installed or CUDA driver mismatch | Reinstall PyTorch via `--index-url https://download.pytorch.org/whl/cu121` |
-| `BFloat16 supported: False` | GPU is pre-Ampere architecture (e.g. GTX 1080, Tesla V100, T4) | Change `mixed_precision` to `"fp16"` in YAML config |
-| `Flash Attention import failed` | `flash-attn` package not compiled for current CUDA version | Run `python install_extras.py flash_attn` or use PyTorch native SDPA |
-| `Torch compile error: C++ compiler missing` | No MSVC on Windows or `build-essential` missing on Linux | Install GCC/Clang (`apt install build-essential`) or Visual Studio C++ Build Tools |
+To run an automated self-test across all optimization layers, execute:
+
+```bash
+python smoke_test_phase6.py
+```
+This tests optimizer convergence, gradient stability, AMP precision scaling, and multi-threaded data loading in less than 30 seconds.

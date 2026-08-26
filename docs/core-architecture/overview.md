@@ -1,6 +1,6 @@
 # Core System Architecture
 
-TruthGPT Optimization Core is engineered as a **modular, registry-driven, polyglot deep learning framework**. The architecture strictly decouples component definition from runtime orchestration, enabling rapid experimentation, cross-language acceleration, and enterprise-grade fault tolerance.
+TruthGPT Optimization Core is engineered as a **modular, registry-driven, polyglot deep learning framework**. This decoupled architecture isolates user configuration, runtime orchestration, algorithmic optimization, and hardware acceleration into clean, interoperable abstraction layers.
 
 ---
 
@@ -10,130 +10,63 @@ The system is organized into four distinct architectural layers:
 
 ```mermaid
 graph TB
-    subgraph "Layer 1: Configuration & Specification"
-        YAML["YAML / JSON Configs"]
-        CLI["TruthGPT CLI / openclaw"]
-        RegistrySchema["Validation & Type Schemas"]
+    subgraph "Layer 1: Orchestration & Configuration"
+        A1["ConfigManager & Dataclasses"]
+        A2["Unified Registries (OPTIMIZER, MODEL, AGENT)"]
+        A3["Factory Pattern Instantiators"]
     end
 
-    subgraph "Layer 2: Factory & Registry Layer"
-        OptReg["OPTIMIZER_REGISTRY"]
-        AttnReg["ATTENTION_REGISTRY"]
-        DataReg["DATASET_REGISTRY"]
-        AgentReg["AGENT_REGISTRY"]
+    subgraph "Layer 2: Engine & Execution Lifecycle"
+        B1["GenericTrainer & Distributed Runners (DDP/FSDP/ZeRO)"]
+        B2["Inference Serving Engine (Continuous Batching)"]
+        B3["Zero-Padding Dynamic Bucketing Data Pipeline"]
+        B4["Telemetry & Callbacks (W&B, TensorBoard, Prometheus)"]
     end
 
-    subgraph "Layer 3: Core Orchestration Engines"
-        Trainer["GenericTrainer Loop"]
-        DistEngine["Distributed Manager (DDP/FSDP)"]
-        InfEngine["Inference Engine (Continuous Batching)"]
-        SwarmEngine["Swarm & Graph Orchestrator"]
+    subgraph "Layer 3: Algorithmic Optimization & Models"
+        C1["Transformer / Modular Blocks (SwiGLU, RoPE)"]
+        C2["PiMoE (Physics-Informed Mixture of Experts)"]
+        C3["Advanced Optimizers (SOAP, Muon, Sophia, AdamW)"]
+        C4["Paged KV-Cache & Speculative Draft Decoders"]
     end
 
-    subgraph "Layer 4: Hardware & Polyglot Runtime"
-        CUDA_Kernels["CUDA & Triton Fused Kernels"]
-        Polyglot_Bridge["Polyglot FFI (Rust / C++ / Go)"]
-        KVCache_Manager["Paged KV-Cache Manager"]
+    subgraph "Layer 4: Hardware & Compilation Acceleration"
+        D1["TorchDynamo & TorchInductor Graph Compilers"]
+        D2["Custom Triton & CUDA Fused Kernels"]
+        D3["Polyglot Native Bridges (Rust Core, C++20 Core, Go Core)"]
     end
 
-    YAML --> RegistrySchema
-    RegistrySchema --> OptReg
-    RegistrySchema --> AttnReg
-    RegistrySchema --> DataReg
-
-    OptReg --> Trainer
-    AttnReg --> Trainer
-    DataReg --> Trainer
-
-    Trainer --> DistEngine
-    Trainer --> CUDA_Kernels
-    InfEngine --> KVCache_Manager
-    InfEngine --> Polyglot_Bridge
-    SwarmEngine --> AgentReg
+    A1 --> A2 --> A3
+    A3 --> B1 & B2 & B3
+    B1 & B2 --> C1 & C2 & C3 & C4
+    C1 & C2 & C3 & C4 --> D1 & D2 & D3
 ```
 
 ---
 
-## 🧩 The Registry Design Pattern
+## 🧩 1. Registry & Factory Decoupling
 
-The foundation of TruthGPT's modularity is the **Registry Pattern**. This pattern allows developers to register new optimizers, attention backends, and data processors via simple decorators without modifying the core trainer logic.
+TruthGPT uses dynamic registries to decouple model component definitions from core training routines. This allows developers to introduce new optimizers, attention backends, or agent architectures without modifying trainer loops:
 
-### 1. Component Registration
 ```python
-# Location: optimizers/lion.py
-from factories.registry import OPTIMIZER_REGISTRY
-import torch
+from registries.unified_registry import OPTIMIZER_REGISTRY
+import torch.optim as optim
 
-@OPTIMIZER_REGISTRY.register("lion")
-class LionOptimizer(torch.optim.Optimizer):
-    def __init__(self, params, lr=1e-4, betas=(0.9, 0.99), weight_decay=0.0):
-        defaults = dict(lr=lr, betas=betas, weight_decay=weight_decay)
-        super().__init__(params, defaults)
-        # Custom Lion update logic
-```
-
-### 2. Declaration in Configuration
-```yaml
-# In config.yaml
-training:
-  optimizer_type: "lion"
-  learning_rate: 0.0001
-  weight_decay: 0.01
-```
-
-### 3. Factory Instantiation
-```python
-# Location: trainers/trainer.py
-from factories.registry import OPTIMIZER_REGISTRY
-
-# Automatically builds LionOptimizer with params from config
-optimizer = OPTIMIZER_REGISTRY.build(
-    cfg.training.optimizer_type,
-    model.parameters(),
-    lr=cfg.training.learning_rate,
-    weight_decay=cfg.training.weight_decay
-)
+# Register a custom optimizer
+@OPTIMIZER_REGISTRY.register("custom_adaptive_opt")
+def build_custom_optimizer(model_params, lr=1e-3, **kwargs):
+    return optim.AdamW(model_params, lr=lr, weight_decay=0.01)
 ```
 
 ---
 
-## 🔄 Component Lifecycle & Execution Sequence
+## ⚡ 2. Component Execution Lifecycle
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as User / CLI
-    participant Config as ConfigManager
-    participant Trainer as GenericTrainer
-    participant Model as ModelManager
-    participant Data as DataManager
-    participant Opt as OptimizerManager
-    participant Checkpoint as CheckpointManager
+During a model training or inference session, the runtime manages state transitions deterministically:
 
-    User->>Config: Load YAML / CLI args
-    Config->>Trainer: Instantiated with TrainerConfig
-    Trainer->>Model: Initialize / Load Weights (LoRA/Quant)
-    Trainer->>Data: Build Bucketed DataLoader
-    Trainer->>Opt: Instantiate Fused Optimizer & Cosine Scheduler
-    Trainer->>Trainer: Compile Model (TorchInductor Graph Mode)
-
-    loop Epoch Loop
-        loop Batch Step
-            Trainer->>Data: Fetch Batch (Dynamic Length)
-            Trainer->>Model: Forward Pass (AMP BF16)
-            Trainer->>Trainer: Compute Loss & Scale Gradients
-            Trainer->>Opt: Backward Pass & Step
-            Trainer->>Trainer: EMA Weight Accumulation
-        end
-        Trainer->>Trainer: Run Validation Pass
-        Trainer->>Checkpoint: Save Async Safetensors Checkpoint
-    end
-```
-
----
-
-## 🛡️ Enterprise Architecture Guarantees
-
-1. **State Isolation**: Random number generators (RNG) are seeded deterministically across data loaders, CUDA streams, and model weight initializations.
-2. **Crash Resilience**: Training state (optimizer states, RNG states, epoch step, EMA weights) is synchronized atomically to prevent corrupted checkpoint writes.
-3. **Decoupled Telemetry**: Logging backends (W&B, TensorBoard, Console) are executed asynchronously via callbacks to eliminate blocking I/O bottlenecks.
+1. **Pre-flight Validation**: `ConfigManager` audits all hardware flags, hyperparameter constraints, and GPU memory budgets.
+2. **Factory Initialization**: The model, optimizer, learning rate scheduler, and loss criterion are constructed via `registries/`.
+3. **Graph Compilation Pass**: If `compile_model=True`, PyTorch Dynamo captures computation graphs, applies fusion passes via TorchInductor, and generates optimized Triton code.
+4. **Data Stream Ingestion**: Datasets are partitioned into length-matched buckets to eliminate zero-padding memory waste.
+5. **Execution Loop**: Batches execute through forward, loss calculation, backward, gradient clipping, optimizer step, and telemetry hooks.
+6. **Persistence & Recovery**: Model weights, optimizer state dicts, and RNG seeds are saved via asynchronous atomic checkpoints.

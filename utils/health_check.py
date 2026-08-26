@@ -6,6 +6,10 @@ import sys
 import importlib
 from pathlib import Path
 
+# Ensure UTF-8 stdout encoding on Windows
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 
 def check_python_version():
     """Check Python version."""
