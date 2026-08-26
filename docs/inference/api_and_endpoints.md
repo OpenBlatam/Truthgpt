@@ -1,96 +1,72 @@
-# Production Inference Server APIs & Endpoints
+# Inference APIs & REST Endpoints
 
-TruthGPT exposes enterprise-grade REST and gRPC endpoints (`inference/api/` and `inference/server.py`), compatible with OpenAI API schemas and production telemetry.
+TruthGPT provides an enterprise-ready FastAPI HTTP and WebSocket serving layer compatible with the OpenAI API standard, alongside dedicated endpoints for telemetry, health auditing, and autonomous swarm routing.
 
 ---
 
-## 🚀 Launching the Production Server
+## 🌐 Endpoints Overview Matrix
 
-```bash
-# Launch server on port 8080 with 4 worker processes
-python cli.py serve --host 0.0.0.0 --port 8080 --workers 4
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/v1/chat/completions` | `POST` | OpenAI-compatible chat completions with Server-Sent Events (SSE) streaming support. |
+| `/v1/completions` | `POST` | Raw text generation and token completions. |
+| `/v1/models` | `GET` | List loaded models, context limits, and active quantization formats. |
+| `/v1/swarm/ask` | `POST` | Semantic Swarm router entrypoint (`{"prompt": "...", "user_id": "..."}`). |
+| `/v1/health` | `GET` | Service liveness, GPU VRAM allocation, and temperature diagnostics. |
+| `/v1/metrics` | `GET` | Prometheus-formatted metrics (throughput, token latency, cache hit rate). |
+
+---
+
+## 📡 1. OpenAI-Compatible Chat Completions
+
+### Request Payload (`POST /v1/chat/completions`)
+
+```json
+{
+  "model": "truthgpt-transformer-sota",
+  "messages": [
+    {"role": "system", "content": "You are TruthGPT, an expert AI assistant."},
+    {"role": "user", "content": "How does Paged KV-Cache prevent memory fragmentation?"}
+  ],
+  "temperature": 0.7,
+  "top_p": 0.9,
+  "max_tokens": 512,
+  "stream": true
+}
 ```
 
----
-
-## 📡 REST API Specification
-
-### 1. Chat Completions (OpenAI Compatible)
-**Endpoint**: `POST /v1/chat/completions`
+### cURL Example
 
 ```bash
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "truthgpt-default",
-    "messages": [
-      {"role": "system", "content": "You are TruthGPT, an expert optimization AI."},
-      {"role": "user", "content": "How do I optimize Flash Attention on Hopper?"}
-    ],
-    "temperature": 0.7,
-    "max_tokens": 256,
+    "model": "truthgpt-transformer-sota",
+    "messages": [{"role": "user", "content": "Explain SOAP optimizer"}],
     "stream": false
   }'
 ```
 
-#### JSON Response:
+---
+
+## 🐝 2. OpenClaw Swarm Endpoint (`POST /v1/swarm/ask`)
+
+```bash
+curl -X POST http://localhost:8080/v1/swarm/ask \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Evaluate gradient descent stability under FP8 quantization",
+    "user_id": "researcher_01",
+    "max_depth": 4
+  }'
+```
+
+Response:
 ```json
 {
-  "id": "chatcmpl-9482f3a",
-  "object": "chat.completion",
-  "created": 1724673820,
-  "model": "truthgpt-default",
-  "choices": [
-    {
-      "index": 0,
-      "message": {
-        "role": "assistant",
-        "content": "To optimize Flash Attention on NVIDIA Hopper (H100/H200), leverage Flash Attention 3 which utilizes asynchronous WGMMA instructions..."
-      },
-      "finish_reason": "stop"
-    }
-  ],
-  "usage": {
-    "prompt_tokens": 28,
-    "completion_tokens": 42,
-    "total_tokens": 70
-  }
+  "agent_name": "OptimizationSpecialistAgent",
+  "action_type": "final_answer",
+  "content": "FP8 quantization maintains gradient stability when coupled with dynamic scale factor tracking...",
+  "execution_time_ms": 342.1
 }
 ```
-
----
-
-### 2. Streaming Completions (Server-Sent Events)
-**Endpoint**: `POST /v1/chat/completions` (with `"stream": true`)
-
-Returns an `application/x-ndjson` or `text/event-stream` stream:
-```text
-data: {"id":"chatcmpl-9482","choices":[{"delta":{"content":"To"}}]}
-data: {"id":"chatcmpl-9482","choices":[{"delta":{"content":" optimize"}}]}
-data: {"id":"chatcmpl-9482","choices":[{"delta":{"content":" Flash"}}]}
-data: [DONE]
-```
-
----
-
-### 3. Swarm Semantic Routing
-**Endpoint**: `POST /v1/swarm/ask`
-
-```json
-{
-  "user_id": "analyst_1",
-  "prompt": "Evaluate the SEO conversion rates for our product.",
-  "return_traces": true
-}
-```
-
----
-
-### 4. Health & Prometheus Metrics
-- **`GET /healthz`**: Returns `{"status": "healthy", "gpu_status": "ready"}`
-- **`GET /metrics`**: Prometheus metrics endpoint tracking:
-  - `truthgpt_inference_requests_total`
-  - `truthgpt_inference_latency_seconds_bucket`
-  - `truthgpt_tokens_generated_total`
-  - `truthgpt_gpu_memory_utilization_ratio`
-  - `truthgpt_kv_cache_allocated_blocks`

@@ -1,60 +1,65 @@
-# TruthGPT Compiler Subsystem
+# Compiler Subsystem & JIT Graph Acceleration
 
-The TruthGPT Compiler Subsystem (`compiler/`) provides an end-to-end Ahead-of-Time (AOT) and Just-in-Time (JIT) compilation pipeline, lowering PyTorch computational graphs through **MLIR**, **TorchInductor**, **TF2XLA**, and **TensorRT**.
+The **TruthGPT Compiler Subsystem** integrates PyTorch 2.0+ graph compilation (`torch.compile`, TorchDynamo, TorchInductor, and AOTAutograd) with custom intermediate representation (IR) optimization passes and MLIR targets.
 
 ---
 
-## 🏗️ Compiler Architecture & Graph Lowering
+## 🏛️ Compiler Subsystem Topology
 
 ```mermaid
 graph TD
-    PyTorchModel["PyTorch nn.Module (Eager Mode)"] --> Dynamo["TorchDynamo (Graph Capture & FX Graph)"]
-    Dynamo --> OptimizationPasses["Graph Rewrites & Dead Code Elimination"]
-    OptimizationPasses --> Lowering{"Target Backend Selection"}
+    PY_MODEL["PyTorch Python Model (nn.Module)"] --> DYNAMO["TorchDynamo Graph Capture"]
+    
+    DYNAMO --> FX_GRAPH["FX Intermediate Representation (FX Graph IR)"]
+    
+    subgraph "TruthGPT Custom Optimization Passes"
+        FX_GRAPH --> PASS_FUSION["Operator & Attention Fusion Pass"]
+        PASS_FUSION --> PASS_CONSTANT["Constant Folding & Dead Code Elimination"]
+        PASS_CONSTANT --> PASS_QUANT["Quantization Insertion (FP8 / INT8)"]
+    end
 
-    Lowering -->|CUDA / Triton| Inductor["TorchInductor (Triton / C++ Kernels)"]
-    Lowering -->|TensorRT| TRT["TF2TensorRT Engine (FP16 / INT8 Engine)"]
-    Lowering -->|XLA / TPU / GPU| XLA["TF2XLA (OpenXLA HLO Representation)"]
-    Lowering -->|AOT Static| AOT["AOT C++ Standalone Shared Library (.so)"]
-
-    Inductor --> PTX["Optimized PTX / SASS Assembly"]
-    TRT --> TRTPlan["Serialized TensorRT Execution Plan"]
-    XLA --> XLAExec["XLA Executable"]
-    AOT --> NativeBin["High-Performance C++ Runtime"]
+    PASS_QUANT --> INDUCTOR["TorchInductor Backend"]
+    
+    INDUCTOR --> TRITON_GEN["Generated Triton GPU Kernels"]
+    INDUCTOR --> C_CPP_GEN["Generated C++ / OpenMP CPU Code"]
+    
+    TRITON_GEN --> BINARY["Compiled Fast Binary Executable"]
+    C_CPP_GEN --> BINARY
 ```
 
 ---
 
-## ⚡ Key Compiler Subsystems
+## ⚡ Compilation Modes & Performance
 
-### 1. TorchDynamo & TorchInductor (`compiler/jit/`)
-- **Symbolic Shape Propagation**: Analyzes dynamic sequence lengths without triggering re-compilations at every batch dimension change.
-- **Operator Fusion**: Fuses element-wise operations (GELU, RMSNorm, Add, Scale) directly into attention and GEMM memory streams.
+TruthGPT supports three compilation modes:
 
-### 2. AOT Standalone Export (`compiler/aot/`)
-Compiles the entire model architecture into a standalone C++ shared library (`.so` / `.dll`) with zero Python runtime dependency, ideal for embedded systems and ultra-low-latency production microservices.
-
-### 3. MLIR & TF2XLA Lowering (`compiler/mlir/` & `compiler/tf2xla/`)
-Lowers neural operations into structured Multi-Level Intermediate Representation (MLIR) dialects, performing polyhedral loop transformations and automatic memory layout optimization.
+| Compile Mode | Compilation Overhead | Runtime Speedup | Ideal Use Case |
+| :--- | :--- | :--- | :--- |
+| `default` | Low (~10-20 sec) | 1.15x - 1.30x | Rapid prototyping & short training runs |
+| `reduce-overhead` | Medium (~30-60 sec) | 1.25x - 1.50x | Small batch inference & latency-critical serving |
+| `max-autotune` | High (~2-5 min) | 1.40x - 1.85x | Large-scale pretraining & production deployments |
 
 ---
 
-## 🛠️ Python Usage Example
+## 💻 Python Usage Example
 
 ```python
-from compiler.core.compiler import TruthGPTCompiler
+from compiler.engine import CompilerEngine, CompilerConfig
+import torch
 
-# Initialize compiler with target optimization flags
-compiler = TruthGPTCompiler(
+# 1. Define compiler configuration
+config = CompilerConfig(
+    mode="max-autotune",
     backend="inductor",
-    precision="bf16",
-    fuse_attention=True,
-    enable_cuda_graphs=True
+    enable_triton_fusion=True,
+    dynamic_shapes=True
 )
 
-# Compile eager PyTorch model into optimized artifact
-compiled_model = compiler.compile(model, sample_input_shape=(1, 512))
+# 2. Compile model instance
+engine = CompilerEngine(config=config)
+compiled_model = engine.compile(model)
 
-# Execute with zero Python overhead
-output = compiled_model(input_ids)
+# 3. Fast execution
+inputs = torch.randn(32, 512, 1024, device="cuda")
+outputs = compiled_model(inputs)
 ```
