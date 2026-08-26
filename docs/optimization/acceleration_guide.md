@@ -1,100 +1,89 @@
 # Hardware Acceleration & Deep Optimization Guide
 
-TruthGPT Optimization Core integrates state-of-the-art computational techniques to maximize GPU FLOPs utilization (MFU) and minimize VRAM overhead across modern accelerators.
+TruthGPT Optimization Core integrates state-of-the-art computational techniques to maximize GPU FLOP utilization, reduce memory bandwidth bottlenecks, and accelerate both training and inference.
 
 ---
 
-## 🚀 Optimization Techniques Overview
+## ⚡ Optimization Techniques Overview
 
 ```mermaid
 graph TD
-    subgraph "Compute Acceleration"
-        Inductor["TorchInductor Graph JIT (Kernel Fusion)"]
-        TF32["TensorFloat-32 (19-bit MatMul)"]
-        FlashAttn["Flash Attention 2/3 (SRAM Tiling)"]
-    end
+    ACCEL["Optimization & Acceleration Matrix"]
+    
+    ACCEL --> AMP["Automatic Mixed Precision (AMP)"]
+    ACCEL --> ATTN["Attention Acceleration"]
+    ACCEL --> FUSION["Kernel Fusion & JIT"]
+    ACCEL --> MEM["Memory Management"]
 
-    subgraph "Memory Reduction"
-        AMP["Mixed Precision: BF16 / FP16"]
-        GradCheck["Activation Checkpointing (Recomputation)"]
-        PagedKV["Paged KV-Cache (Non-contiguous Virtual Memory)"]
-    end
+    AMP --> FP16["FP16 with Dynamic Loss Scaler"]
+    AMP --> BF16["BF16 Bfloat16 Native (Ada/Hopper/Blackwell)"]
+    AMP --> FP8["FP8 TransformerEngine (E4M3 / E5M2)"]
 
-    subgraph "Optimizer Efficiency"
-        FusedOpt["Fused AdamW / Lion (Single CUDA Kernel Step)"]
-        BNB["8-bit Quantized States (BitsAndBytes)"]
-    end
+    ATTN --> FLASH2["FlashAttention-2 (IO-Aware Tiling)"]
+    ATTN --> FLASH3["FlashAttention-3 (Warp Specialization)"]
+    ATTN --> PAGED["PagedAttention (Non-Contiguous KV Memory)"]
+
+    FUSION --> TORCH_COMPILE["TorchInductor Graph Fusion"]
+    FUSION --> TRITON["Custom Triton Fused Kernels"]
+
+    MEM --> GRAD_CKPT["Activation Checkpointing (Recomputation)"]
+    MEM --> DYN_BUCKET["Dynamic Length Bucketing"]
+    MEM --> ZERO["ZeRO / FSDP Gradient Sharding"]
 ```
 
 ---
 
-## ⚡ 1. Torch.compile & TorchInductor
+## 1. Automatic Mixed Precision (AMP)
 
-`torch.compile` converts PyTorch eager mode into optimized Triton CUDA kernels, fusing consecutive pointwise and reduction operations to eliminate kernel launch latency and memory bandwidth round-trips.
+Modern NVIDIA Tensor Cores execute low-precision matrix multiplications at dramatic speedups compared to FP32:
 
-### Compile Modes:
-- `default`: Fast compilation; fuses basic kernels and eliminates Python interpreter overhead.
-- `reduce-overhead`: Utilizes CUDA Graphs to record and replay kernel execution without CPU-GPU synchronization. Ideal for small batch sizes and low-latency inference.
-- `max-autotune`: Evaluates multiple Triton kernel tile sizes and schedules for the exact GPU architecture. Takes longer to compile at startup but achieves peak runtime speed.
+| Precision Format | Bits | Dynamic Range | Relative Compute Speed | Best Target Hardware |
+| :--- | :--- | :--- | :--- | :--- |
+| **FP32** | 32 | $10^{\pm 38}$ | 1.0x (Baseline) | CPU / Debugging |
+| **FP16** | 16 | $10^{\pm 5}$ | ~2.5x - 3.5x | Turing / Ampere |
+| **BF16** | 16 | $10^{\pm 38}$ | ~3.0x - 4.0x | Ampere / Ada / Hopper |
+| **FP8 (E4M3/E5M2)** | 8 | $10^{\pm 2} / 10^{\pm 4}$ | ~6.0x - 8.0x | Hopper / Blackwell |
 
-### YAML Configuration:
-```yaml
-training:
-  torch_compile: true
-  compile_mode: "default"  # default | reduce-overhead | max-autotune
-```
+### Enabling AMP in TruthGPT
 
----
-
-## 💡 2. TensorFloat-32 (TF32)
-
-NVIDIA Ampere, Ada Lovelace, and Hopper architectures include specialized TF32 Tensor Cores that compute FP32 matrix multiplications with 19-bit precision (8-bit exponent, 10-bit mantissa) at up to **8x higher throughput** than standard FP32 math.
-
-TruthGPT enables TF32 automatically for supported hardware:
 ```python
-import torch
-torch.backends.cuda.matmul.allow_tf32 = True
-torch.backends.cudnn.allow_tf32 = True
+# In TrainerConfig or YAML preset:
+config = TrainerConfig(
+    use_amp=True,
+    amp_dtype="bfloat16" # Options: 'bfloat16', 'float16', 'fp8'
+)
 ```
 
 ---
 
-## 🌊 3. Flash Attention 2 & 3
+## 2. FlashAttention-2 & FlashAttention-3
 
-Standard attention calculates $S = Q K^T / \sqrt{d}$, materializes an $N \times N$ attention matrix in GPU High-Bandwidth Memory (HBM), applies Softmax, and multiplies by $V$. This requires $O(N^2)$ memory and is heavily memory-bandwidth bound.
+Standard PyTorch attention materializes the full $N \times N$ attention matrix in GPU HBM (High-Bandwidth Memory), causing $O(N^2)$ memory scaling and high memory traffic.
 
-**Flash Attention** breaks $Q, K, V$ into small tiles that fit entirely inside high-speed GPU on-chip SRAM (192KB+ per Streaming Multiprocessor), computing attention and online softmax incrementally without writing $N \times N$ intermediates to HBM.
+FlashAttention tiles Query, Key, and Value blocks directly into fast GPU SRAM (on-chip memory), avoiding intermediate HBM read/writes:
 
-| Attention Mechanism | Memory Complexity | Compute Boundness | Context Length Scaling |
-| :--- | :--- | :--- | :--- |
-| **Standard Attention** | $O(N^2)$ Quadratic | Memory Bandwidth Bound | Limited (~2k - 4k) |
-| **Flash Attention 2** | $O(N)$ Linear | Math Compute Bound | Extended (32k - 128k+) |
-| **Flash Attention 3 (Hopper)** | $O(N)$ Linear + FP8 Asynchronous WGMMA | Peak Tensor Core MFU | Ultra Extended (256k+) |
+$$\text{Memory Overhead}: O(N^2) \longrightarrow O(N)$$
 
----
+TruthGPT automatically dispatches to the highest-performing available backend:
 
-## 🛡️ 4. Gradient Activation Checkpointing
+```python
+from models.modules.attention import FlashAttentionWrapper
 
-To compute backpropagation gradients, deep networks normally retain all intermediate forward activations in VRAM. For a 7B model at batch size 8 and sequence length 4096, activation memory easily exceeds 40 GB.
-
-**Gradient Checkpointing** discards intermediate activations during the forward pass and recomputes them on-the-fly during the backward pass:
-- **VRAM Savings**: Up to **70%–80% memory reduction**.
-- **Compute Overhead**: Only ~20% additional FLOPs during backward pass.
-- **Net Result**: Allows 3x–4x larger batch sizes, which increases GPU utilization and offsets recomputation cost.
-
-```yaml
-model:
-  gradient_checkpointing: true
+# Auto-detects and uses FlashAttention-2 if CUDA toolkit is present
+attn = FlashAttentionWrapper(d_model=1024, num_heads=16)
 ```
 
 ---
 
-## 📈 Performance Summary Matrix
+## 3. Activation Checkpointing (Gradient Recomputation)
 
-| Optimization Combo | Training Throughput | VRAM Consumption | Max Sequence Length |
-| :--- | :--- | :--- | :--- |
-| Eager FP32 Baseline | 1,200 tok/sec | 22.4 GB | 1,024 tokens |
-| + BF16 Mixed Precision | 2,800 tok/sec | 12.8 GB | 2,048 tokens |
-| + Flash Attention 2 | 5,900 tok/sec | 8.2 GB | 8,192 tokens |
-| + Torch.compile (Fused) | 7,850 tok/sec | 8.1 GB | 8,192 tokens |
-| + Grad Checkpointing + Bucketing | **9,400 tok/sec** | **5.4 GB** | **32,768+ tokens** |
+For models exceeding GPU VRAM capacity, activation checkpointing discards intermediate forward activations from memory and recomputes them on the fly during the backward pass:
+
+- **Memory Saved**: Up to **60-70%** reduction in activation memory.
+- **Compute Overhead**: Only ~20% increase in backward FLOPs.
+
+```python
+config = TrainerConfig(
+    gradient_checkpointing=True
+)
+```
