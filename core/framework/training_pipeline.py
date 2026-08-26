@@ -43,7 +43,7 @@ except (ImportError, ModuleNotFoundError):
     sns = None  # type: ignore
 
 
-from .modern_truthgpt_optimizer import ModernTruthGPTOptimizer, TruthGPTConfig, TruthGPTDataset
+from ..optimizers.modern_truthgpt_optimizer import ModernTruthGPTOptimizer, TruthGPTConfig, TruthGPTDataset
 
 
 @dataclass
@@ -599,8 +599,17 @@ if __name__ == "__main__":
         use_wandb=False
     )
     
-    print("Training completed!")
-    print(f"Final evaluation metrics: {results['eval_metrics']}")
-    print(f"Generated samples: {results['generated_samples']}")
+
+# Aliases for backward compatibility
+TrainingPipeline = ModernTrainingPipeline
+
+__all__ = [
+    "TrainingConfig",
+    "ModernTrainingPipeline",
+    "TrainingPipeline",
+    "create_training_pipeline",
+    "train_truthgpt_model",
+]
+
 
 

@@ -5,14 +5,24 @@ Contains core configurations, interfaces, exceptions, utilities, and validation 
 
 from .config import (
     ConfigManager,
+    TruthGPTConfigManager,
+    ConfigurationManager,
     TrainerConfig,
     TrainingConfig,
     ModelConfig,
     DataConfig,
     OptimizerConfig,
     OptimizationConfig,
+    MonitoringConfig,
+    PerformanceConfig,
+    HardwareConfig,
+    CheckpointConfig,
+    EMAConfig,
+    ResumeConfig,
     Environment,
     ConfigSource,
+    create_config_manager,
+    config_context,
 )
 
 from .exceptions import (
@@ -41,14 +51,24 @@ from .performance_utils import measure_latency, measure_model_memory
 __all__ = [
     # Config
     "ConfigManager",
+    "TruthGPTConfigManager",
+    "ConfigurationManager",
     "TrainerConfig",
     "TrainingConfig",
     "ModelConfig",
     "DataConfig",
     "OptimizerConfig",
     "OptimizationConfig",
+    "MonitoringConfig",
+    "PerformanceConfig",
+    "HardwareConfig",
+    "CheckpointConfig",
+    "EMAConfig",
+    "ResumeConfig",
     "Environment",
     "ConfigSource",
+    "create_config_manager",
+    "config_context",
     # Exceptions
     "TruthGPTCoreError",
     "PluginError",

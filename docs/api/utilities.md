@@ -1,47 +1,49 @@
-# Utility Scripts
+# 🛠️ Utilities API Reference
 
-TruthGPT includes a suite of maintenance and verification scripts to ensure your environment is healthy and your training is observable.
+The `utils` module contains developer tools for health checks, environment diagnostics, live training monitoring, performance profiling, and dataset processing.
 
-## `health_check.py`
+---
 
-**Usage**: `python utils/health_check.py`
+## 🔍 System Health Check (`utils/health_check.py`)
 
-This script performs a comprehensive audit of your environment:
--   **Python Version**: Verifies Python 3.8+.
--   **Dependencies**: Checks for critical libraries (`torch`, `transformers`, `accelerate`).
--   **CUDA**: Verifies GPU availability and CUDA version compatibility.
--   **Core Modules**: Attempts to import internal modules to detect path issues.
+Performs an automated multi-point verification of the execution environment:
 
-## `install_extras.py`
+```bash
+python utils/health_check.py
+```
 
-**Usage**: `python install_extras.py [group]`
+### Audited Components:
+- **Python Version**: Validates Python 3.8+ compatibility.
+- **PyTorch & CUDA**: Checks CUDA availability, compute capability, cuDNN version, and VRAM capacity.
+- **Accelerator Backends**: Validates FlashAttention, Triton, xFormers, and TensorRT runtime libraries.
+- **Polyglot Modules**: Verifies native Rust and C++ shared object linkage.
 
-Manages optional dependencies to keep the core install lightweight.
+---
 
-**Arguments**:
--   `--list`: Show all available dependency groups.
--   `--check`: Show installed status of each group.
--   `[group]`: Install a specific group (e.g., `wandb`, `bitsandbytes`, `test`).
--   `all`: Install everything.
+## 📊 Live Terminal Monitor (`utils/monitor_training.py`)
 
-## `monitor_training.py`
+A curses/rich-based live dashboard that monitors training runs in real time:
 
-**Usage**: `python utils/monitor_training.py runs/my_run`
+```bash
+python utils/monitor_training.py runs/my_experiment
+```
 
-A lightweight terminal dashboard that watches a running training directory.
+### Displays:
+- **Loss Progression**: Step-by-step moving average loss and validation loss curves.
+- **Hardware Telemetry**: GPU utilization %, VRAM consumption, temperature, and power draw.
+- **Throughput**: Real-time Tokens/sec and TFLOPs efficiency metrics.
 
-**Features**:
--   Detects new checkpoints as they appear.
--   Reads the latest `log` file to show current Loss and Tokens/sec.
--   Monitors system resources (CPU/RAM/GPU).
+---
 
-## `visualize_training.py`
+## 📈 Post-Training Visualizer (`utils/visualize_training.py`)
 
-**Usage**: `python utils/visualize_training.py runs/my_run --summary`
+Generates statistical reports and high-resolution plots of completed runs:
 
-Generates post-training reports.
+```bash
+python utils/visualize_training.py runs/my_experiment --plot --summary
+```
 
-**Arguments**:
--   `--summary`: Prints a high-level summary of the training run (total metrics, best validation loss).
--   `--checkpoints`: Lists all saved checkpoints and their metadata.
--   `--plot`: (Optional) Generates a generic localized plot image of the loss curve.
+### Arguments:
+- `--summary`: Prints total token count, best validation checkpoint, and training wall-clock time.
+- `--plot`: Generates `loss_curve.png` and `lr_schedule.png` in the run directory.
+- `--export-json`: Exports all step metrics into structured JSON format for external BI tools.

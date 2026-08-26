@@ -38,6 +38,9 @@ class LearnerConfigurationError(LearningBaseException):
     pass
 
 
+LearningConfigError = LearnerConfigurationError
+
+
 class OptimizationFailedError(LearningBaseException):
     """Raised when an optimization process fails to find a viable solution."""
     pass
@@ -226,6 +229,7 @@ __all__ = [
     'LearnerNotFoundError',
     'LearnerInitializationError',
     'LearnerConfigurationError',
+    'LearningConfigError',
     'OptimizationFailedError',
     'ConvergenceError',
     'StrategyNotSupportedError',
@@ -263,13 +267,8 @@ __all__ = [
     'TransferLearningError',
     'PipelineError',
     'PipelineExecutionError',
+    'LearningConfigError',
 ]
 
-import sys
-_mod = sys.modules.get(__name__)
-if _mod:
-    if __name__.startswith("optimization_core.learning."):
-        sys.modules["learning." + __name__[len("optimization_core.learning."):]] = _mod
-    elif __name__.startswith("learning."):
-        sys.modules["optimization_core.learning." + __name__[len("learning."):]] = _mod
-
+from ._compat import register_dual_namespace as _register_ns
+_register_ns(module_name=__name__)

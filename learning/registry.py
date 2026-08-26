@@ -311,11 +311,40 @@ class LearningRegistry:
         )
 
     @classmethod
-    def get_info(cls, name: str) -> Dict[str, Any]:
+    def get_info(cls, name: Union[str, LearningStrategyType]) -> Dict[str, Any]:
         """Get metadata about a registered learning module."""
-        key = cls._resolve_name(name)
+        raw = name.value if isinstance(name, LearningStrategyType) else str(name)
+        key = cls._resolve_name(raw)
         with cls._lock:
-            return cls._metadata.get(key, {"name": key, "description": f"Learning module {key}"})
+            if key in cls._metadata:
+                return cls._metadata[key]
+            if key in cls._learners or key in cls._optimizers or key in cls._BUILTIN_LEARNERS:
+                return {"name": key, "description": f"Learning module {key}"}
+            raise LearnerNotFoundError(f"Learning module '{name}' not found in registry.")
+
+    @classmethod
+    def unregister(cls, name: Union[str, LearningStrategyType]) -> bool:
+        """Unregister a learner by name or enum."""
+        raw = name.value if isinstance(name, LearningStrategyType) else str(name).lower()
+        key = cls._resolve_name(raw)
+        with cls._lock:
+            removed = False
+            if key in cls._learners:
+                del cls._learners[key]
+                removed = True
+            if key in cls._optimizers:
+                del cls._optimizers[key]
+                removed = True
+            if key in cls._strategies:
+                del cls._strategies[key]
+                removed = True
+            if key in cls._metadata:
+                del cls._metadata[key]
+                removed = True
+            to_del = [a for a, target in cls._aliases.items() if target == key or a == key]
+            for a in to_del:
+                del cls._aliases[a]
+            return removed
 
     @classmethod
     def list_learners(cls) -> List[str]:

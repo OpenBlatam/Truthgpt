@@ -1,107 +1,136 @@
-# Optimization Techniques
+# TruthGPT Optimization & Acceleration Bible
 
-TruthGPT leverages state-of-the-art optimization techniques to maximize training throughput and minimize memory usage. This guide explains not just *what* features we have, but *why* they matter and *how* to tune them.
+The TruthGPT Optimization Core integrates state-of-the-art computational and architectural optimizations to maximize hardware utilization (TFLOPS), minimize memory footprint (VRAM), and accelerate both training and inference workloads.
 
-## ⚡ Performance Features
+---
 
-### 1. Torch.compile (PyTorch 2.0+)
+## ⚡ 1. Graph Compilation & Kernel Fusion
 
-We utilize `torch.compile` (Graph Mode) to fuse operations and reduce Python overhead.
+### TorchInductor & Dynamo (PyTorch 2.x+)
 
--   **Why it matters**: Standard PyTorch "eager mode" executes operations one by one, launching a CUDA kernel for each (e.g., `add`, `mul`, `relu`). This causes "kernel launch overhead". `torch.compile` analyzes the entire graph and fuses these into a single kernel, reducing memory access and CPU overhead.
--   **Impact**: Can provide 1.3x - 2.0x speedup on modern GPUs.
+Standard PyTorch eager mode launches independent CUDA kernels for every elementary operation (e.g., `matmul`, `bias_add`, `layer_norm`, `gelu`), incurring severe CPU-GPU synchronization and high Global Memory (HBM) bandwidth pressure.
 
-**Modes**:
--   `default`: Good balance of compile time and performance.
--   `reduce-overhead`: Uses CUDA Graphs to minimize CPU-launch latency (great for small batches).
--   `max-autotune`: Aggressive optimization, profiling different Triton configs. Long compile times (minutes), but best runtime performance.
+`torch.compile` captures the computation graph via TorchDynamo and generates fused C++/Triton kernels via TorchInductor.
 
-**Configuration**:
+| Compile Mode | Characteristics | Ideal Workload |
+| :--- | :--- | :--- |
+| `default` | Fast compilation time; standard operator fusion. | Development, rapid prototyping, medium batches. |
+| `reduce-overhead` | Captures CUDA Graphs to eliminate CPU kernel launch latency. | Small batch inference, latency-critical serving. |
+| `max-autotune` | Exhaustively benchmarks multiple Triton tile configurations. | Long-running production training and large-scale serving. |
+
+#### Configuration in YAML:
 ```yaml
 training:
   torch_compile: true
-  compile_mode: max-autotune
+  compile_mode: "max-autotune"
 ```
 
-### 2. TF32 (TensorFloat-32)
+---
 
--   **What is it?**: A math mode on NVIDIA Ampere (A100, RTX 30/40) GPUs that uses 19-bit precision for matrix multipliers (FP32 range, FP16 precision).
--   **Why it matters**: It is **8x faster** than standard FP32 on A100s, with no perceptible loss in model accuracy. It is "free speed".
--   **Note**: Enabled by default in TruthGPT for supported hardware.
+### Custom Triton Kernels & Operator Fusion
 
-**Configuration**:
+The core provides optimized Triton kernels for operations that are bottlenecks in vanilla PyTorch:
+- **Fused RoPE + Attention**: Fuses Rotary Positional Embedding directly into Query/Key projections.
+- **Fused SwiGLU**: Combines gating linear projections and SiLU activations into a single SRAM kernel.
+- **Fused LayerNorm / RMSNorm**: Fuses mean/variance reduction and elementwise affine scaling.
+
+---
+
+## 🚀 2. Hardware-Aware Attention Mechanisms
+
+Self-attention computes $O(N^2)$ interactions across sequence length $N$. TruthGPT dynamically selects the fastest hardware-aware attention backend:
+
+```mermaid
+graph TD
+    SeqIn["Input Sequence Q, K, V"] --> CheckHw{"Hardware & Kernel Check"}
+    CheckHw -->|NVIDIA Ampere/Hopper| Flash2["FlashAttention-2 (SRAM Tiling, Zero IO Overhead)"]
+    CheckHw -->|PyTorch 2.0 Native| SDPA["F.scaled_dot_product_attention (Auto-Backend)"]
+    CheckHw -->|Very Long Context (32k+)| FocusLLM["FocusLLM / LongRoPE (Chunked Attention)"]
+    CheckHw -->|Inference Serving| PagedAttn["PagedAttention (Virtual Memory Pages)"]
+```
+
+### 1. FlashAttention-2
+- **Mechanism**: Splits Q, K, V matrices into blocks that fit within fast on-chip GPU SRAM (L1/Shared Memory), computing softmax incrementally without materializing the $N \times N$ attention matrix in High Bandwidth Memory (HBM).
+- **Speedup**: 2x–4x faster than eager attention; memory complexity drops from $O(N^2)$ to $O(N)$.
+
+### 2. PagedAttention (Inference Serving)
+- **Problem**: Standard KV-caching pre-allocates contiguous memory for the maximum possible sequence length, wasting 60%–80% of VRAM due to internal and external fragmentation.
+- **Solution**: Allocates KV-cache blocks dynamically in non-contiguous physical memory pages, enabling up to 4x higher serving concurrency.
+
+---
+
+## 🎯 3. Precision Modes & Tensor Cores
+
+| Precision Mode | Bits | Dynamic Range | Hardware Support | Use Case |
+| :--- | :--- | :--- | :--- | :--- |
+| **TF32** | 19-bit | Same as FP32 (8-bit exp) | NVIDIA Ampere (A100, RTX 30/40) & Hopper | Default on Ampere+. 8x faster matmuls with zero code changes. |
+| **BF16 (BFloat16)** | 16-bit | Same as FP32 (8-bit exp) | NVIDIA Ampere, Hopper, newer CPUs | **Recommended**. High numerical stability, no loss scaler required. |
+| **FP16** | 16-bit | Narrow (5-bit exp) | NVIDIA Volta (V100), Turing (T4) | Legacy fallback. Requires dynamic `GradScaler` to prevent underflow. |
+| **FP8 (E4M3 / E5M2)** | 8-bit | Extreme compression | NVIDIA Hopper (H100/H200/B200) | Ultra-large model pretraining and ultra-fast inference. |
+| **INT8 / INT4 (AWQ)** | 8/4-bit | Quantized integer weights | All modern CUDA GPUs | Low-VRAM fine-tuning (QLoRA) and memory-constrained serving. |
+
+#### Configuration in YAML:
 ```yaml
 training:
+  mixed_precision: "bf16"
   allow_tf32: true
 ```
 
-### 3. Flash Attention & SDPA
+---
 
-Attention is the bottleneck of Transformers ($O(N^2)$ complexity). We support:
+## 💾 4. Memory Optimization & Scaling Strategies
 
-1.  **Flash Attention 2**: Hardware-aware IO optimization. It splits Q, K, V into blocks that fit in GPU SRAM, avoiding slow Global Memory reads.
-2.  **SDPA (Scalable Dot Product Attention)**: PyTorch's native `F.scaled_dot_product_attention`. It automatically chooses between FlashAttention, MemEfficient, or Math backends.
+### Gradient Checkpointing (Activation Recomputation)
+- **Mechanism**: During the forward pass, intermediate layer activations are discarded from memory. During the backward pass, activations are recomputed on-the-fly from boundary checkpoints.
+- **Trade-off**: Incurs ~20% additional compute overhead, but reduces activation memory by **up to 75%**, allowing significantly larger batch sizes.
 
-**Why it matters**:
--   **Speed**: 2-4x faster than vanilla attention.
--   **Memory**: Linear memory usage with sequence length (vs Quadratic), allowing much longer sequences (e.g., 8k, 32k).
-
-### 4. Mixed Precision (AMP)
-
-Training in pure FP32 (32-bit float) is redundant for Deep Learning.
-
--   **BF16 (BFloat16)**:
-    -   *Pros*: Same dynamic range as FP32, so no "loss scaling" issues. extremely stable.
-    -   *Reqs*: NVIDIA Ampere (A100, 3090, 4090) or newer.
--   **FP16**:
-    -   *Pros*: Supported on older hardware (V100, T4).
-    -   *Cons*: Smaller dynamic range. Gradients can underflow to zero. Requires `GradScaler`.
-
-**Configuration**:
-```yaml
-training:
-  mixed_precision: bf16  # Recommended
-  # mixed_precision: fp16 # Fallback
-```
-
-### 5. Gradient Checkpointing
-
--   **The Problem**: To calculate gradients, you need to store the input of every layer during the forward pass. This eats VRAM.
--   **The Solution**: Throw away the intermediate activations. During backwards pass, *recompute* them on the fly from the checkpoints.
--   **Trade-off**: Increases compute by ~20%, but **reduces memory usage by 75%**.
-
-**When to use**: When you see `CUDA Out of Memory`. It allows you to increase batch size significantly, which often offsets the compute cost.
-
-**Configuration**:
 ```yaml
 model:
   gradient_checkpointing: true
 ```
 
-## 🧠 Smart Data Pipeline
+---
 
-### Dynamic Padding & Bucketing
+### Dynamic Length Bucketing & Smart Padding
 
-Standard data loaders pad every sequence in a batch to the maximum model length (e.g., 2048). If your real inputs are short (e.g., 100 tokens), you are computing 95% padding (zeroes).
+Standard data loaders pad all sequences in a dataset to a fixed global max length (e.g., 2048 tokens). If the average sample is only 300 tokens, 85% of matrix operations compute zeroes.
 
-**Our Approach**:
-1.  **Bucketing**: We group sequences of similar lengths together in the dataset buffer.
-2.  **Dynamic Padding**: When creating a batch, we pad to the length of the *longest sequence in that specific batch*, not the global max.
+TruthGPT groups samples of similar length into discrete cluster bins before batching, reducing redundant computation by up to **3x**:
 
-*Result*: Massive speedups (2x-3x) on datasets with variable lengths (like instruction tuning data).
-
-**Configuration**:
 ```yaml
 data:
   bucket_by_length: true
   bucket_bins: [64, 128, 256, 512, 1024, 2048]
 ```
 
-## 🕵️ Troubleshooting Performance
+---
 
-| Symptom | Probable Cause | Fix |
+### Distributed Memory Reduction (ZeRO / FSDP)
+
+When training large models across multiple GPUs:
+
+- **ZeRO-Stage 1**: Partitions optimizer states across GPUs (4x memory reduction).
+- **ZeRO-Stage 2**: Partitions optimizer states + gradients across GPUs (8x memory reduction).
+- **ZeRO-Stage 3 / FSDP**: Fully shards optimizer states, gradients, and model parameters across nodes, allowing 70B+ parameter models to fit on consumer/enterprise GPU clusters.
+
+---
+
+## 🛠️ 5. Advanced Optimizers Comparison
+
+| Optimizer | Memory per Param | Update Characteristic | Recommended For |
+| :--- | :--- | :--- | :--- |
+| **Fused AdamW** | 8 bytes (fp32 moments) | Standard adaptive momentum with fused CUDA kernel | Baseline for small/medium models. |
+| **Lion** | 4 bytes (sign-based momentum) | Uses `sign()` of gradient momentum; faster convergence | Pre-training and large-scale fine-tuning. |
+| **Sophia-G** | 4 bytes (Hessian diagonal) | Curvature-aware second-order optimizer | Fast convergence with non-convex loss surfaces. |
+| **8-Bit AdamW (bitsandbytes)** | 2 bytes (quantized moments) | Block-wise dynamic quantization of optimizer states | Fine-tuning on 8GB-24GB GPUs without accuracy loss. |
+
+---
+
+## 🕵️ 6. Performance Troubleshooting Matrix
+
+| Symptom | Primary Root Cause | Recommended Remedy |
 | :--- | :--- | :--- |
-| **Low GPU Utilization (<50%)** | Data Starvation | Increase `num_workers`, `prefetch_factor`, or `train_batch_size`. Use `torch_compile=True` with `mode="reduce-overhead"`. |
-| **Training is Slow** | Computing Padding | Enable `bucket_by_length: True`. |
-| **CUDA OOM (Memory)** | Batch size too large | 1. Enable `gradient_checkpointing: True`.<br>2. Use `mixed_precision: bf16`.<br>3. Reduce `train_batch_size` and increase `grad_accum_steps`. |
-| **Loss is NaN** | Exploding Gradients | 1. Use `mixed_precision: bf16` instead of `fp16`.<br>2. Reduce `learning_rate`.<br>3. Check for bad data samples. |
+| **Low GPU Compute Utilization (<40%)** | CPU bottleneck or dataloader starvation | 1. Increase `num_workers` and `prefetch_factor`.<br>2. Enable `torch_compile: true` with `mode: "reduce-overhead"`.<br>3. Increase `train_batch_size`. |
+| **CUDA Out of Memory (OOM)** | Activation memory explosion or optimizer overhead | 1. Enable `gradient_checkpointing: true`.<br>2. Switch to `mixed_precision: "bf16"`.<br>3. Enable 8-bit AdamW (`optimizer.type: "adamw_8bit"`).<br>4. Reduce batch size and increase `grad_accum_steps`. |
+| **Training Throughput is Low** | Excessive padding in variable-length batches | Enable `data.bucket_by_length: true`. |
+| **Loss is NaN / Diverging** | Gradient underflow/overflow in FP16 | 1. Switch to `mixed_precision: "bf16"`.<br>2. Lower `learning_rate` and enable gradient clipping (`max_grad_norm: 1.0`). |

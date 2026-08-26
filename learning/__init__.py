@@ -36,6 +36,16 @@ from typing import Any, Dict, List, Optional, Type, Union
 
 logger = logging.getLogger(__name__)
 
+__version__ = "2.5.0"
+
+# Module level aliasing for backward compatibility
+_curr_mod = sys.modules.get(__name__)
+if _curr_mod:
+    if __name__.startswith("optimization_core.learning"):
+        sys.modules["learning"] = _curr_mod
+    elif __name__ == "learning":
+        sys.modules["optimization_core.learning"] = _curr_mod
+
 # ==========================================
 # Lazy Import Resolution Map
 # ==========================================
@@ -298,6 +308,8 @@ def __getattr__(name: str) -> Any:
     """
     Thread-safe lazy import resolution for the learning subsystem.
     """
+    if name == "__version__":
+        return __version__
     if name.startswith('_'):
         raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
     
@@ -451,6 +463,8 @@ def create_learning_module(module_type: str, config: Optional[Union[Dict[str, An
     """
     Unified factory function to instantiate any learning subsystem module.
     
+    Delegates to the canonical factory implementation in learning.factory.
+    
     Args:
         module_type: Name of the paradigm (e.g., 'active', 'adversarial', 'evolutionary', etc.)
         config: Optional configuration dataclass instance or dictionary of options.
@@ -464,65 +478,8 @@ def create_learning_module(module_type: str, config: Optional[Union[Dict[str, An
         >>> learner = create_learning_module("active")
         >>> hpo = create_learning_module("hpo", {"n_trials": 20})
     """
-    key = module_type.lower().replace("-", "_").replace(" ", "_")
-    
-    # Handle common aliases
-    alias_map = {
-        "active_learning": "active",
-        "adaptive_learning": "adaptive",
-        "adversarial_learning": "adversarial",
-        "bayesian_optimization": "bayesian",
-        "causal_inference": "causal",
-        "continual_learning": "continual",
-        "lifelong_learning": "continual",
-        "ensemble_learning": "ensemble",
-        "evolutionary_computing": "evolutionary",
-        "federated_learning": "federated",
-        "hyperparameter_optimization": "hpo",
-        "meta_learning": "meta",
-        "multitask_learning": "multitask",
-        "neural_architecture_search": "nas",
-        "reinforcement_learning": "reinforcement",
-        "rl": "reinforcement",
-        "self_supervised_learning": "self_supervised",
-        "ssl": "self_supervised",
-        "transfer_learning": "transfer",
-    }
-    key = alias_map.get(key, key)
-    
-    if key not in LEARNING_MODULE_REGISTRY:
-        available = ", ".join(sorted(LEARNING_MODULE_REGISTRY.keys()))
-        raise ValueError(f"Unknown learning module type: '{module_type}'. Available: {available}")
-    
-    entry = LEARNING_MODULE_REGISTRY[key]
-    mod_path = f"{__name__}{entry['module']}"
-    cls_name = entry["class"]
-    cfg_name = entry["config_class"]
-    
-    mod = importlib.import_module(mod_path)
-    cls_obj = getattr(mod, cls_name)
-    
-    # Build config instance if dict is passed
-    if isinstance(config, dict):
-        try:
-            cfg_mod = importlib.import_module(f"{__name__}.config")
-            cfg_cls = getattr(cfg_mod, cfg_name)
-            config_instance = cfg_cls.from_dict(config)
-        except Exception:
-            config_instance = config
-    elif config is None:
-        try:
-            cfg_mod = importlib.import_module(f"{__name__}.config")
-            cfg_cls = getattr(cfg_mod, cfg_name)
-            config_instance = cfg_cls(**kwargs)
-        except Exception:
-            config_instance = None
-    else:
-        config_instance = config
-
-    if config_instance is not None:
-        return cls_obj(config_instance)
-    return cls_obj()
+    from .factory import create_learning_module as _factory_create
+    return _factory_create(module_type, config=config, **kwargs)
 
 
 def list_available_learning_modules() -> List[str]:

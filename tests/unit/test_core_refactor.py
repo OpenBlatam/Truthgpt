@@ -1,17 +1,9 @@
 """
 Unit tests for Core Module Refactoring.
-Verifies module exports, optimizer factories, data caching, framework pipeline, and backward compatibility shims.
+Verifies module exports, optimizer factories, data caching, framework pipeline, training pipeline, and backward compatibility shims.
 """
 
 import unittest
-import torch
-import torch.nn as nn
-import sys
-from pathlib import Path
-
-import unittest
-import torch
-import torch.nn as nn
 import sys
 from pathlib import Path
 
@@ -22,6 +14,9 @@ sys.path.insert(0, opt_core_dir)
 
 if "core" in sys.modules and not getattr(sys.modules["core"], "__file__", "").startswith(opt_core_dir):
     sys.modules.pop("core", None)
+
+import torch
+import torch.nn as nn
 
 import core
 from core import (
@@ -36,6 +31,7 @@ from core import (
     Validator,
     ModuleLoader,
     list_available_core_modules,
+    get_core_module_info,
 )
 
 
@@ -50,12 +46,26 @@ class TestCoreModuleRefactor(unittest.TestCase):
         self.assertIn("data", submodules)
         self.assertIn("systems", submodules)
         self.assertIn("common_runtime", submodules)
+        self.assertIn("adapters", submodules)
+        self.assertIn("services", submodules)
+        self.assertIn("validation", submodules)
+        self.assertIn("composition", submodules)
 
+    def test_core_module_info_discovery(self):
+        """Test get_core_module_info for metadata discovery."""
+        info = get_core_module_info("systems")
+        self.assertEqual(info["name"], "systems")
+        self.assertEqual(info["import_path"], "core.systems")
+        self.assertEqual(info["category"], "infrastructure")
+
+        with self.assertRaises(KeyError):
+            get_core_module_info("non_existent_module")
 
     def test_framework_exports(self):
-        """Test framework module exports."""
+        """Test framework module exports including TrainingPipeline."""
         from core.framework import (
             OptimizationPipeline,
+            TrainingPipeline,
             ResultBuilder,
             StatisticsCalculator,
             ModelFeatureExtractor,
@@ -68,6 +78,7 @@ class TestCoreModuleRefactor(unittest.TestCase):
         )
 
         self.assertIsNotNone(OptimizationPipeline)
+        self.assertIsNotNone(TrainingPipeline)
         self.assertIsNotNone(ResultBuilder)
         self.assertIsNotNone(StatisticsCalculator)
         self.assertIsNotNone(AIOptimizationLevel.INTELLIGENT)

@@ -2,4 +2,8 @@
 Distributed Runtime Module for Core Systems.
 """
 
-__all__ = []
+from .distributed_optimizer import DistributedOptimizer
+
+__all__ = [
+    "DistributedOptimizer",
+]

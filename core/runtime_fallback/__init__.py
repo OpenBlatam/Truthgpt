@@ -2,4 +2,8 @@
 Runtime Fallback Module for Core Systems.
 """
 
-__all__ = []
+from .realtime_optimizer import RealtimeOptimizer
+
+__all__ = [
+    "RealtimeOptimizer",
+]

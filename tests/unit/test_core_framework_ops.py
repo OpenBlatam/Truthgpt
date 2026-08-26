@@ -6,12 +6,14 @@ import sys
 import os
 import unittest
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PARENT_ROOT = os.path.dirname(PROJECT_ROOT)
-if PARENT_ROOT not in sys.path:
-    sys.path.insert(0, PARENT_ROOT)
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+from pathlib import Path
+
+OPT_CORE_DIR = str(Path(__file__).resolve().parent.parent.parent)
+PARENT_DIR = str(Path(OPT_CORE_DIR).parent)
+if PARENT_DIR not in sys.path:
+    sys.path.insert(0, PARENT_DIR)
+if OPT_CORE_DIR not in sys.path:
+    sys.path.insert(0, OPT_CORE_DIR)
 
 
 

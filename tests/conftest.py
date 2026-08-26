@@ -14,10 +14,14 @@ import torch
 _project_dir = Path(__file__).parent.parent
 _parent_dir = _project_dir.parent
 
-if str(_project_dir) not in sys.path:
-    sys.path.insert(0, str(_project_dir))
 if str(_parent_dir) not in sys.path:
     sys.path.insert(0, str(_parent_dir))
+if str(_project_dir) not in sys.path:
+    sys.path.insert(0, str(_project_dir))
+else:
+    # Ensure project_dir has higher precedence than parent_dir
+    sys.path.remove(str(_project_dir))
+    sys.path.insert(0, str(_project_dir))
 
 # Bootstrap the 'tests' package in sys.modules before importing from it.
 # Pytest loads conftest.py before the normal module system has initialized

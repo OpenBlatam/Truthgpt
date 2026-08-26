@@ -5,6 +5,7 @@ Implements highly modular microservices with component-based architecture
 
 import torch
 import torch.nn as nn
+import torch.nn.utils.prune as prune
 import torch.optim as optim
 from typing import Dict, Any, List, Optional, Tuple, Union, Callable, Protocol
 from dataclasses import dataclass, field

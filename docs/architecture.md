@@ -1,82 +1,66 @@
-# System Architecture
+# 🏗️ TruthGPT Optimization Core Architecture
 
-The TruthGPT Optimization Core is designed as a **modular, registry-based framework**. This architecture separates the *definition* of components (like optimizers or attention mechanisms) from their *usage*, allowing for seamless extensibility and rapid experimentation.
+> [!NOTE]
+> TruthGPT Optimization Core is engineered as a **modular, stratified, registry-based foundation framework**. It decouples component definitions from runtime orchestration, providing extreme extensibility and hardware acceleration across both training and serving workloads.
 
-## 🏗️ High-Level Design
+---
 
-The system is stratified into four distinct layers, each with a specific responsibility:
+## 🏛️ Stratified Multi-Layer Architecture
 
-1.  **Configuration Layer (`configs/`)**:
-    -   **Responsibility**: Defines the "What".
-    -   **Mechanism**: A unified YAML structure that controls every aspect of the training run.
-    -   **Benefit**: reproducibility. You can version check your YAMLs to track exact experimental conditions.
-
-2.  **Factory Layer (`factories/`)**:
-    -   **Responsibility**: The "Builder".
-    -   **Mechanism**: Uses the `Registry` pattern to instantiate objects based on string identifiers in the config.
-    -   **Benefit**: Decoupling. The Trainer doesn't need to import `LionOptimizer` directly; it just asks the factory for `"lion"`.
-
-3.  **Core Engine (`trainers/`)**:
-    -   **Responsibility**: The "Orchestrator".
-    -   **Mechanism**: The `GenericTrainer` class manages the training loop, state synchronization, and data flow.
-    -   **Benefit**: abstraction. The complex logic of gradient accumulation, AMP, and distributed sync is hidden from the user.
-
-4.  **Hardware Abstraction**:
-    -   **Responsibility**: The "Accelerator".
-    -   **Mechanism**: Utilities that interface with PyTorch/CUDA/XLA to optimize execution.
-    -   **Benefit**: Performance. Automatic selection of the best kernels for the available hardware.
+The system is organized into five tightly integrated layers:
 
 ```mermaid
-graph TD
-    subgraph "User Space"
-        Config[YAML Configuration]
-        Script[train_llm.py]
+graph TB
+    subgraph Layer1 ["1. Client & Application Layer"]
+        CLI["TruthGPT CLI / OpenClaw"]
+        REST["FastAPI & gRPC Servers"]
+        SDK["Python SDK / Jupyter Workspaces"]
     end
 
-    subgraph "Factory Layer"
-        OptF[Optimizer Factory]
-        AttnF[Attention Factory]
-        DataF[Data Factory]
+    subgraph Layer2 ["2. Agent Swarm & Orchestration Layer (`agents/`)"]
+        Swarm["Multi-Agent Swarm Orchestrator"]
+        ReAct["ReAct Reasoning Loop & Reflexion"]
+        Tools["Dynamic Tools (Code, Search, DB)"]
+        Memory["Vector RAG (ChromaDB) & SQLite Memory"]
+        Webhooks["Multi-Platform Webhooks (Discord, Telegram, Slack)"]
     end
 
-    subgraph "Core Engine"
-        Trainer[Generic Trainer]
-        State[Training State]
-        Loop[Training Loop]
+    subgraph Layer3 ["3. Optimization & Training Engine (`trainers/`, `papers/`)"]
+        Trainer["GenericTrainer (DDP / FSDP / ZeRO / LoRA)"]
+        Papers["SOTA Papers Registry (48+ Paper Plugins)"]
+        Optimizers["Optimizers Suite (Lion, Sophia, Fused, 8-Bit)"]
+        Configs["Unified TrainerConfig & YAML Presets"]
     end
 
-    subgraph "Hardware Layer"
-        GPU[CUDA Kernels]
-        Comp[Torch.compile]
-        Dist[Distributed Backend]
+    subgraph Layer4 ["4. Compiler & Acceleration Subsystem (`compiler/`)"]
+        TorchInductor["TorchInductor / Dynamo Graph JIT"]
+        MLIR_TRT["MLIR Passes & TensorRT Engines"]
+        XLA["Accelerated Linear Algebra (TF2XLA)"]
+        TritonKernels["Custom Triton & CUDA Kernels"]
     end
 
-    Script --> Config
-    Script --> Trainer
-    
-    Trainer --> OptF
-    Trainer --> AttnF
-    Trainer --> DataF
-    
-    Trainer --> Loop
-    Loop --> State
-    Loop --> GPU
-    Loop --> Comp
-    Loop --> Dist
+    subgraph Layer5 ["5. Polyglot Native Backends (`polyglot_core/`)"]
+        RustCore["Rust Engine (PyO3) - Zero-Copy Paged KV & Buffers"]
+        CppCore["C++ Core (PyBind11) - SIMD & CUDA GEMMs"]
+        GoCore["Go Backends - Networking & Swarm Dispatch"]
+        PyFallback["Pure Python Fallback (NumPy / Torch)"]
+    end
+
+    Layer1 --> Layer2
+    Layer1 --> Layer3
+    Layer2 --> Layer3
+    Layer3 --> Layer4
+    Layer4 --> Layer5
 ```
 
-## 🧩 Deep Dive: The Registry System
+---
 
-The `Registry` pattern is the cornerstone of TruthGPT's modularity. It allows the system to discover and load components dynamically.
+## 🧩 1. The Dynamic Registry System
 
-### How it Works
-
-1.  **Registration**: A component (class or function) is decorated with `@REGISTRY.register("name")`.
-2.  **Lookup**: When the config specifies `type: "name"`, the registry returns the corresponding class.
-3.  **Instantiation**: The factory initializes the class with arguments from the config.
+Modularity is achieved via the **Registry Pattern**. Subsystems discover classes dynamically through string identifiers, allowing configuration via YAML without code alterations.
 
 ```python
-# 1. Definition (in optimization_core/optimizers/lion.py)
+# 1. Component Registration (e.g. in optimization_core/optimizers/pytorch/lion.py)
 from factories.registry import OPTIMIZERS
 
 @OPTIMIZERS.register("lion")
@@ -84,86 +68,69 @@ class LionOptimizer(torch.optim.Optimizer):
     def __init__(self, params, lr=1e-4, ...):
         ...
 
-# 2. Configuration (in config.yaml)
+# 2. Declarative Specification (in config.yaml)
 # optimizer:
 #   type: lion
 #   lr: 0.0001
 
-# 3. Usage (in trainers/trainer.py)
-self.optimizer = OPTIMIZERS.build(
-    cfg.optimizer.type,  # "lion"
-    model.parameters(),
-    lr=cfg.optimizer.lr
-)
+# 3. Dynamic Factory Instantiation (in trainers/trainer.py)
+self.optimizer = OPTIMIZERS.build(cfg.optimizer.type, model.parameters(), lr=cfg.optimizer.lr)
 ```
 
-## 🔄 Component Lifecycle
+---
 
-Understanding the lifecycle of a training run helps in debugging and extending the system.
+## 🔄 2. Complete Execution Lifecycle
+
+Understanding the end-to-end training and inference lifecycle:
 
 ```mermaid
 sequenceDiagram
-    participant CLI as CLI (train_llm.py)
-    participant Cfg as Config Loader
-    participant T as Trainer
-    participant M as Model
-    participant D as Data Loader
+    participant User as User / CLI
+    participant Config as ConfigManager
+    participant Factory as Dynamic Factory
+    participant Trainer as GenericTrainer
+    participant Compiler as CompilerSubsystem
+    participant Hardware as GPU / Accelerators
 
-    Note over CLI: User starts training
-    CLI->>Cfg: Load & Validate JSON/YAML
-    Cfg-->>CLI: Valid TrainerConfig
-    
-    CLI->>T: Initialize(config)
-    
-    rect rgb(240, 248, 255)
-    Note over T: Setup Phase
-    T->>T: Set Random Seeds
-    T->>M: Load Pre-trained Weights
-    T->>M: Apply LoRA / Quantization
-    T->>D: Build Datasets & Samplers
-    end
-    
-    rect rgb(255, 250, 240)
-    Note over T: Optimization Phase
-    T->>T: Move to Device (CUDA/MPS)
-    T->>T: Compile Model (torch.compile)
-    T->>T: Initialize Optimizer & Scheduler
-    end
+    User->>Config: Load YAML / CLI Overrides
+    Config->>Config: Validate Schema & Pre-flight
+    Config-->>User: Validated TrainerConfig
 
-    rect rgb(240, 255, 240)
-    Note over T: Training Loop
-    loop Epochs
-        T->>D: Fetch Batch
-        T->>M: Forward Pass
-        T->>T: Calculate Loss
-        T->>T: Backward Pass (Scaled)
-        T->>T: Optimizer Step
-        T->>T: Save Checkpoint (Async)
-    end
+    User->>Trainer: Initialize(config)
+    Trainer->>Factory: Build Model, Optimizer, Loss, Data
+    Factory-->>Trainer: Initialized Components
+
+    Trainer->>Compiler: Optimize Model Graph (TorchInductor / Triton)
+    Compiler->>Hardware: Compile PTX & TensorRT Engines
+    Compiler-->>Trainer: Compiled Executable Graph
+
+    loop Training Epochs & Batches
+        Trainer->>Hardware: Forward Pass (Mixed Precision BF16)
+        Trainer->>Hardware: Scaled Backward Pass
+        Trainer->>Hardware: Optimizer Step & Gradient Clipping
+        Trainer->>Trainer: Async Checkpointing & Metrics Log
     end
 ```
 
-## 🛠️ Extensibility Guide
+---
 
-### Adding a New Attention Mechanism
+## 🌐 3. Polyglot Multi-Language Interoperability
 
-1.  Create a file in `optimization_core/modules/attention/`.
-2.  Implement your attention class inheriting from `nn.Module`.
-3.  Register it using the `ATTENTION_REGISTRY`.
+TruthGPT pairs Python's rapid prototyping with low-level systems languages:
 
-```python
-from factories.registry import ATTENTION_REGISTRY
+| Language | Integration Technology | Core Responsibilities |
+| :--- | :--- | :--- |
+| **Python** | Host Language | User APIs, high-level training loops, agent orchestration, PyTorch model definitions. |
+| **Rust** | PyO3 / C-FFI | Thread-safe Paged KV-Cache allocation, zero-copy buffer pooling, tokenization. |
+| **C++** | PyBind11 / CUDA C++ | Custom CUDA GEMM kernels, FlashAttention wrappers, SIMD AVX-512 tensor math. |
+| **Go** | C-Shared / gRPC | High-concurrency network proxies, swarm message brokers, microservice dispatch. |
 
-@ATTENTION_REGISTRY.register("my_fast_attention")
-class MyFastAttention(nn.Module):
-    def forward(self, x):
-        # Your custom implementation
-        return x
-```
+---
 
-4.  Use it in your YAML:
-```yaml
-model:
-    attention:
-        backend: my_fast_attention
-```
+## 📚 Related Documentation Links
+- [API Reference: Compiler Subsystem](api/compiler.md)
+- [API Reference: Polyglot Core](api/polyglot_core.md)
+- [API Reference: Generic Trainer](api/trainer.md)
+- [API Reference: OpenClaw Agents SDK](api/openclaw_agents.md)
+- [Engineering Guide: Distributed Training](guides/distributed_training.md)
+- [Engineering Guide: KV-Cache Optimization](guides/kv_cache_optimization.md)

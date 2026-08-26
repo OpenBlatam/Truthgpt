@@ -1,128 +1,142 @@
-# 🚀 SOTA 2025 Quick Start Guide
+# SOTA 2026 Ecosystem Quick Start Guide
 
-Welcome to the **TruthGPT SOTA 2025** ecosystem. This guide will help you run the most advanced features of the platform in minutes.
+Welcome to the **TruthGPT SOTA 2026** ecosystem. This guide demonstrates how to harness cutting-edge capabilities: autonomous multi-agent swarms, 48+ state-of-the-art research paper implementations, Paged KV-Cache, and speculative decoding serving.
+
+---
 
 ## 📋 Prerequisites
 - Python 3.10+
-- CUDA-compatible GPU (Optional but recommended for papers)
-- API Keys for LLMs (set in `.env`)
+- CUDA-compatible NVIDIA GPU (recommended for paper benchmarks and inference)
+- LLM API Keys (configured in `.env` or passed via environment variables)
 
-## 🐝 1. Using the Agent Swarm (CLI)
-The `openclaw` command rutes your request to the best specialized agent using semantic routing.
+---
+
+## 🐝 1. Multi-Agent Swarm Orchestration (CLI)
+
+The `openclaw` CLI provides direct access to semantic swarm routing. Incoming instructions are automatically routed to the domain-expert agent best suited for the task.
 
 ```bash
-# Direct question
-openclaw swarm ask "What are the latest breakthroughs in multi-modal LLMs?"
+# Query the autonomous agent swarm
+openclaw swarm ask "What are the latest breakthroughs in sub-quadratic attention mechanisms?"
 
-# Context-aware chat (persists memory)
-openclaw swarm ask "Help me write a research paper on focus-based attention" --user researcher_1
+# Persistent session with user context memory
+openclaw swarm ask "Develop an evaluation script for SnapKV attention compression" --user researcher_1
 ```
 
-## 📚 2. Discovering Research Papers
-TruthGPT has a built-in library of 48+ SOTA papers that can be applied to your models.
+---
+
+## 📚 2. Discovering & Applying Research Papers
+
+TruthGPT includes a built-in library of **48+ SOTA Research Paper** implementations (e.g., FocusLLM, LongRoPE, MoQAE, SnapKV, Speculative Prefill, Chain of Draft).
 
 ```bash
-# List top papers
+# List all available research paper modules
 openclaw papers list
 
-# Get details on a specific paper (e.g., LongRoPE)
+# Filter papers by category
+openclaw papers list --category attention
+
+# Inspect implementation details and parameters for a specific paper
 openclaw papers info longrope_2024
 ```
 
-## 🐍 3. Python SDK (OpenClaw)
-Integrate OpenClaw into your own research scripts or Jupyter notebooks.
+---
+
+## 🐍 3. Python SDK (OpenClaw Agents)
+
+Integrate the OpenClaw agent client into your Python applications or research workflows:
 
 ```python
-import openclaw as oc
 import asyncio
+from openclaw import AgentClient, AgentConfig
 
 async def main():
-    # 1. Ask the swarm
-    res = await oc.ask("Can you summarize the FocusLLM paper?")
-    print(f"Agent: {res.content}")
-    
-    # 2. List papers programmatically
-    papers = oc.list_papers(category="attention")
-    print(f"Found {len(papers)} matching papers.")
+    # 1. Initialize configuration with Swarm & Reflection enabled
+    config = AgentConfig(
+        use_swarm=True,
+        max_handoff_depth=6,
+        use_reflexion=True,          # Self-critique & error correction
+        use_vector_memory=True,      # Long-term ChromaDB vector memory
+        default_agent_name="ResearchAgent"
+    )
+
+    client = AgentClient(config=config)
+
+    # 2. Query the Swarm
+    response = await client.run(
+        user_id="researcher_1",
+        prompt="Explain how SnapKV compresses key-value cache memory without retraining.",
+        return_response=True
+    )
+
+    print(f"Executing Agent: {response.agent_name}")
+    print(f"Action Type:     {response.action_type}")
+    print(f"Response:\n{response.content}")
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-## 🌐 4. Production API
-Run TruthGPT as a service for your applications.
+---
+
+## 🚀 4. High-Throughput Speculative Decoding Server
+
+Launch the inference serving engine equipped with continuous batching, Paged KV-Cache, and speculative draft acceleration:
 
 ```bash
-# Start the server
-python cli.py serve --port 8080 --workers 4
+# Start the production inference service
+python cli.py serve --port 8080 --workers 4 --enable-speculative-decoding
 ```
 
-### Key Endpoints:
-- `POST /v1/swarm/ask`: JSON body `{"prompt": "...", "user_id": "..."}`
-- `GET /v1/research/papers`: Query `?category=...`
-- `GET /v1/metrics`: Prometheus-compatible metrics.
+### Key API Endpoints
 
-## 🛠️ 5. Developer Guide: Building Your Own Agent
-TruthGPT is a framework first. You can use its base classes to build specialized agents that integrate perfectly with the ecosystem.
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `POST /v1/swarm/ask` | `POST` | Semantic Swarm router entrypoint (`{"prompt": "...", "user_id": "..."}`). |
+| `POST /v1/completions` | `POST` | OpenAI-compatible high-throughput text generation. |
+| `GET /v1/research/papers` | `GET` | Retrieve list of registered research papers and configurations. |
+| `GET /v1/metrics` | `GET` | Prometheus-formatted metrics (throughput, cache hit rate, token latency). |
 
-### 🚀 Ejemplo SOTA 2025 (Recomendado)
+---
 
-Esta es la forma más profesional y escalable de usar el framework ahora:
+## 🛠️ 5. Developing Custom Domain Agents
 
-```python
-from openclaw import AgentClient, AgentConfig
-
-config = AgentConfig(
-    use_swarm=True,
-    max_handoff_depth=8,
-    default_agent_name="ResearchAgent"
-)
-
-client = AgentClient(config=config)
-
-async def ask():
-    response = await client.run(
-        user_id="researcher_1", 
-        prompt="¿Cuál es el estado del arte en LLMs?",
-        return_response=True
-    )
-    print(f"Agente: {response.agent_name}")
-    print(f"Respuesta: {response.content}")
-```
-
-### 🛠️ Guía del Desarrollador (Custom Agents)
-To build a new agent, inherit from `BaseAgent` and implement the `process` method.
+Create custom autonomous agents by inheriting from `BaseAgent` and registering them with the system:
 
 ```python
 from optimization_core.agents.framework.architectures.base_agent import BaseAgent
 from optimization_core.agents.framework.models import AgentResponse
+from registries.unified_registry import AGENT_REGISTRY
 
-class MyExpertAgent(BaseAgent):
+@AGENT_REGISTRY.register("quantum_optimizer_agent")
+class QuantumOptimizerAgent(BaseAgent):
     def __init__(self):
-        super().__init__(name="ExpertAgent", role="Especialista en Datos")
+        super().__init__(
+            name="QuantumOptimizerAgent",
+            role="Specialist in Tensor Network & Quantum-Inspired Optimization"
+        )
 
     async def process(self, query: str, context: dict = None) -> AgentResponse:
-        # Tu lógica personalizada aquí
+        # Custom domain reasoning logic
+        analysis = f"Applied Tensor Network contraction analysis for: '{query}'"
+        
         return AgentResponse(
-            content=f"Análisis experto de: {query}",
+            content=analysis,
             agent_name=self.name,
             action_type="final_answer"
         )
 ```
 
-### Running Your Agent
-You can run your agent using the `AgentClient`, which automatically provides:
-- **Observability**: Tracing integration.
-- **Memory**: Persistent memory management.
-- **Safety**: HITL (Human-in-the-Loop) support.
-
-See the full example in `examples/custom_agent_example.py`.
-
 ---
-## 📊 6. API Integration
-If you want to create agents in other languages, use the Unified API:
-- `POST /v1/swarm/ask`: Entry point for the semantic orchestrator.
-- `GET /v1/research/papers`: Direct access to the SOTA knowledge base.
 
----
-**Build the future with TruthGPT.** 🚀
+## 🌐 6. Multi-Platform Webhook Integrations
+
+OpenClaw can serve as an autonomous chatbot agent across platforms by enabling built-in webhook adapters:
+
+```bash
+# Export bot token
+export TELEGRAM_BOT_TOKEN="your_token_here"
+
+# Start the webhook listener
+openclaw serve --webhooks telegram,discord,slack
+```

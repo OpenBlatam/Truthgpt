@@ -1,0 +1,122 @@
+site_name: TruthGPT Optimization Core
+site_description: Enterprise-Grade High-Performance Deep Learning & Multi-Agent Optimization Suite
+site_author: DeepMind / Blatam Academy
+site_url: https://docs.truthgpt.blatam.academy/
+
+repo_name: OpenBlatam/TruthGPT
+repo_url: https://github.com/OpenBlatam/TruthGPT
+
+theme:
+  name: material
+  language: en
+  palette:
+    - scheme: slate
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.keys
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.arithmatex:
+      generic: true
+  - tables
+  - attr_list
+  - md_in_html
+
+extra_javascript:
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+  - https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js
+
+nav:
+  - Overview: index.md
+  - Getting Started:
+      - Quick Start: getting-started/quickstart.md
+      - Installation Guide: getting-started/installation.md
+      - Configuration System: getting-started/configuration.md
+      - Health & Diagnostics: getting-started/health_and_diagnostics.md
+  - Architecture:
+      - System Overview: core-architecture/overview.md
+      - Training Engine: core-architecture/trainers.md
+      - Data Pipeline: core-architecture/data_pipeline.md
+      - Models & Layer Design: core-architecture/models_and_layers.md
+      - Physics-Informed MoE: core-architecture/pimoe.md
+  - Optimization:
+      - Acceleration & AMP: optimization/acceleration_guide.md
+      - Optimizers & Schedulers: optimization/optimizers.md
+      - KV-Cache Acceleration: optimization/kv_cache.md
+      - Custom Triton/CUDA Kernels: optimization/custom_kernels.md
+  - Inference:
+      - Serving & Engine: inference/inference_engine.md
+      - Speculative Decoding: inference/speculative_decoding.md
+      - APIs & Endpoints: inference/api_and_endpoints.md
+  - Compilers:
+      - Compiler System & JIT: compiler/compiler_system.md
+      - Compiler Runtime: compiler/compiler_runtime.md
+  - Agents & Swarm:
+      - OpenClaw SDK: agents-and-swarm/openclaw_sdk.md
+      - Swarm Orchestration: agents-and-swarm/swarm_orchestration.md
+      - Messaging Integrations: agents-and-swarm/messaging_integrations.md
+      - Task Scheduler: agents-and-swarm/agent_scheduler.md
+  - Polyglot:
+      - Native Language Bridges: polyglot/polyglot_subsystem.md
+  - Deployment & Ops:
+      - Production Deployment: deployment-and-ops/production_deployment.md
+      - Monitoring & Tracing: deployment-and-ops/monitoring_and_tracing.md
+  - API Reference:
+      - Master Catalog: api-reference/index.md
+      - Trainer API: api-reference/trainer_api.md
+      - Inference API: api-reference/inference_api.md
+      - Agents API: api-reference/agents_api.md
+      - Optimizers API: api-reference/optimizers_api.md
+      - Compiler API: api-reference/compiler_api.md
+      - Models & Modules API: api-reference/models_api.md
+      - Configuration API: api-reference/configuration_api.md
+      - Polyglot Bridge API: api-reference/polyglot_api.md
+  - Tutorials & Guides:
+      - LoRA / QLoRA Finetuning: tutorials/lora_finetuning_tutorial.md
+      - Building Custom Agents: tutorials/building_custom_agents.md
+      - Distributed Training: tutorials/distributed_training.md
+      - Troubleshooting & FAQ: tutorials/troubleshooting_and_faq.md

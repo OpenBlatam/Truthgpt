@@ -21,8 +21,13 @@ class DynamicFactory:
     and decorators. Thread-safe.
     """
     
-    def __init__(self, base_class: Optional[Type] = None):
-        self.base_class = base_class
+    def __init__(self, base_class: Optional[Type] = None, name: Optional[str] = None):
+        if isinstance(base_class, str) and name is None:
+            self.name = base_class
+            self.base_class = None
+        else:
+            self.base_class = base_class
+            self.name = name or (base_class.__name__ if base_class else "dynamic_factory")
         self._registry: Dict[str, Type] = {}
         self._factories: Dict[str, Callable] = {}
         self._lock = threading.RLock()

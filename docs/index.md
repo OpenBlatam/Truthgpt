@@ -1,50 +1,71 @@
-# TruthGPT Optimization Core Documentation
+# ⚡ TruthGPT Optimization Core Documentation
 
-Welcome to the **TruthGPT Optimization Core** documentation. This comprehensive guide covers everything from installation to advanced optimization techniques for training Large Language Models (LLMs) with enterprise-grade performance.
+Welcome to the **TruthGPT Optimization Core** enterprise documentation suite. TruthGPT is a modular, ultra-high-performance deep learning ecosystem combining polyglot hardware acceleration, physics-informed mixture of experts (PiMoE), MLIR/JIT graph compilation, and autonomous OpenClaw agent swarms.
 
-## 🚀 Overview
+---
 
-TruthGPT Optimization Core is a modular, high-performance training system designed for:
-- **Scalability**: Train on anything from a single GPU to multi-node clusters.
-- **Modularity**: Swap components (attention backends, optimizers, datasets) via a registry system without changing code.
-- **Performance**: Built-in support for Flash Attention, TF32, Torch.compile, and custom CUDA kernels.
-- **Reliability**: Production-grade error handling, automatic recovery, and comprehensive monitoring.
-
-## 📚 Documentation Sections
+## 🧭 Navigation Matrix by Role
 
 <div class="grid cards" markdown>
 
--   :material-clock-fast: **[Quick Start](quickstart.md)**
-    -   Train your first model in 5 minutes.
-    -   Use pre-configured presets.
+-   :material-flash: **[ML Engineers & Researchers](getting_started/quickstart_training.md)**
+    -   [5-Minute Training Quickstart](getting_started/quickstart_training.md)
+    -   [Optimization & Performance Tuning](guides/optimization_tuning.md)
+    -   [Distributed Training (FSDP / ZeRO)](guides/distributed_training.md)
+    -   [SOTA Research Papers Catalog](api/papers.md)
 
--   :material-download: **[Installation](installation.md)**
-    -   Setup for Development and Production.
-    -   Docker and Conda environments.
+-   :material-robot: **[Agent & App Developers](getting_started/quickstart_agents.md)**
+    -   [OpenClaw Agent Quickstart](getting_started/quickstart_agents.md)
+    -   [Custom Tools & Specialized Agents](guides/custom_agent_development.md)
+    -   [Graph Orchestrator & State Machines](architecture/agent_framework.md)
+    -   [Agents & Webhooks API](api/agents.md)
 
--   :material-server-network: **[Architecture](architecture.md)**
-    -   System design and component interaction.
-    -   Registry system and factories.
+-   :material-cpu-64-bit: **[Systems & Compiler Engineers](getting_started/quickstart_compiler.md)**
+    -   [Compiler & Acceleration Quickstart](getting_started/quickstart_compiler.md)
+    -   [Polyglot Core Architecture (Rust / C++)](architecture/polyglot_core.md)
+    -   [Custom CUDA & Triton Kernels](guides/compiler_and_kernels.md)
+    -   [Compiler API & TensorRT Exporter](api/compiler.md)
 
--   :material-speedometer: **[Optimization](optimization.md)**
-    -   Deep dive into performance tuning.
-    -   Mixed precision, XLA, and Kernel Fusion.
-
--   :material-api: **[API Reference](api/trainer.md)**
-    -   Detailed API docs for Trainer and Configs.
-    -   Utility functions and scripts.
+-   :material-server: **[DevOps & Production Teams](guides/deployment_production.md)**
+    -   [Cross-Platform Installation Guide](getting_started/installation.md)
+    -   [Production Serving & REST API](guides/deployment_production.md)
+    -   [Prometheus Metrics & Health Checks](api/utilities.md)
+    -   [Troubleshooting & Diagnostics](guides/troubleshooting.md)
 
 </div>
 
-## 🌟 Key Features
+---
 
-| Feature | Description |
-| :--- | :--- |
-| **Unified Configuration** | Control every aspect of training via a single YAML file. |
-| **Advanced Memory** | Adaptive memory management, gradient checkpointing, and dynamic padding. |
-| **Polyglot Core** | Modules written in Rust, C++, and Python for maximum efficiency. |
-| **Observability** | Real-time tracking with Weights & Biases, TensorBoard, and custom metrics. |
+## 🌟 Architectural Highlights
 
-## 🤝 Contributing
+```mermaid
+graph LR
+    subgraph "TruthGPT Core Pillars"
+        P1["⚡ Polyglot Engine<br>(Rust / C++ / CUDA)"]
+        P2["🌌 PiMoE Architecture<br>(Physics-Informed MoE)"]
+        P3["🔬 MLIR & TensorRT Compiler<br>(JIT / AOT / Kernels)"]
+        P4["🤖 OpenClaw Agent Swarms<br>(ReAct / Memory / Tools)"]
+    end
+```
 
-We welcome contributions! Please see our [Contributing Guide](../CONTRIBUTING.md) for details on how to get started.
+| Feature | Description | Reference Guide |
+| :--- | :--- | :--- |
+| **Polyglot Acceleration** | Zero-copy tensor sharing between PyTorch, Rust, and C++ for minimal memory allocation latency. | [Polyglot Core](architecture/polyglot_core.md) |
+| **PiMoE (Physics MoE)** | Sparse Mixture of Experts regularized by Hamiltonian conservation laws to eliminate expert collapse. | [PiMoE Architecture](architecture/pimoe.md) |
+| **Multi-Stage Compiler** | Graph lowering through MLIR dialects, automatic Triton autotuning, and TensorRT compilation. | [Compiler Runtime](architecture/compiler_runtime.md) |
+| **OpenClaw Swarms** | Autonomous ReAct agent ecosystem with vector episodic memory, auto-reflexion, and multi-chat webhooks. | [Agent Framework](architecture/agent_framework.md) |
+| **Unified Config System** | Strongly typed YAML/dataclass configurations with automated cross-field validation rules. | [Configuration API](api/configuration.md) |
+
+---
+
+## 📦 Quick Navigation Tree
+
+```
+docs/
+├── getting_started/         # Installation & 5-minute quickstarts
+├── architecture/            # Deep-dive system design & polyglot core
+├── api/                     # Full Python & REST API references
+├── guides/                  # In-depth optimization, distributed, & deployment guides
+├── examples/                # Runnable recipes & benchmark scripts
+└── archive/                 # Historical evolution & refactoring logs
+```

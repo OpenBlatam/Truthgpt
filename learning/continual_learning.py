@@ -692,7 +692,7 @@ class CLTrainer(BaseLearner):
             last = self.cl_history[-1]
             return {"duration": float(last.get("total_duration", 0.0))}
         return {}
-    
+
     def train_continual_learning(self, task_data: Dict[int, Tuple[torch.Tensor, torch.Tensor]]) -> Dict[str, Any]:
         """Train continual learning"""
         logger.info(f"🚀 Training continual learning with strategy: {self.config.cl_strategy.value}")
@@ -892,6 +892,10 @@ class CLTrainer(BaseLearner):
         
         plt.close()
 
+    # Method aliases for compatibility (must be after method definitions)
+    train_continual = train_continual_learning
+    learn_task = train_continual_learning
+
 # Factory functions
 def create_cl_config(**kwargs) -> ContinualLearningConfig:
     """Create continual learning configuration"""
@@ -917,8 +921,10 @@ def create_lifelong_learner(config: ContinualLearningConfig) -> LifelongLearner:
     """Create lifelong learner"""
     return LifelongLearner(config)
 
-def create_cl_trainer(config: ContinualLearningConfig) -> CLTrainer:
+def create_cl_trainer(config: Optional[ContinualLearningConfig] = None) -> CLTrainer:
     """Create continual learning trainer"""
+    if config is None:
+        config = ContinualLearningConfig()
     return CLTrainer(config)
 
 # Example usage
@@ -1034,10 +1040,5 @@ if __name__ == "__main__":
     example_continual_learning()
     print("✅ Continual learning example completed successfully!")
 
-import sys
-_mod = sys.modules.get(__name__)
-if _mod:
-    if __name__.startswith("optimization_core.learning."):
-        sys.modules["learning." + __name__[len("optimization_core.learning."):]] = _mod
-    elif __name__.startswith("learning."):
-        sys.modules["optimization_core.learning." + __name__[len("learning."):]] = _mod
+from ._compat import register_dual_namespace as _register_ns
+_register_ns(module_name=__name__)

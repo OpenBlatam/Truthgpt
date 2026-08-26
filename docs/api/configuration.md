@@ -1,70 +1,87 @@
-# Configuration Reference
+# ⚙️ Configuration Schema Reference
 
-The TruthGPT system uses a unified configuration object, `TrainerConfig`. This centralized YAML approach ensures that every experiment is reproducible.
+TruthGPT uses a strictly validated, dataclass-backed YAML configuration architecture.
 
-## `TrainerConfig`
+---
 
-**Location**: `optimization_core/trainers/trainer.py`
+## 🏛️ `TrainerConfig`
 
-### 🏗️ Model Settings
+```python
+from trainers.trainer import TrainerConfig
+```
 
-| Parameter | Type | Default | Description | Best Practice |
-| :--- | :--- | :--- | :--- | :--- |
-| `model_name` | `str` | `"gpt2"` | HuggingFace model ID or path. | Use smaller models (gpt2) for debugging. |
-| `gradient_checkpointing` | `bool` | `True` | Enable checkpointing to save RAM. | **Always Enable** for models > 1B params. |
-| `save_safetensors` | `bool` | `True` | Save in `safetensors` format. | **Yes**. Much faster loading and safer than pickle. |
+### Complete Field Specification
 
-### ⚡ LoRA (Low-Rank Adaptation)
+```yaml
+# configs/my_experiment.yaml
 
-| Parameter | Type | Default | Description | Best Practice |
-| :--- | :--- | :--- | :--- | :--- |
-| `lora_enabled` | `bool` | `False` | Enable LoRA fine-tuning. | Set to `true` for fine-tuning on consumer GPUs. |
-| `lora_r` | `int` | `16` | LoRA rank dimension. | `8` or `16` is usually sufficient. `64` for complex tasks. |
-| `lora_alpha` | `int` | `32` | Scaling factor. | Rule of thumb: `alpha = 2 * r`. |
-| `lora_dropout` | `float` | `0.05` | Dropout probability. | Keep low (`0.05` or `0.1`) to prevent underfitting. |
+model:
+  model_name: "gpt2"                      # HuggingFace ID or local filesystem path
+  gradient_checkpointing: true            # Save up to 75% VRAM during backward pass
+  save_safetensors: true                  # Fast zero-copy safe weight serialization
+  lora_enabled: true                      # Low-Rank Adaptation for PEFT
+  lora_r: 16                              # LoRA rank dimension
+  lora_alpha: 32                          # Scaling factor (rule: alpha = 2 * r)
+  lora_dropout: 0.05                      # Dropout probability on adapter layers
+  lora_target_modules:                    # Modules to inject LoRA adapters into
+    - "q_proj"
+    - "v_proj"
 
-### 🚅 Training Hyperparameters
+training:
+  epochs: 3                               # Number of full training epochs
+  train_batch_size: 8                     # Per-device batch size
+  grad_accum_steps: 4                     # Effective batch size = batch_size * accum_steps * GPUs
+  learning_rate: 1.0e-4                   # Peak learning rate
+  weight_decay: 0.01                      # L2 weight regularization
+  optimizer: "lion"                       # 'lion', 'sophia', 'adamw', 'adamw_8bit', 'muon'
+  scheduler: "cosine"                     # 'cosine', 'linear', 'wsd', 'constant'
+  warmup_steps: 100                       # Steps for linear LR warmup
+  max_grad_norm: 1.0                      # Gradient clipping threshold
 
-| Parameter | Type | Default | Description | Best Practice |
-| :--- | :--- | :--- | :--- | :--- |
-| `epochs` | `int` | `3` | Number of training passes. | `1-3` for fine-tuning. Pre-training needs more. |
-| `train_batch_size` | `int` | `8` | Batch size per device. | Maximize this until OOM, then step back slightly. |
-| `grad_accum_steps` | `int` | `2` | Steps to accumulate gradients. | effective_bs = `batch_size * accum_steps * num_gpus`. Aim for 32-128. |
-| `learning_rate` | `float` | `5e-5` | Max learning rate. | `1e-4` to `2e-5` for LoRA. `1e-5` for full finetune. |
-| `scheduler` | `str` | `"cosine"` | LR scheduler type. | `cosine` is generally superior to `linear` for LLMs. |
+precision:
+  mixed_precision: "bf16"                 # 'bf16' (recommended for Ampere+), 'fp16', 'none'
+  allow_tf32: true                        # TensorFloat-32 acceleration on Ampere/Ada/Hopper
+  torch_compile: true                     # Enable PyTorch 2.0 Graph Mode
+  compile_mode: "max-autotune"            # 'default', 'reduce-overhead', 'max-autotune'
 
-### 🚀 Optimization & Precision
+data:
+  dataset: "wikitext"                     # Dataset name or custom file path
+  text_field_max_len: 512                 # Maximum sequence length in tokens
+  num_workers: 4                          # DataLoader worker processes
+  prefetch_factor: 2                      # Batches to prefetch per worker
+  persistent_workers: true                # Keep workers alive across epoch boundaries
+  bucket_by_length: true                  # Dynamic padding bucketing
 
-| Parameter | Type | Default | Description | Best Practice |
-| :--- | :--- | :--- | :--- | :--- |
-| `mixed_precision` | `str` | `"bf16"` | `"bf16"`, `"fp16"`, or `"none"`. | Use `bf16` on Ampere (3090/A100). Use `fp16` on older (T4/V100). |
-| `allow_tf32` | `bool` | `True` | Enable TensorFloat-32. | **Always True** on Ampere+. Free speedup. |
-| `torch_compile` | `bool` | `False` | Enable JIT compilation. | Set `True` for long runs. Startup is slow but step time is faster. |
-| `fused_adamw` | `bool` | `True` | Use Fused AdamW. | **Always True** if CUDA is available. |
+checkpointing:
+  output_dir: "runs/my_experiment"        # Path where checkpoints and logs are saved
+  ckpt_interval_steps: 500                # Save checkpoint frequency
+  ckpt_keep_last: 3                       # Retain N most recent checkpoints
+  eval_interval: 250                      # Evaluation frequency
+  ema_enabled: true                       # Exponential Moving Average of weights
+  ema_decay: 0.999                        # EMA decay coefficient
 
-### 💾 Data Loading
+logging:
+  log_interval: 25                        # Metrics print interval
+  use_wandb: false                        # Weights & Biases telemetry
+  wandb_project: "truthgpt-runs"
+```
 
-| Parameter | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `num_workers` | `int` | `4` | Number of dataloader subprocesses. |
-| `prefetch_factor` | `int` | `2` | Number of batches to prefetch per worker. |
-| `persistent_workers` | `bool` | `True` | Keep workers alive between epochs to reduce startup cost. |
+---
 
-### 📝 Logging & Checkpointing
+## 🛠️ Programmatic Configuration API
 
-| Parameter | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `output_dir` | `str` | `"runs/run"` | Directory to save checkpoints and logs. |
-| `log_interval` | `int` | `50` | Steps between logging metrics. |
-| `eval_interval` | `int` | `500` | Steps between validation runs. |
-| `ckpt_interval_steps` | `int` | `1000` | Steps between saving checkpoints. |
-| `ckpt_keep_last` | `int` | `3` | Number of recent checkpoints to restrict disk usage. |
-| `ema_enabled` | `bool` | `True` | Maintain EMA (Exponential Moving Average) of weights. |
-| `ema_decay` | `float` | `0.999` | Decay rate for EMA. |
+```python
+from optimization_core.config import ConfigManager
 
-### 🔄 Recovery
+manager = ConfigManager()
 
-| Parameter | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `resume_enabled` | `bool` | `False` | Auto-detect and resume from latest checkpoint. |
-| `resume_from_checkpoint` | `str` | `None` | Path to specific checkpoint file (`.pt`) to resume from. |
+# Load and validate YAML configuration file
+config = manager.load_config("configs/presets/performance_max.yaml")
+
+# Override parameters dynamically
+config.training.learning_rate = 2e-4
+config.training.train_batch_size = 16
+
+# Validate consistency rules
+manager.validate(config)
+```

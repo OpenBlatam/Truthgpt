@@ -136,51 +136,51 @@ def create_learning_config(
 ) -> Any:
     """Factory to construct domain-specific learning configuration dataclasses."""
     from .config import (
+        BaseLearningConfig,
+        LearningPipelineConfig,
         ActiveLearningConfig,
         AdaptiveLearningConfig,
         AdversarialConfig,
-        BayesianConfig,
+        BayesianOptimizationConfig,
         CausalConfig,
-        ContinualConfig,
+        ContinualLearningConfig,
         EnsembleConfig,
         EvolutionaryConfig,
-        FederatedConfig,
-        HPOConfig,
-        MetaConfig,
-        MultitaskConfig,
+        FederatedLearningConfig,
+        HpoConfig,
+        MetaLearningConfig,
+        MultiTaskConfig,
         NASConfig,
         RLConfig,
-        SelfSupervisedConfig,
+        SSLConfig,
         TransferLearningConfig,
-        PipelineConfig,
-        LearningConfig,
     )
     
     mapping = {
         "active": ActiveLearningConfig,
         "adaptive": AdaptiveLearningConfig,
         "adversarial": AdversarialConfig,
-        "bayesian": BayesianConfig,
+        "bayesian": BayesianOptimizationConfig,
         "causal": CausalConfig,
-        "continual": ContinualConfig,
+        "continual": ContinualLearningConfig,
         "ensemble": EnsembleConfig,
         "evolutionary": EvolutionaryConfig,
-        "federated": FederatedConfig,
-        "hpo": HPOConfig,
-        "meta": MetaConfig,
-        "multitask": MultitaskConfig,
+        "federated": FederatedLearningConfig,
+        "hpo": HpoConfig,
+        "meta": MetaLearningConfig,
+        "multitask": MultiTaskConfig,
         "nas": NASConfig,
         "reinforcement": RLConfig,
         "rl": RLConfig,
-        "self_supervised": SelfSupervisedConfig,
-        "ssl": SelfSupervisedConfig,
+        "self_supervised": SSLConfig,
+        "ssl": SSLConfig,
         "transfer": TransferLearningConfig,
-        "pipeline": PipelineConfig,
-        "unified": LearningConfig,
+        "pipeline": LearningPipelineConfig,
+        "unified": BaseLearningConfig,
     }
     
     key = config_type.value if isinstance(config_type, LearningStrategyType) else str(config_type).lower()
-    cfg_cls = mapping.get(key, LearningConfig)
+    cfg_cls = mapping.get(key, BaseLearningConfig)
     return cfg_cls(**kwargs)
 
 

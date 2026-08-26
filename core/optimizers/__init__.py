@@ -1,234 +1,199 @@
 """
 Core Optimizers
 ===============
-Unified exports for all optimizers in the core directory.
-Serves as the single entry point for all optimizer types.
+Unified entry point for all optimizers in the optimization framework.
+Features high-performance thread-safe lazy loading to avoid overhead during import.
 """
 
-# Import ops optimizers
-from ..ops.extreme_optimizer import (
-    ExtremeOptimizer,
-    ExtremeOptimizationLevel,
-    ExtremeOptimizationResult,
-    QuantumNeuralOptimizer,
-    CosmicOptimizer,
-    TranscendentOptimizer,
-)
+from __future__ import annotations
 
-from ..ops.quantum_extreme_optimizer import (
-    QuantumOptimizer,
-)
+import sys
+import importlib
+import threading
+from typing import Dict, Any, List, Optional, Callable
 
-from ..ops.ultra_fast_optimizer import (
-    UltraFastOptimizer,
-    ParallelOptimizer,
-    CacheOptimizer,
-)
+# ---------------------------------------------------------------------------
+# Lazy Imports Mapping
+# ---------------------------------------------------------------------------
 
-# Import util optimizers
-from ..util.enhanced_optimizer import (
-    EnhancedOptimizer,
-    EnhancedOptimizationLevel,
-    EnhancedOptimizationResult,
-)
+_LAZY_OPTIMIZER_MAP: Dict[str, tuple[str, str]] = {
+    # Ops optimizers
+    "ExtremeOptimizer": ("..ops.extreme_optimizer", "ExtremeOptimizer"),
+    "ExtremeOptimizationLevel": ("..ops.extreme_optimizer", "ExtremeOptimizationLevel"),
+    "ExtremeOptimizationResult": ("..ops.extreme_optimizer", "ExtremeOptimizationResult"),
+    "QuantumNeuralOptimizer": ("..ops.extreme_optimizer", "QuantumNeuralOptimizer"),
+    "CosmicOptimizer": ("..ops.extreme_optimizer", "CosmicOptimizer"),
+    "TranscendentOptimizer": ("..ops.extreme_optimizer", "TranscendentOptimizer"),
+    "QuantumOptimizer": ("..ops.quantum_extreme_optimizer", "QuantumOptimizer"),
+    "UltraFastOptimizer": ("..ops.ultra_fast_optimizer", "UltraFastOptimizer"),
+    "ParallelOptimizer": ("..ops.ultra_fast_optimizer", "ParallelOptimizer"),
+    "CacheOptimizer": ("..ops.ultra_fast_optimizer", "CacheOptimizer"),
+    # Util optimizers
+    "EnhancedOptimizer": ("..util.enhanced_optimizer", "EnhancedOptimizer"),
+    "EnhancedOptimizationLevel": ("..util.enhanced_optimizer", "EnhancedOptimizationLevel"),
+    "EnhancedOptimizationResult": ("..util.enhanced_optimizer", "EnhancedOptimizationResult"),
+    "ComplementaryOptimizer": ("..util.complementary_optimizer", "ComplementaryOptimizer"),
+    "ComplementaryOptimizationLevel": ("..util.complementary_optimizer", "ComplementaryOptimizationLevel"),
+    "ComplementaryOptimizationResult": ("..util.complementary_optimizer", "ComplementaryOptimizationResult"),
+    "AdvancedComplementaryOptimizer": ("..util.advanced_complementary_optimizer", "AdvancedComplementaryOptimizer"),
+    "MicroservicesOptimizer": ("..util.microservices_optimizer", "MicroservicesOptimizer"),
+    "OptimizerService": ("..util.microservices_optimizer", "OptimizerService"),
+    # Framework optimizers
+    "AIExtremeOptimizer": ("..framework.ai_extreme_optimizer", "AIExtremeOptimizer"),
+    # Advanced optimizations
+    "QuantumInspiredOptimizer": (".advanced_optimizations", "QuantumInspiredOptimizer"),
+    "EvolutionaryOptimizer": (".advanced_optimizations", "EvolutionaryOptimizer"),
+    "MetaLearningOptimizer": (".advanced_optimizations", "MetaLearningOptimizer"),
+    # Core optimizers
+    "BaseTruthGPTOptimizer": (".base_truthgpt_optimizer", "BaseTruthGPTOptimizer"),
+    "UnifiedTruthGPTOptimizer": (".unified_optimizer", "UnifiedTruthGPTOptimizer"),
+    "ModernTruthGPTOptimizer": (".modern_truthgpt_optimizer", "ModernTruthGPTOptimizer"),
+    "ModularOptimizer": (".modular_optimizer", "ModularOptimizer"),
+    "PyTorchOptimizerBase": (".pytorch_optimizer_base", "PyTorchOptimizerBase"),
+}
 
-from ..util.complementary_optimizer import (
-    ComplementaryOptimizer,
-    ComplementaryOptimizationLevel,
-    ComplementaryOptimizationResult,
-)
-
-from ..util.advanced_complementary_optimizer import (
-    AdvancedComplementaryOptimizer,
-)
-
-from ..util.microservices_optimizer import (
-    MicroservicesOptimizer,
-    OptimizerService,
-)
-
-# Import framework optimizers
-from ..framework.ai_extreme_optimizer import (
-    AIExtremeOptimizer,
-)
-
-# Import advanced optimizations
-from .advanced_optimizations import (
-    QuantumInspiredOptimizer,
-    EvolutionaryOptimizer,
-    MetaLearningOptimizer,
-)
-
-# Import base and unified optimizers
-from .base_truthgpt_optimizer import BaseTruthGPTOptimizer
-from .unified_optimizer import UnifiedTruthGPTOptimizer
-
-# Import other core optimizers
-from .modern_truthgpt_optimizer import (
-    ModernTruthGPTOptimizer,
-)
-
-from .modular_optimizer import (
-    ModularOptimizer,
-)
-
-from .pytorch_optimizer_base import (
-    PyTorchOptimizerBase,
-)
+_import_cache: Dict[str, Any] = {}
+_cache_lock = threading.RLock()
 
 
+def __getattr__(name: str) -> Any:
+    """Lazy import system for optimizer classes."""
+    if name.startswith('_'):
+        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
-# Unified factory function for core optimizers
-def create_core_optimizer(
-    optimizer_type: str = "enhanced",
-    config: dict = None
-):
-    """
-    Unified factory function to create core optimizers.
-    
-    Args:
-        optimizer_type: Type of optimizer to create. Options:
-            - "extreme" - ExtremeOptimizer
-            - "quantum" - QuantumOptimizer
-            - "ultra_fast" - UltraFastOptimizer
-            - "enhanced" - EnhancedOptimizer
-            - "complementary" - ComplementaryOptimizer
-            - "advanced_complementary" - AdvancedComplementaryOptimizer
-            - "microservices" - MicroservicesOptimizer
-            - "ai_extreme" - AIExtremeOptimizer
-            - "quantum_inspired" - QuantumInspiredOptimizer
-            - "evolutionary" - EvolutionaryOptimizer
-            - "meta_learning" - MetaLearningOptimizer
-            - "modern_truthgpt" - ModernTruthGPTOptimizer
-            - "modular" - ModularOptimizer
-        config: Optional configuration dictionary
-    
-    Returns:
-        The requested optimizer instance
-    """
-    if config is None:
-        config = {}
-    
-    optimizer_type = optimizer_type.lower()
-    
-    factory_map = {
-        "extreme": lambda cfg: ExtremeOptimizer(cfg),
-        "quantum": lambda cfg: QuantumOptimizer(cfg),
-        "ultra_fast": lambda cfg: UltraFastOptimizer(cfg),
-        "enhanced": lambda cfg: EnhancedOptimizer(cfg),
-        "complementary": lambda cfg: ComplementaryOptimizer(cfg),
-        "advanced_complementary": lambda cfg: AdvancedComplementaryOptimizer(cfg),
-        "microservices": lambda cfg: MicroservicesOptimizer(cfg),
-        "ai_extreme": lambda cfg: AIExtremeOptimizer(cfg),
-        "quantum_inspired": lambda cfg: QuantumInspiredOptimizer(cfg),
-        "evolutionary": lambda cfg: EvolutionaryOptimizer(cfg),
-        "meta_learning": lambda cfg: MetaLearningOptimizer(cfg),
-        "modern_truthgpt": lambda cfg: ModernTruthGPTOptimizer(cfg),
-        "modular": lambda cfg: ModularOptimizer(cfg),
-        "base": lambda cfg: BaseTruthGPTOptimizer(cfg),
-        "unified": lambda cfg: UnifiedTruthGPTOptimizer(cfg),
-    }
-    
-    if optimizer_type not in factory_map:
-        available = ", ".join(factory_map.keys())
-        raise ValueError(
-            f"Unknown core optimizer type: '{optimizer_type}'. "
-            f"Available types: {available}"
-        )
-    
-    factory = factory_map[optimizer_type]
-    return factory(config)
+    with _cache_lock:
+        if name in _import_cache:
+            return _import_cache[name]
+
+        if name in _LAZY_OPTIMIZER_MAP:
+            mod_rel_path, symbol_name = _LAZY_OPTIMIZER_MAP[name]
+            try:
+                mod = importlib.import_module(mod_rel_path, package=__name__)
+                obj = getattr(mod, symbol_name)
+                _import_cache[name] = obj
+                globals()[name] = obj
+                return obj
+            except Exception as e:
+                raise AttributeError(f"Failed to lazy load '{name}' from '{mod_rel_path}': {e}") from e
+
+        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 
-# Registry of all available core optimizers (module paths corrected)
-CORE_OPTIMIZER_REGISTRY = {
+def __dir__() -> List[str]:
+    """Return available symbols including lazy-loaded optimizers."""
+    return sorted(list(set(globals().keys()) | set(_LAZY_OPTIMIZER_MAP.keys()) | set(__all__)))
+
+
+# ---------------------------------------------------------------------------
+# Metadata Registry & Factory
+# ---------------------------------------------------------------------------
+
+CORE_OPTIMIZER_REGISTRY: Dict[str, Dict[str, str]] = {
     "extreme": {
-        "class": ExtremeOptimizer,
+        "class": "ExtremeOptimizer",
         "module": "core.ops.extreme_optimizer",
     },
     "quantum": {
-        "class": QuantumOptimizer,
+        "class": "QuantumOptimizer",
         "module": "core.ops.quantum_extreme_optimizer",
     },
     "ultra_fast": {
-        "class": UltraFastOptimizer,
+        "class": "UltraFastOptimizer",
         "module": "core.ops.ultra_fast_optimizer",
     },
     "enhanced": {
-        "class": EnhancedOptimizer,
+        "class": "EnhancedOptimizer",
         "module": "core.util.enhanced_optimizer",
     },
     "complementary": {
-        "class": ComplementaryOptimizer,
+        "class": "ComplementaryOptimizer",
         "module": "core.util.complementary_optimizer",
     },
     "advanced_complementary": {
-        "class": AdvancedComplementaryOptimizer,
+        "class": "AdvancedComplementaryOptimizer",
         "module": "core.util.advanced_complementary_optimizer",
     },
     "microservices": {
-        "class": MicroservicesOptimizer,
+        "class": "MicroservicesOptimizer",
         "module": "core.util.microservices_optimizer",
     },
     "ai_extreme": {
-        "class": AIExtremeOptimizer,
+        "class": "AIExtremeOptimizer",
         "module": "core.framework.ai_extreme_optimizer",
     },
     "quantum_inspired": {
-        "class": QuantumInspiredOptimizer,
+        "class": "QuantumInspiredOptimizer",
         "module": "core.optimizers.advanced_optimizations",
     },
     "evolutionary": {
-        "class": EvolutionaryOptimizer,
+        "class": "EvolutionaryOptimizer",
         "module": "core.optimizers.advanced_optimizations",
     },
     "meta_learning": {
-        "class": MetaLearningOptimizer,
+        "class": "MetaLearningOptimizer",
         "module": "core.optimizers.advanced_optimizations",
     },
     "modern_truthgpt": {
-        "class": ModernTruthGPTOptimizer,
+        "class": "ModernTruthGPTOptimizer",
         "module": "core.optimizers.modern_truthgpt_optimizer",
     },
     "modular": {
-        "class": ModularOptimizer,
+        "class": "ModularOptimizer",
         "module": "core.optimizers.modular_optimizer",
     },
     "base": {
-        "class": BaseTruthGPTOptimizer,
+        "class": "BaseTruthGPTOptimizer",
         "module": "core.optimizers.base_truthgpt_optimizer",
     },
     "unified": {
-        "class": UnifiedTruthGPTOptimizer,
+        "class": "UnifiedTruthGPTOptimizer",
         "module": "core.optimizers.unified_optimizer",
     },
 }
 
 
-def list_available_core_optimizers() -> list:
+def list_available_core_optimizers() -> List[str]:
     """List all available core optimizer types."""
     return list(CORE_OPTIMIZER_REGISTRY.keys())
 
 
-def get_core_optimizer_info(optimizer_type: str) -> dict:
+def get_core_optimizer_info(optimizer_type: str) -> Dict[str, str]:
+    """Get information about a specific core optimizer."""
+    opt_type = optimizer_type.lower()
+    if opt_type not in CORE_OPTIMIZER_REGISTRY:
+        raise ValueError(f"Unknown optimizer type: '{optimizer_type}'")
+
+    entry = CORE_OPTIMIZER_REGISTRY[opt_type]
+    return {
+        "type": opt_type,
+        "class": entry["class"],
+        "module": entry["module"],
+    }
+
+
+def create_core_optimizer(optimizer_type: str = "enhanced", config: Optional[Dict[str, Any]] = None) -> Any:
     """
-    Get information about a specific core optimizer.
+    Unified factory function to create core optimizers on demand.
     
     Args:
-        optimizer_type: Type of optimizer
-    
+        optimizer_type: Type of optimizer to create.
+        config: Optional configuration dictionary.
+        
     Returns:
-        Dictionary with optimizer information
+        The requested optimizer instance.
     """
-    if optimizer_type not in CORE_OPTIMIZER_REGISTRY:
-        raise ValueError(f"Unknown optimizer type: {optimizer_type}")
-    
-    registry_entry = CORE_OPTIMIZER_REGISTRY[optimizer_type]
-    return {
-        "type": optimizer_type,
-        "class": registry_entry["class"].__name__,
-        "module": registry_entry["module"],
-    }
+    if config is None:
+        config = {}
+
+    opt_key = optimizer_type.lower()
+    if opt_key not in CORE_OPTIMIZER_REGISTRY:
+        available = ", ".join(sorted(CORE_OPTIMIZER_REGISTRY.keys()))
+        raise ValueError(f"Unknown core optimizer type: '{optimizer_type}'. Available types: {available}")
+
+    entry = CORE_OPTIMIZER_REGISTRY[opt_key]
+    cls_name = entry["class"]
+    cls_obj = getattr(sys.modules[__name__], cls_name)
+    return cls_obj(config)
 
 
 __all__ = [
@@ -259,15 +224,14 @@ __all__ = [
     "QuantumInspiredOptimizer",
     "EvolutionaryOptimizer",
     "MetaLearningOptimizer",
-    # Other core optimizers
+    # Core optimizers
     "ModernTruthGPTOptimizer",
     "ModularOptimizer",
     "PyTorchOptimizerBase",
     "BaseTruthGPTOptimizer",
     "UnifiedTruthGPTOptimizer",
-    # Unified factory
+    # Factory & Registry
     "create_core_optimizer",
-    # Registry
     "CORE_OPTIMIZER_REGISTRY",
     "list_available_core_optimizers",
     "get_core_optimizer_info",

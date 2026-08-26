@@ -2,7 +2,7 @@
 Workflow builder for creating training/inference workflows declaratively.
 """
 import logging
-from typing import Dict, Any, List, Optional, Callable
+from typing import Dict, Any, List, Optional, Callable, Union
 from dataclasses import dataclass, field
 
 from ..systems.service_registry import ServiceContainer
@@ -28,14 +28,25 @@ class WorkflowBuilder:
     Enables defining complex workflows in a simple, modular way.
     """
     
-    def __init__(self, container: Optional[ServiceContainer] = None):
+    def __init__(self, name_or_container: Optional[Union[ServiceContainer, str]] = None, container: Optional[ServiceContainer] = None, name: Optional[str] = None):
         """
         Initialize workflow builder.
         
         Args:
+            name_or_container: Workflow name or Service container
             container: Service container
+            name: Workflow name
         """
-        self.container = container or ServiceContainer()
+        if isinstance(name_or_container, str):
+            self.name = name_or_container
+            self.container = container or ServiceContainer()
+        elif isinstance(name_or_container, ServiceContainer):
+            self.name = name or "workflow"
+            self.container = name_or_container
+        else:
+            self.name = name or "workflow"
+            self.container = container or ServiceContainer()
+
         self.steps: List[WorkflowStep] = []
         self.current_step: int = 0
     
