@@ -1,104 +1,82 @@
 # Training Engine & Orchestration
 
-The `GenericTrainer` class (`trainers/trainer.py`) serves as the central orchestration engine of the TruthGPT Optimization Core. It encapsulates high-performance distributed training, automatic mixed precision, gradient accumulation, exponential moving averages, and fault-tolerant checkpointing.
+The `GenericTrainer` class (`trainers/trainer.py`) serves as the central orchestration engine of the TruthGPT Optimization Core. It is designed to abstract training boilerplate while supporting state-of-the-art acceleration strategies including Automatic Mixed Precision (AMP), gradient accumulation, Distributed Data Parallel (DDP), Fully Sharded Data Parallel (FSDP), and dynamic callback pipelines.
 
 ---
 
-## 🏗️ Trainer Subsystem Architecture
+## 🏛️ Trainer Subsystem Architecture
 
 ```mermaid
 graph TD
-    subgraph "GenericTrainer Core"
-        Loop[Training Loop Engine]
-        ModelMgr[ModelManager - Weights, LoRA, JIT]
-        OptMgr[OptimizerManager - Fused Kernels, Schedulers]
-        DataMgr[DataManager - Dynamic Bucketing, Workers]
-        EMAMgr[EMAManager - Weight Averaging]
-        CkptMgr[CheckpointManager - Atomic Safetensors]
-        EvalMgr[Evaluator - Validation & Perplexity]
-        Metrics[MetricsTracker & Profiler]
-    end
+    TRAINER["GenericTrainer Instance"] --> CB["Callback Pipeline"]
+    TRAINER --> AMP["AMP Scaler (GradScaler)"]
+    TRAINER --> OPT["Optimizer Step & Clip"]
+    TRAINER --> CKPT["Checkpoint Manager"]
+    TRAINER --> TELEM["Telemetry & Metrics"]
 
-    Loop --> ModelMgr
-    Loop --> OptMgr
-    Loop --> DataMgr
-    Loop --> EMAMgr
-    Loop --> CkptMgr
-    Loop --> EvalMgr
-    Loop --> Metrics
+    CB --> HOOK_START["on_train_start()"]
+    CB --> HOOK_EPOCH["on_epoch_begin() / on_epoch_end()"]
+    CB --> HOOK_STEP["on_step_begin() / on_step_end()"]
+    CB --> HOOK_FINISH["on_train_end()"]
+
+    AMP --> FP16["FP16 Loss Scaling"]
+    AMP --> BF16["BF16 Native Autocast"]
+    AMP --> FP8["FP8 TransformerEngine Scaler"]
 ```
 
 ---
 
-## ⚡ Key Trainer Features
+## 🔄 The Training Step Lifecycle
 
-### 1. Automatic Precision & Scaled Backpropagation
-The trainer dynamically configures precision according to detected hardware:
-- **BFloat16 (BF16)**: Direct native execution without scaling overhead.
-- **Float16 (FP16)**: Backed by `torch.cuda.amp.GradScaler` with dynamic scale adjustment and underflow recovery.
-- **TensorFloat-32 (TF32)**: Configured globally via `torch.backends.cuda.matmul.allow_tf32 = True`.
+Each optimization step in `GenericTrainer` follows a rigorous sequence:
 
-### 2. Gradient Accumulation with Synchronized Step Boundaries
-Gradient accumulation enables training with large effective batch sizes without exhausting GPU VRAM:
-
-$$\text{Effective Batch Size} = \text{Batch Size per Device} \times \text{Gradient Accumulation Steps} \times N_{\text{GPUs}}$$
-
-The trainer manages backward loss scaling:
 ```python
-loss = loss / cfg.grad_accum_steps
-scaler.scale(loss).backward()
+def train_step(self, batch):
+    self.optimizer.zero_grad(set_to_none=True)
+    
+    # 1. Automatic Mixed Precision Forward Pass
+    with torch.autocast(device_type=self.device_type, dtype=self.amp_dtype, enabled=self.config.use_amp):
+        outputs = self.model(**batch)
+        loss = self.criterion(outputs, batch['labels'])
+        loss = loss / self.config.gradient_accumulation_steps
 
-if (step + 1) % cfg.grad_accum_steps == 0:
-    scaler.unscale_(optimizer)
-    torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.max_grad_norm)
-    scaler.step(optimizer)
-    scaler.update()
-    optimizer.zero_grad(set_to_none=True)
-    if cfg.ema_enabled:
-        ema_manager.update(model)
+    # 2. Mixed Precision Scaled Backward Pass
+    self.scaler.scale(loss).backward()
+
+    # 3. Gradient Accumulation & Step Execution
+    if (self.global_step + 1) % self.config.gradient_accumulation_steps == 0:
+        self.scaler.unscale_(self.optimizer)
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.max_grad_norm)
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
+        self.lr_scheduler.step()
+
+    return loss.item() * self.config.gradient_accumulation_steps
 ```
-
-### 3. Exponential Moving Average (EMA)
-EMA maintains a slowly decaying average of model weights during training:
-
-$$\theta_{\text{EMA}}^{(t)} = \beta \cdot \theta_{\text{EMA}}^{(t-1)} + (1 - \beta) \cdot \theta^{(t)}$$
-
-where $\beta \approx 0.999$. During evaluation and final checkpoint export, EMA weights produce smoother loss landscapes and improved out-of-distribution generalization.
-
-### 4. Asynchronous & Atomic Checkpointing
-Checkpoints are saved using `safetensors` format with atomic filesystem rename operations:
-- Prevents partially written checkpoints during hardware or power interruptions.
-- Preserves full training state: optimizer state dictionaries, RNG states, step counters, learning rate schedules, and EMA weights.
-- Automatically maintains only the top $K$ checkpoints (`cfg.ckpt_keep_last`) to conserve disk space.
 
 ---
 
-## 📋 Callback Lifecycle Hooks
+## 🧩 Event Callbacks & Hooks
 
-TruthGPT provides an extensible callback system:
+TruthGPT provides modular hooks allowing custom extensions to execute at any phase of the training loop:
 
-```mermaid
-sequenceDiagram
-    participant T as Trainer
-    participant CB as Callback
+```python
+from trainers.callbacks import BaseCallback
 
-    T->>CB: on_train_begin()
-    loop Epochs
-        T->>CB: on_epoch_begin(epoch)
-        loop Steps
-            T->>CB: on_step_begin(step)
-            T->>CB: on_step_end(step, metrics)
-        end
-        T->>CB: on_eval_begin()
-        T->>CB: on_eval_end(eval_metrics)
-        T->>CB: on_epoch_end(epoch)
-    end
-    T->>CB: on_train_end()
+class EarlyStoppingCallback(BaseCallback):
+    def __init__(self, patience=3):
+        self.patience = patience
+        self.best_loss = float("inf")
+        self.counter = 0
+
+    def on_epoch_end(self, trainer, epoch, metrics):
+        val_loss = metrics.get("val_loss", float("inf"))
+        if val_loss < self.best_loss:
+            self.best_loss = val_loss
+            self.counter = 0
+        else:
+            self.counter += 1
+            if self.counter >= self.patience:
+                trainer.should_stop = True
+                print(f"Early stopping triggered at epoch {epoch}")
 ```
-
-### Available Built-In Callbacks:
-- `ConsoleLoggingCallback`: Colored terminal progress bar and step diagnostics.
-- `WandbCallback`: Real-time streaming to Weights & Biases dashboards.
-- `TensorBoardCallback`: Loss curves, gradient norms, and learning rate histories.
-- `EarlyStoppingCallback`: Halts training when validation loss stops improving.
-- `ProfilerCallback`: PyTorch CUDA profiler traces exportable to Chrome Trace (`chrome://tracing`).

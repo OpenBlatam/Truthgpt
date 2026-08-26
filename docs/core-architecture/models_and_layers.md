@@ -1,73 +1,79 @@
 # Models & Layer Architecture
 
-TruthGPT Optimization Core includes modular, high-efficiency building blocks for state-of-the-art Transformer architectures (`modules/`), supporting custom positional embeddings, attention variants, activation functions, and Mixture of Experts (MoE).
+TruthGPT Optimization Core includes modular, high-efficiency building blocks for state-of-the-art Transformer and Mixture-of-Experts architectures.
 
 ---
 
-## 🧱 Modular Layer Hierarchy
+## 🏛️ Modular Layer Hierarchy
 
 ```mermaid
 graph TD
-    Model[TransformerModel] --> Embedding[Embedding Layer + RoPE / ALiBi]
-    Model --> Blocks[Stack of N Transformer Blocks]
-    Model --> Norm[Final LayerNorm / RMSNorm]
-    Model --> Head[LM Head / Output Projection]
+    TRANSFORMER["TransformerBlock / Model"]
+    
+    TRANSFORMER --> ATTN_LAYER["Attention Sub-Layer"]
+    TRANSFORMER --> FFN_LAYER["FeedForward / MLP Sub-Layer"]
+    TRANSFORMER --> NORM["Normalization (RMSNorm / LayerNorm)"]
 
-    subgraph "Transformer Block"
-        Blocks --> PreNorm1[RMSNorm]
-        Blocks --> Attn[Attention: Flash / SDPA / Sparse]
-        Blocks --> Res1[Residual Add]
-        Blocks --> PreNorm2[RMSNorm]
-        Blocks --> FFN[Feed Forward: SwiGLU / MoE / GeGLU]
-        Blocks --> Res2[Residual Add]
-    end
+    ATTN_LAYER --> MHA["Multi-Head Attention (MHA)"]
+    ATTN_LAYER --> GQA["Grouped-Query Attention (GQA)"]
+    ATTN_LAYER --> MQA["Multi-Query Attention (MQA)"]
+    ATTN_LAYER --> FLASH["FlashAttention-2 / FlashAttention-3"]
+    ATTN_LAYER --> ROPE["Rotary Embeddings (RoPE / LongRoPE)"]
+
+    FFN_LAYER --> SWIGLU["SwiGLU Activation MLP"]
+    FFN_LAYER --> GEGLU["GeGLU Activation MLP"]
+    FFN_LAYER --> MOE["Sparse MoE / PiMoE"]
 ```
 
 ---
 
-## 🔬 Component Details
+## ⚡ Key Architectural Features
 
-### 1. Positional Encodings (`modules/embeddings/`)
-- **Rotary Position Embeddings (RoPE)**: Applies complex rotation matrices to query and key vectors. Supports **xPos**, **LongRoPE**, and **NTK-aware scaling** for context extension up to 128k+ tokens.
-- **ALiBi (Attention with Linear Biases)**: Eliminates explicit position embeddings in favor of distance-based bias penalties, enabling zero-shot context extrapolation.
-- **Learned Absolute Embeddings**: Traditional sinusoidal / learned embeddings for legacy architectures.
+### 1. Grouped-Query Attention (GQA) & Multi-Query Attention (MQA)
+Standard Multi-Head Attention maintains separate Key and Value heads for every Query head, dramatically inflating KV-Cache memory during autoregressive inference. TruthGPT implements GQA with configurable head ratios:
 
-### 2. Attention Mechanisms (`modules/attention/`)
-- **Flash Attention 2 & 3**: IO-aware SRAM-tiled attention kernel that avoids writing intermediate $N \times N$ attention matrices to high-bandwidth memory (HBM).
-- **Scaled Dot Product Attention (SDPA)**: PyTorch native multi-backend attention dispatcher.
-- **Sparse Attention & Local Sliding Window**: Limits attention matrix computation to localized token receptive fields.
-- **Grouped-Query Attention (GQA) & Multi-Query Attention (MQA)**: Reduces KV-head counts to shrink KV-cache footprint during inference by 4x–8x.
+$$\text{KV-Heads} = \frac{\text{Query Heads}}{G}$$
 
-### 3. Feed-Forward & Activations (`modules/feed_forward/`)
-- **SwiGLU (Swish Gated Linear Unit)**: Non-linear gating mechanism offering superior training dynamics over standard ReLU/GELU:
+For $G=8$, KV cache memory is reduced by **87.5%** with negligible perplexity degradation.
+
+### 2. Rotary Position Embeddings (RoPE & LongRoPE)
+RoPE applies complex planar rotations to Query and Key projections, enabling strong relative positional awareness:
+
+$$R_{\Theta, m}^d = \text{diag}\left(R_{\theta_1, m}, R_{\theta_2, m}, \dots, R_{\theta_{d/2}, m}\right)$$
+
+TruthGPT also integrates **LongRoPE**, scaling context windows from 4K to 128K+ tokens without fine-tuning instability.
+
+### 3. SwiGLU Feed-Forward Networks
+TruthGPT defaults to Swish-Gated Linear Units (SwiGLU), proven across LLaMA, Mistral, and Claude models to outperform standard ReLU/GELU MLPs:
 
 $$\text{SwiGLU}(x) = (\text{Swish}(x W_{\text{gate}}) \odot x W_{\text{up}}) W_{\text{down}}$$
 
-- **Mixture of Experts (MoE)**: Sparse top-$K$ token routing layer allowing models to scale to hundreds of billions of parameters with sparse compute budgets.
-
 ---
 
-## 🛠️ Instantiating Modular Models
+## 💻 Python Module Example
 
 ```python
-from modules.model.transformer_model import TransformerModel
-from config.transformer_config import TransformerConfig
+from models.modules.attention import GroupedQueryAttention
+from models.modules.feed_forward import SwiGLUFeedForward
+from models.modules.normalization import RMSNorm
+import torch
+import torch.nn as nn
 
-# Define modular model configuration
-config = TransformerConfig(
-    d_model=4096,
-    n_heads=32,
-    n_kv_heads=8,             # Grouped Query Attention (GQA 4:1)
-    n_layers=32,
-    d_ff=14336,
-    vocab_size=32000,
-    max_seq_length=4096,
-    pos_embedding_type="rope", # RoPE embeddings
-    activation="swiglu",       # SwiGLU feed-forward
-    norm_type="rmsnorm",       # RMSNorm for stability
-    use_flash_attention=True
-)
+class OptimizedTransformerBlock(nn.Module):
+    def __init__(self, d_model=1024, num_q_heads=16, num_kv_heads=4, d_ff=2816):
+        super().__init__()
+        self.input_norm = RMSNorm(d_model)
+        self.attention = GroupedQueryAttention(
+            d_model=d_model, 
+            num_q_heads=num_q_heads, 
+            num_kv_heads=num_kv_heads
+        )
+        self.post_attention_norm = RMSNorm(d_model)
+        self.mlp = SwiGLUFeedForward(d_model=d_model, d_ff=d_ff)
 
-# Instantiate PyTorch nn.Module
-model = TransformerModel(config)
+    def forward(self, x, mask=None):
+        # Pre-LN architecture with residual connections
+        x = x + self.attention(self.input_norm(x), mask=mask)
+        x = x + self.mlp(self.post_attention_norm(x))
+        return x
 ```
