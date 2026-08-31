@@ -14,6 +14,7 @@ TruthGPT) plus stdlib. Every helper is safe to call from sync or async code.
 """
 from __future__ import annotations
 
+import asyncio
 import functools
 import inspect
 import itertools
@@ -471,7 +472,7 @@ def cc_menu(
     """
 
     def _wrap(fn: F) -> F:
-        is_coro = inspect.iscoroutinefunction(fn)
+        is_coro = asyncio.iscoroutinefunction(fn) or inspect.iscoroutinefunction(fn)
 
         if is_coro:
             @functools.wraps(fn)
@@ -512,7 +513,7 @@ def cc_step(
     """
 
     def _wrap(fn: F) -> F:
-        is_coro = inspect.iscoroutinefunction(fn)
+        is_coro = asyncio.iscoroutinefunction(fn) or inspect.iscoroutinefunction(fn)
         sp_label = spinner_label or label
 
         if is_coro:

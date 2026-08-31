@@ -390,21 +390,21 @@ flake8 optimization_core/
 ## 📚 Documentación Adicional
 
 ### Ejemplos Completos
-- [Ejemplo Básico](production_example.py)
-- [Configuración Avanzada](docs/advanced_configuration.md)
-- [Monitoreo en Producción](docs/production_monitoring.md)
-- [Testing y Benchmarking](docs/testing_guide.md)
+- [Ejemplo Básico](../../../production/production_example.py)
+- [Configuración Avanzada](../../getting_started/configuration.md)
+- [Monitoreo en Producción](../../api/utilities.md)
+- [Testing y Benchmarking](../../getting_started/health_and_diagnostics.md)
 
 ### API Reference
-- [Production Optimizer API](docs/api/optimizer.md)
-- [Monitoring API](docs/api/monitoring.md)
-- [Configuration API](docs/api/configuration.md)
-- [Testing API](docs/api/testing.md)
+- [Production Optimizer API](../../api/optimizers.md)
+- [Monitoring API](../../api/utilities.md)
+- [Configuration API](../../api/configuration.md)
+- [Testing API](../../getting_started/health_and_diagnostics.md)
 
 ### Troubleshooting
-- [Problemas Comunes](docs/troubleshooting.md)
-- [Performance Tuning](docs/performance_tuning.md)
-- [Debugging Guide](docs/debugging.md)
+- [Problemas Comunes](../../guides/troubleshooting.md)
+- [Performance Tuning](../../guides/optimization_tuning.md)
+- [Debugging Guide](../../guides/troubleshooting.md)
 
 ## 🚀 Despliegue en Producción
 
@@ -487,7 +487,7 @@ spec:
 - **Community**: [Discord](https://discord.gg/optimization-core)
 
 ### Licencia
-MIT License - Ver [LICENSE](LICENSE) para más detalles.
+MIT License - Ver `LICENSE` para más detalles.
 
 ---
 

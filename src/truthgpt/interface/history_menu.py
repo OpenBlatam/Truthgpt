@@ -20,11 +20,11 @@ from rich.panel import Panel
 from rich.text import Text
 from rich.columns import Columns
 
-from truthgpt.interface.core import (
+from interface.core import (
     console, clear_screen, get_header, get_input,
     SYSTEM_LOGS, system_history, USER_PREFS, log_activity,
 )
-from truthgpt.interface.cc_style import (
+from interface.cc_style import (
     cc_menu, cc_action, cc_divider, cc_spinner, cc_result,
     BULLET, CONT, ARROW,
 )

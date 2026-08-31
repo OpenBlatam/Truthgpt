@@ -1,6 +1,6 @@
 # 🚀 Production Deployment & Serving Guide
 
-This guide covers deploying TruthGPT Optimization Core for high-availability production training clusters and low-latency inference serving.
+This guide covers deploying TruthGPT Optimization Core for high-availability production training clusters and low-latency inference serving with Docker, Kubernetes, and Prometheus monitoring.
 
 ---
 
@@ -62,9 +62,73 @@ EXPOSE 8080 9090
 CMD ["python3", "cli.py", "serve", "--host", "0.0.0.0", "--port", "8080"]
 ```
 
+### Building & Running with GPU Passthrough:
+```bash
+# Build image
+docker build -t truthgpt-core:latest .
+
+# Run with full GPU allocation and shared memory support
+docker run --gpus all \
+    -p 8080:8080 \
+    -v /data/models:/models \
+    -v /data/runs:/runs \
+    --ipc=host \
+    truthgpt-core:latest \
+    python -m inference.server --model /models/llama-2-7b --port 8080
+```
+
 ---
 
-## 📊 3. Prometheus & Grafana Monitoring
+## ☸️ 3. Kubernetes Deployment Manifest
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: truthgpt-inference
+  namespace: ml-production
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: truthgpt-inference
+  template:
+    metadata:
+      labels:
+        app: truthgpt-inference
+    spec:
+      containers:
+      - name: truthgpt
+        image: truthgpt-core:latest
+        command: ["python", "-m", "inference.server", "--port", "8080"]
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+            memory: "32Gi"
+            cpu: "8"
+          requests:
+            nvidia.com/gpu: 1
+            memory: "16Gi"
+            cpu: "4"
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 15
+```
+
+---
+
+## 📊 4. Prometheus & Grafana Monitoring
 
 TruthGPT exports real-time system metrics at `/v1/metrics`:
 
@@ -74,3 +138,4 @@ TruthGPT exports real-time system metrics at `/v1/metrics`:
 | `truthgpt_inference_latency_seconds` | Histogram | Request end-to-end execution latency |
 | `truthgpt_tokens_per_second` | Gauge | Active generation / training throughput |
 | `truthgpt_gpu_memory_used_bytes` | Gauge | Instantaneous GPU VRAM allocation |
+| `truthgpt_kv_cache_usage_ratio` | Gauge | Paged KV-Cache allocation fraction |

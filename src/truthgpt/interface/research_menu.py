@@ -6,15 +6,27 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.prompt import Prompt
 
-from truthgpt.interface.core import (
+from interface.core import (
     console, USER_PREFS, clear_screen, get_header, wait_for_user
 )
-from truthgpt.interface.cc_style import cc_menu, cc_step
+from interface.cc_style import cc_menu, cc_step
+from interface.registry import MenuRegistry
 
+@MenuRegistry.register("research", title="SOTA Research & Deep Discovery Hub", category="Research")
 @cc_menu("SOTA Research & Deep Discovery")
 async def research_menu():
-    from truthgpt.modules.base.core_system.core.papers.paper_registry import get_paper_registry
-    registry = get_paper_registry(preload_popular=False)
+    try:
+        from modules.base.core_system.core.papers.paper_registry import get_paper_registry
+        registry = get_paper_registry(preload_popular=False)
+    except ImportError:
+        try:
+            from optimization_core.modules.base.core_system.core.papers.paper_registry import get_paper_registry
+            registry = get_paper_registry(preload_popular=False)
+        except Exception:
+            class DummyRegistry:
+                def list_papers(self): return []
+            registry = DummyRegistry()
+
     while True:
         clear_screen()
         console.print(get_header())
@@ -224,14 +236,14 @@ async def research_menu():
             wait_for_user(force=True)
 
         elif choice == "M":
-            from truthgpt.modules.math.erdos_solver import ErdosSolver
+            from modules.math.erdos_solver import ErdosSolver
             solver = ErdosSolver()
             solver.forensic_report()
             wait_for_user(force=True)
         elif choice == "T":
             query = Prompt.ask("Research Query")
             if query:
-                from optimization_core.utils.networking.internet_search import search_internet
+                from optimization_core.utils.internet_search import search_internet
                 from rich.table import Table
                 from rich.panel import Panel
                 
@@ -277,4 +289,3 @@ async def intelligence_labs_menu():
         if choice == "0": break
         # ... logic ...
         wait_for_user(force=True)
-

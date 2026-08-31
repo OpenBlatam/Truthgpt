@@ -1,140 +1,137 @@
 # Models & Modular Components API Reference
 
-The `modules` and `models` packages contain decoupled, composable neural building blocks for architecting state-of-the-art transformer models and foundation architectures.
+The `models` and `modules` packages contain decoupled, composable neural building blocks and model builders for architecting state-of-the-art transformer models, diffusion pipelines, and PiMoE architectures.
 
 ---
 
 ## 🏛️ Modular Hierarchy
 
 ```
+models/
+├── model_manager.py           # Central lifecycle and model orchestration manager
+├── model_builder.py           # Fluent builder pattern for transformer models
+├── models.py                  # Native TruthGPT transformer architectures
+├── attention_utils.py         # Rotary, ALiBi, and efficient attention modules
+├── hf_transformers.py         # HuggingFace Transformers wrapper
+└── hf_diffusers.py            # Diffusion pipeline integrations
+
 modules/
-├── embeddings/                # Positional & semantic embedding mechanisms
-│   ├── positional_encoding.py # Standard sinusoidal encodings
-│   ├── rotary_embeddings.py   # Rotary Positional Embeddings (RoPE)
-│   ├── alibi_embeddings.py    # Attention with Linear Biases (ALiBi)
-│   └── relative_embeddings.py # Relative position matrices
 ├── attention/                 # High-performance attention mechanisms
-│   ├── flash_attention.py     # FlashAttention-2 & SDPA backends
-│   ├── multi_head_attention.py# Scaled Dot-Product Multi-Head Attention
-│   ├── sparse_attention.py    # Block-sparse & sliding window attention
-│   └── cross_attention.py     # Multi-modal cross-attention
-├── feed_forward/              # Non-linear projection layers
-│   ├── feed_forward.py        # SwiGLU, GeGLU, and standard MLP
-│   └── mixture_of_experts.py  # MoE / PiMoE Sparse Routing Layers
-├── transformer_block/         # Pre-LayerNorm Transformer Block assemblies
-└── model/                     # Complete Decoder-only & Encoder-Decoder models
+├── embeddings/                # Positional & semantic embedding mechanisms
+├── feed_forward/              # SwiGLU, GeGLU, and PiMoE routing networks
+└── transformer_block/         # Transformer block assemblies
 ```
 
 ---
 
-## 🎯 1. Attention Mechanisms (`modules.attention`)
+## 🎯 1. Model Builders & Managers (`models`)
 
-### `FlashAttention2`
-Hardware-accelerated self-attention utilizing on-chip SRAM tiling.
+### `ModelBuilder` & `ModelManager`
 
 ```python
-from modules.attention import create_flash_attention
+from models import (
+    ModelBuilder,
+    ModelManager,
+    TruthGPTModelConfig,
+    create_model_builder,
+    create_model_manager
+)
 
-attention = create_flash_attention(
+# 1. Configure TruthGPT model
+config = TruthGPTModelConfig(
+    vocab_size=32000,
     d_model=4096,
     n_heads=32,
-    head_dim=128,
-    dropout=0.0,
-    causal=True,
-    use_flash_attention=True
+    n_layers=32,
+    d_ff=11008,
+    max_seq_len=8192
 )
 
-# Input shape: [batch_size, seq_len, d_model]
-context_output = attention(hidden_states)
+# 2. Build model instance
+builder = create_model_builder()
+model = builder.with_config(config).build()
+
+# 3. Manage model lifecycle
+manager = create_model_manager(model=model, config=config)
 ```
 
 ---
 
-## 🧭 2. Positional Encodings (`modules.embeddings`)
+## 🧭 2. Positional Encodings & Attention (`models.attention_utils`)
 
-### `RotaryEmbedding` (RoPE)
-Rotates Query and Key representations in complex 2D planes according to token sequence positions:
-
-$$\mathbf{R}_{\Theta, m}^d = \text{diag}\left(\mathbf{R}_{\theta_1, m}, \mathbf{R}_{\theta_2, m}, \dots, \mathbf{R}_{\theta_{d/2}, m}\right)$$
+### `RotaryPositionalEmbedding` & `ALiBiPositionalEmbedding`
 
 ```python
-from modules.embeddings import RotaryEmbedding
-
-rope = RotaryEmbedding(
-    dim=128,
-    max_position_embeddings=32768,
-    base=10000.0,
-    scaling_factor=1.0  # Supports YaRN / LongRoPE scaling
+from models.attention_utils import (
+    RotaryPositionalEmbedding,
+    ALiBiPositionalEmbedding,
+    create_attention
 )
 
-# Apply rotation to Q and K
-q_rot, k_rot = rope(q_tensor, k_tensor, position_ids)
+# Initialize RoPE embedding module
+rope = RotaryPositionalEmbedding(dim=128, max_seq_len=32768)
+
+# Initialize efficient scaled dot-product attention
+attention = create_attention(
+    d_model=4096,
+    n_heads=32,
+    attention_type="scaled_dot_product"
+)
 ```
 
 ---
 
 ## ⚡ 3. Feed-Forward Networks & SwiGLU (`modules.feed_forward`)
 
-### `SwiGLUFeedForward`
-Gated linear activation unit shown to significantly improve linguistic representations:
+### `SwiGLU` & `FeedForward`
 
 $$\text{SwiGLU}(x) = \left(\text{Swish}(x W_{\text{gate}}) \otimes x W_{\text{up}}\right) W_{\text{down}}$$
 
 ```python
-from modules.feed_forward import create_swiglu
+from modules.feed_forward import SwiGLU, FeedForward, create_feed_forward
 
-ffn = create_swiglu(
+# Create SwiGLU feed-forward network
+ffn = create_feed_forward(
     d_model=4096,
-    d_ff=11008,          # Typically (8/3) * d_model
-    bias=False
-)
-
-ffn_out = ffn(hidden_states)
-```
-
----
-
-## 🔮 4. Mixture of Experts (MoE / PiMoE) (`modules.feed_forward.mixture_of_experts`)
-
-Implements sparse expert routing, activating only top-$k$ experts per token:
-
-```python
-from modules.feed_forward import MixtureOfExperts
-
-moe = MixtureOfExperts(
-    d_model=4096,
-    d_ff=4096,
-    num_experts=8,
-    top_k=2,                     # Route each token to top-2 experts
-    router_jitter_noise=0.01,
-    load_balancing_loss_weight=0.01
-)
-
-moe_out, auxiliary_loss = moe(hidden_states)
-```
-
----
-
-## 🏗️ 5. Complete Model Assembly (`modules.model`)
-
-Construct a production-ready decoder-only language model using factory methods:
-
-```python
-from modules.model import create_transformer_model
-
-model = create_transformer_model(
-    vocab_size=32000,
-    d_model=4096,
-    n_heads=32,
-    n_layers=32,
     d_ff=11008,
-    max_seq_length=4096,
-    attention_type="flash",
-    activation_type="swiglu",
-    norm_type="rmsnorm",
-    use_gradient_checkpointing=True
+    activation="swiglu"
+)
+```
+
+---
+
+## 🌌 4. Physics-Informed Mixture of Experts (PiMoE)
+
+**Location**: `modules.feed_forward.pimoe_router`
+
+```python
+from modules.feed_forward.pimoe_router import (
+    PiMoESystem,
+    create_pimoe_system,
+    ExpertType
 )
 
-# Forward pass
-logits = model(input_ids)  # Shape: [batch_size, seq_len, vocab_size]
+pimoe = create_pimoe_system(
+    d_model=4096,
+    num_experts=8,
+    top_k=2,
+    router_type="token_level"
+)
+
+# Route input through physics-informed experts
+output, routing_decisions = pimoe(hidden_states)
+```
+
+---
+
+## 📦 5. HuggingFace Model Bridges (`models.hf_transformers`)
+
+```python
+from models.hf_transformers import HFTransformersModel, create_hf_transformers_model
+
+hf_model = create_hf_transformers_model(
+    model_name_or_path="meta-llama/Llama-3-8B",
+    device_map="auto",
+    torch_dtype="bfloat16"
+)
 ```

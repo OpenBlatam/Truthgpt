@@ -1,44 +1,36 @@
 site_name: TruthGPT Optimization Core
-site_description: Enterprise-Grade High-Performance Deep Learning & Multi-Agent Optimization Suite
-site_author: DeepMind / Blatam Academy
-site_url: https://docs.truthgpt.blatam.academy/
-
-repo_name: OpenBlatam/TruthGPT
-repo_url: https://github.com/OpenBlatam/TruthGPT
+site_description: High-performance deep learning training, polyglot compiler, and agentic swarm optimization ecosystem.
+site_author: TruthGPT Team
 
 theme:
   name: material
   language: en
   palette:
-    - scheme: slate
-      primary: indigo
-      accent: cyan
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
+    # Light mode
     - scheme: default
       primary: indigo
-      accent: cyan
+      accent: deep purple
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
+    # Dark mode
+    - scheme: slate
+      primary: indigo
+      accent: deep purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
   features:
     - navigation.instant
     - navigation.tracking
     - navigation.tabs
-    - navigation.tabs.sticky
     - navigation.sections
     - navigation.expand
     - navigation.top
-    - navigation.indexes
-    - toc.follow
     - search.suggest
     - search.highlight
     - content.code.copy
-    - content.code.annotate
-
-plugins:
-  - search
+    - content.tabs.link
 
 markdown_extensions:
   - admonition
@@ -50,81 +42,189 @@ markdown_extensions:
           format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.highlight:
       anchor_linenums: true
-      line_spans: __span
-      pygments_lang_class: true
   - pymdownx.inlinehilite
   - pymdownx.snippets
-  - pymdownx.keys
   - pymdownx.tabbed:
       alternate_style: true
-  - pymdownx.tasklist:
-      custom_checkbox: true
-  - pymdownx.arithmatex:
-      generic: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:materialx.emoji.to_svg
   - tables
   - attr_list
   - md_in_html
 
-extra_javascript:
-  - https://polyfill.io/v3/polyfill.min.js?features=es6
-  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
-  - https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js
-
 nav:
-  - Overview: index.md
+  - Home: index.md
+  - Overview: README.md
+  - Table of Contents: SUMMARY.md
   - Getting Started:
-      - Quick Start: quickstart.md
-      - SOTA Ecosystem Quickstart: quickstart_sota.md
-      - Installation Guide: installation.md
-      - Architecture Overview: architecture.md
-      - Optimization Guide: optimization.md
-  - Training Subsystem:
-      - Overview & Lifecycle: training/overview.md
-      - Configuration Reference: training/configuration.md
-      - Distributed Training: training/distributed.md
-      - Callbacks & Monitoring: training/callbacks_monitoring.md
-      - Checkpointing & EMA: training/checkpointing_recovery.md
-  - Compiler & Acceleration:
-      - Compiler Overview: compiler/overview.md
-      - Triton & CUDA Kernels: compiler/triton_cuda_kernels.md
-      - Integration Guide: compiler/integration_guide.md
-  - Polyglot Core:
-      - Polyglot Architecture: polyglot/overview.md
-      - Rust & C++ Kernels: polyglot/rust_cpp_kernels.md
-      - Distributed Bridge: polyglot/distributed_bridge.md
-  - Autonomous Agents:
-      - OpenClaw Overview: agents/overview.md
-      - Swarm Orchestration: agents/swarm_orchestration.md
-      - Memory & Tools SDK: agents/memory_and_tools.md
-      - Messaging Integrations: agents/messaging_integrations.md
-      - Scheduler & Traces: agents/scheduler_and_traces.md
-  - Inference & Serving:
-      - High-Throughput Serving: inference/serving.md
-      - KV-Cache & Speculative Decoding: inference/kv_cache_and_decoding.md
-  - Tooling & Terminals:
-      - CLI Reference: cli_and_tools/cli_reference.md
-      - Interactive Terminals & TUI: cli_and_tools/interactive_terminals.md
-  - Practical Guides:
-      - Distributed Setup: guides/distributed_training.md
-      - Custom Triton Kernels: guides/custom_kernels.md
-      - Multi-Agent Workflows: guides/agent_workflows.md
-      - KV-Cache Optimization: guides/kv_cache_optimization.md
-      - Production Deployment: guides/production_deployment.md
-  - Tutorials & FAQ:
-      - Fine-Tuning LLaMA with LoRA: tutorials/finetune_llama_lora.md
-      - High-Throughput Serving: tutorials/high_throughput_serving.md
-      - Custom Research Papers: tutorials/custom_research_paper.md
-      - Building Custom Agents: tutorials/building_custom_agents.md
-      - Troubleshooting & FAQ: tutorials/troubleshooting_and_faq.md
+      - Overview: getting_started/index.md
+      - Installation: getting_started/installation.md
+      - Quickstart LLM Training: getting_started/quickstart_training.md
+      - Quickstart OpenClaw Agents: getting_started/quickstart_agents.md
+      - Quickstart Compiler: getting_started/quickstart_compiler.md
+      - Configuration System: getting_started/configuration.md
+      - Health & Diagnostics: getting_started/health_and_diagnostics.md
+  - Architecture:
+      - Architecture Portal: architecture/index.md
+      - System Overview: architecture/overview.md
+      - Polyglot Core: architecture/polyglot_core.md
+      - Compiler Runtime: architecture/compiler_runtime.md
+      - PiMoE Architecture: architecture/pimoe.md
+      - OpenClaw Agent Framework: architecture/agent_framework.md
+      - Data Pipeline & Bucketing: architecture/data_pipeline.md
+      - Models & Modular Layers: architecture/models_and_layers.md
   - API Reference:
-      - API Index: api/index.md
-      - Trainer API: api/trainer.md
-      - Configuration API: api/configuration.md
-      - Compiler API: api/compiler.md
-      - Polyglot API: api/polyglot.md
-      - Inference API: api/inference.md
-      - OpenClaw Agents API: api/openclaw_agents.md
-      - Optimizers API: api/optimizers.md
-      - Models & Modules API: api/models_modules.md
-      - Research Papers API: api/papers.md
-      - Utilities API: api/utilities.md
+      - API Directory: api/index.md
+      - Trainers & Checkpointing: api/trainers.md
+      - Models & Modules: api/models_modules.md
+      - Optimizers & Schedulers: api/optimizers.md
+      - Compiler & Acceleration: api/compiler.md
+      - OpenClaw Agents SDK: api/agents.md
+      - Inference & Paged KV-Cache: api/inference.md
+      - Polyglot Bindings: api/polyglot.md
+      - Configuration Schema: api/configuration.md
+      - Research Papers: api/papers.md
+      - Utilities & Telemetry: api/utilities.md
+  - Guides:
+      - Guides Overview: guides/index.md
+      - Optimization & Tuning: guides/optimization_tuning.md
+      - Distributed Training: guides/distributed_training.md
+      - Custom Agent Development: guides/custom_agent_development.md
+      - Compiler & Custom Kernels: guides/compiler_and_kernels.md
+      - KV-Cache Optimization: guides/kv_cache_optimization.md
+      - Production Deployment: guides/deployment_production.md
+      - CLI & Interactive Terminals: guides/cli_and_terminals.md
+      - Swarm Ensemble vs Single Model: guides/swarm_ensemble_vs_single_model.md
+      - Troubleshooting: guides/troubleshooting.md
+  - Tutorials:
+      - Tutorials Overview: tutorials/index.md
+      - LoRA & QLoRA Fine-Tuning: tutorials/lora_finetuning.md
+      - Custom Agents: tutorials/building_custom_agents.md
+      - High-Throughput Serving: tutorials/high_throughput_serving.md
+      - Custom Research Papers: tutorials/custom_research_papers.md
+      - Troubleshooting & FAQ: tutorials/troubleshooting_and_faq.md
+  - Examples:
+      - Examples Overview: examples/index.md
+      - LLM Fine-Tuning: examples/basic_training.md
+      - Research Swarm: examples/agent_swarms.md
+      - Compiler Benchmarks: examples/compiler_benchmarks.md
+  - Spanish Suite (Español):
+      - Portal Principal: spanish/index.md
+      - Inicio Rápido: spanish/QUICK_START.md
+      - Manual General: spanish/README.md
+      - Características:
+          - Ensemble vs Modelo Único: spanish/features/Ensemble_Vs_Single_Model.md
+      - Guías:
+          - Inicio Rápido: spanish/guides/quick_start_guide.md
+          - Uso de TruthGPT: spanish/guides/truthgpt_usage_guide.md
+          - Adaptación a TruthGPT: spanish/guides/truthgpt_adaptation_guide.md
+          - Optimización Avanzada: spanish/guides/advanced_optimization_guide.md
+          - Guía de Despliegue: spanish/guides/deployment_guide.md
+          - Mejores Prácticas: spanish/guides/best_practices_guide.md
+          - Creación de Modelos: spanish/guides/model_creation_guide.md
+          - Referencia API: spanish/guides/api_reference.md
+          - Solución de Problemas: spanish/guides/troubleshooting_guide.md
+      - Ejemplos:
+          - Ejemplos Básicos: spanish/examples/basic_examples.md
+          - Ejemplos Avanzados: spanish/examples/advanced_examples.md
+          - Benchmarks: spanish/examples/benchmark_examples.md
+          - Ejemplos Enterprise: spanish/examples/enterprise_examples.md
+          - Integraciones: spanish/examples/integration_examples.md
+          - Rendimiento: spanish/examples/performance_examples.md
+          - Casos Reales: spanish/examples/real_world_examples.md
+      - Tutoriales:
+          - Tutorial Básico: spanish/tutorials/basic_tutorial.md
+          - Tutorial Avanzado: spanish/tutorials/advanced_tutorial.md
+  - Archive:
+      - Archive Catalog: archive/index.md
+      - Legacy READMEs:
+          - Omnipotent Intelligence: archive/legacy_readmes/OMNIPOTENT_INTELLIGENCE_README.md
+          - Production README: archive/legacy_readmes/PRODUCTION_README.md
+          - Supreme Intelligence: archive/legacy_readmes/SUPREME_INTELLIGENCE_README.md
+          - Ultimate Intelligence: archive/legacy_readmes/ULTIMATE_INTELLIGENCE_README.md
+      - PiMoE Summaries:
+          - Absolute Perfection: archive/pimoe_summaries/ABSOLUTE_PERFECTION_PIMOE_SUMMARY.md
+          - Cosmic Intelligence: archive/pimoe_summaries/COSMIC_INTELLIGENCE_PIMOE_SUMMARY.md
+          - Infinite Divine: archive/pimoe_summaries/INFINITE_DIVINE_PIMOE_SUMMARY.md
+          - Infinite Reality: archive/pimoe_summaries/INFINITE_REALITY_PIMOE_SUMMARY.md
+          - Infinite Transcendence: archive/pimoe_summaries/INFINITE_TRANSCENDENCE_PIMOE_SUMMARY.md
+          - Infinite Understanding: archive/pimoe_summaries/INFINITE_UNDERSTANDING_PIMOE_SUMMARY.md
+          - Infinite Wisdom: archive/pimoe_summaries/INFINITE_WISDOM_PIMOE_SUMMARY.md
+          - Lightning Speed: archive/pimoe_summaries/LIGHTNING_SPEED_PIMOE_SUMMARY.md
+          - Transcendent Perfection: archive/pimoe_summaries/TRANSCENDENT_PERFECTION_PIMOE_SUMMARY.md
+          - Ultimate Awareness: archive/pimoe_summaries/ULTIMATE_AWARENESS_PIMOE_SUMMARY.md
+          - Ultimate Consciousness: archive/pimoe_summaries/ULTIMATE_CONSCIOUSNESS_PIMOE_SUMMARY.md
+          - Ultimate Creativity: archive/pimoe_summaries/ULTIMATE_CREATIVITY_PIMOE_SUMMARY.md
+          - Ultimate Excellence: archive/pimoe_summaries/ULTIMATE_EXCELLENCE_PIMOE_SUMMARY.md
+          - Ultimate Intelligence: archive/pimoe_summaries/ULTIMATE_INTELLIGENCE_PIMOE_SUMMARY.md
+          - Ultimate Optimization: archive/pimoe_summaries/ULTIMATE_OPTIMIZATION_PIMOE_SUMMARY.md
+          - Ultimate Enhancement: archive/pimoe_summaries/ULTIMATE_PIMOE_ENHANCEMENT_SUMMARY.md
+          - Ultimate Transcendence: archive/pimoe_summaries/ULTIMATE_TRANSCENDENCE_PIMOE_SUMMARY.md
+          - Ultimate Wisdom: archive/pimoe_summaries/ULTIMATE_WISDOM_PIMOE_SUMMARY.md
+          - Ultra Rapid Speed: archive/pimoe_summaries/ULTRA_RAPID_SPEED_PIMOE_SUMMARY.md
+      - Proposals & RFCs:
+          - Modular Architecture: archive/proposals/MODULAR_ARCHITECTURE.md
+          - Phase 1 Implementation Guide: archive/proposals/IMPLEMENTATION_GUIDE_PHASE1.md
+          - Compiler Integration Guide: archive/proposals/COMPILER_INTEGRATION_GUIDE.md
+          - KV-Cache Optimization Guide: archive/proposals/KV_CACHE_OPTIMIZATION_GUIDE.md
+          - Kernel Enhancement Master Plan: archive/proposals/KERNEL_ENHANCEMENT_MASTER_PLAN.md
+          - Kernel Improvement Proposal: archive/proposals/KERNEL_IMPROVEMENT_PROPOSAL.md
+          - Deprecated Optimizers: archive/proposals/DEPRECATED_OPTIMIZERS.md
+          - Directory Structure Guide: archive/proposals/DIRECTORY_STRUCTURE_GUIDE.md
+          - TruthGPT Improvement Plan: archive/proposals/TRUTHGPT_IMPROVEMENT_PLAN.md
+          - Kernel Enhancement Detailed: archive/proposals/TRUTHGPT_KERNEL_ENHANCEMENT_DETAILED.md
+          - Kernel Enhancement Proposal: archive/proposals/TRUTHGPT_KERNEL_ENHANCEMENT_PROPOSAL.md
+          - System Summary: archive/proposals/TRUTHPGT_SYSTEM_SUMMARY.md
+      - Refactoring History:
+          - Architecture Improvements: archive/refactoring_history/ARCHITECTURE_IMPROVEMENTS.md
+          - Architecture Improvements Summary: archive/refactoring_history/ARCHITECTURE_IMPROVEMENTS_SUMMARY.md
+          - Improvements Complete Summary: archive/refactoring_history/IMPROVEMENTS_COMPLETE_SUMMARY.md
+          - Modular Refactoring Complete: archive/refactoring_history/MODULAR_REFACTORING_COMPLETE.md
+          - Phase 1 Implementation Status: archive/refactoring_history/PHASE1_IMPLEMENTATION_STATUS.md
+          - Phase 2 Directory Reorganization: archive/refactoring_history/PHASE2_DIRECTORY_REORGANIZATION.md
+          - Phase 2 Implementation Status: archive/refactoring_history/PHASE2_IMPLEMENTATION_STATUS.md
+          - Compilers Models Adapters: archive/refactoring_history/REFACTORING_COMPILERS_MODELS_ADAPTERS.md
+          - Complete Summary: archive/refactoring_history/REFACTORING_COMPLETE_SUMMARY.md
+          - Comprehensive Refactoring: archive/refactoring_history/REFACTORING_COMPREHENSIVE.md
+          - Constants Refactoring: archive/refactoring_history/REFACTORING_CONSTANTS.md
+          - Core Optimizers: archive/refactoring_history/REFACTORING_CORE_OPTIMIZERS.md
+          - Core Organization: archive/refactoring_history/REFACTORING_CORE_ORGANIZATION.md
+          - Examples & Benchmarks: archive/refactoring_history/REFACTORING_EXAMPLES_BENCHMARKS.md
+          - Factories & Managers: archive/refactoring_history/REFACTORING_FACTORIES_MANAGERS.md
+          - Feed Forward: archive/refactoring_history/REFACTORING_FEED_FORWARD.md
+          - Final Session: archive/refactoring_history/REFACTORING_FINAL_SESSION.md
+          - Final Summary: archive/refactoring_history/REFACTORING_FINAL_SUMMARY.md
+          - Refactoring Guide: archive/refactoring_history/REFACTORING_GUIDE.md
+          - Inference Organization: archive/refactoring_history/REFACTORING_INFERENCE_ORGANIZATION.md
+          - Init.py Refactoring: archive/refactoring_history/REFACTORING_INIT_PY.md
+          - Mass Refactor: archive/refactoring_history/REFACTORING_MASS_REFACTOR.md
+          - Models Complete: archive/refactoring_history/REFACTORING_MODELS_COMPLETE.md
+          - Modules Data Optimization: archive/refactoring_history/REFACTORING_MODULES_DATA_OPTIMIZATION.md
+          - Opportunities: archive/refactoring_history/REFACTORING_OPPORTUNITIES.md
+          - Optimization Cores: archive/refactoring_history/REFACTORING_OPTIMIZATION_CORES.md
+          - Optimizers Refactoring: archive/refactoring_history/REFACTORING_OPTIMIZERS.md
+          - Optimizers Organization: archive/refactoring_history/REFACTORING_OPTIMIZERS_ORGANIZATION.md
+          - Papers Refactoring: archive/refactoring_history/REFACTORING_PAPERS.md
+          - Production Configs: archive/refactoring_history/REFACTORING_PRODUCTION_CONFIGS.md
+          - Progress: archive/refactoring_history/REFACTORING_PROGRESS.md
+          - Registries: archive/refactoring_history/REFACTORING_REGISTRIES.md
+          - Root Organization: archive/refactoring_history/REFACTORING_ROOT_ORGANIZATION.md
+          - Session Summary: archive/refactoring_history/REFACTORING_SESSION_SUMMARY.md
+          - Status: archive/refactoring_history/REFACTORING_STATUS.md
+          - Summary: archive/refactoring_history/REFACTORING_SUMMARY.md
+          - Trainers Complete: archive/refactoring_history/REFACTORING_TRAINERS_COMPLETE.md
+          - Training Complete: archive/refactoring_history/REFACTORING_TRAINING_COMPLETE.md
+          - Training Config: archive/refactoring_history/REFACTORING_TRAINING_CONFIG.md
+          - Utils Complete: archive/refactoring_history/REFACTORING_UTILS_COMPLETE.md
+          - Utils Organization: archive/refactoring_history/REFACTORING_UTILS_ORGANIZATION.md
+      - Test Reports:
+          - Enhanced Framework: archive/test_reports/README_ENHANCED_FRAMEWORK.md
+          - Enhanced Tests: archive/test_reports/README_ENHANCED_TESTS.md
+          - Enhanced Tests V4: archive/test_reports/README_ENHANCED_TESTS_V4.md
+          - Improved Tests: archive/test_reports/README_IMPROVED_TESTS.md
+          - Refactored Tests: archive/test_reports/README_REFACTORED_TESTS.md
+          - TensorFlow Optimizations: archive/test_reports/README_TENSORFLOW_OPTIMIZATIONS.md
+          - Tests: archive/test_reports/README_TESTS.md
+          - Ultra Enhanced Tests: archive/test_reports/README_ULTRA_ENHANCED_TESTS.md
+          - Ultra Enhanced Tests V3: archive/test_reports/README_ULTRA_ENHANCED_TESTS_V3.md

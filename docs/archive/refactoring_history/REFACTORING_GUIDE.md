@@ -413,10 +413,10 @@ monitor.stop_monitoring()
 ## 📞 Soporte y Contribución
 
 ### **Documentación**
-- [Guía de Usuario](docs/user_guide.md)
-- [API Reference](docs/api_reference.md)
-- [Ejemplos](examples/)
-- [Troubleshooting](docs/troubleshooting.md)
+- [Guía de Usuario](../../getting_started/index.md)
+- [API Reference](../../api/index.md)
+- [Ejemplos](../../examples/index.md)
+- [Troubleshooting](../../guides/troubleshooting.md)
 
 ### **Contribuir**
 1. Fork del repositorio

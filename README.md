@@ -7,7 +7,10 @@
 
 Sistema modular de entrenamiento LLM con arquitectura extensible vía registries, configuración YAML unificada, y optimizaciones de performance listas para producción.
 
+> 📚 **Complete Documentation Portal**: Browse the comprehensive documentation in [`docs/`](docs/index.md) or launch the interactive viewer with `python docs/serve_docs.py` (visit `http://localhost:8000`).
+
 ## 🎯 Características Principales
+
 
 ✅ **Arquitectura Modular**
 - Registries intercambiables (attention, optimizer, datasets, callbacks, etc.)

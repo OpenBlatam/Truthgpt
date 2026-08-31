@@ -8,17 +8,24 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.prompt import Prompt, Confirm
 from interface.core import console, clear_screen, USER_PREFS, save_user_prefs, wait_for_user
+from interface.registry import MenuRegistry
 
 import sys
 import asyncio
 
-async def async_input_with_timeout(prompt: str, timeout: float = 30.0) -> str:
+from typing import Optional
+
+async def async_input_with_timeout(prompt: str, timeout: float = 30.0) -> Optional[str]:
     """Read user keyboard input asynchronously with an absolute timeout."""
     sys.stdout.write(prompt)
     sys.stdout.flush()
     
     input_str = ""
-    start_time = asyncio.get_event_loop().time()
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.get_event_loop()
+    start_time = loop.time()
     
     # On Windows, use msvcrt
     if os.name == 'nt':
@@ -30,7 +37,7 @@ async def async_input_with_timeout(prompt: str, timeout: float = 30.0) -> str:
         except Exception:
             pass
             
-        while asyncio.get_event_loop().time() - start_time < timeout:
+        while loop.time() - start_time < timeout:
             await asyncio.sleep(0.02)
             if msvcrt.kbhit():
                 ch = msvcrt.getch()
@@ -38,15 +45,15 @@ async def async_input_with_timeout(prompt: str, timeout: float = 30.0) -> str:
                     sys.stdout.write("\n")
                     sys.stdout.flush()
                     return input_str.strip()
-                elif ch == b'\x08': # backspace
+                elif ch == b'\x08':  # backspace
                     if len(input_str) > 0:
                         input_str = input_str[:-1]
                         sys.stdout.write("\b \b")
                         sys.stdout.flush()
-                elif ch == b'\xe0': # Special/arrow keys
+                elif ch == b'\xe0':  # Special/arrow keys
                     if msvcrt.kbhit():
                         msvcrt.getch()
-                elif ch == b'\x03': # Ctrl+C
+                elif ch == b'\x03':  # Ctrl+C
                     raise KeyboardInterrupt()
                 else:
                     try:
@@ -64,7 +71,7 @@ async def async_input_with_timeout(prompt: str, timeout: float = 30.0) -> str:
         # Fallback for Unix/Linux/macOS using select
         import select
         try:
-            def get_input():
+            def get_input() -> Optional[str]:
                 ready, _, _ = select.select([sys.stdin], [], [], timeout)
                 if ready:
                     return sys.stdin.readline().rstrip('\r\n')
@@ -78,6 +85,7 @@ async def async_input_with_timeout(prompt: str, timeout: float = 30.0) -> str:
             except Exception:
                 return None
 
+@MenuRegistry.register("overdrive", title="Neural Performance & Optimization", category="Optimization")
 async def handle_overdrive_menu():
     try:
         while True:

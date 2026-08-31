@@ -1,49 +1,135 @@
 # 🛠️ Utilities API Reference
 
-The `utils` module contains developer tools for health checks, environment diagnostics, live training monitoring, performance profiling, and dataset processing.
+The `utils` subsystem provides developer tools for environment diagnostics, hardware telemetry, training visualization, checkpoint exporting, dataset profiling, and automated integrity validation.
 
 ---
 
-## 🔍 System Health Check (`utils/health_check.py`)
+## 🔍 System Health & Diagnostics (`utils/health_check.py`)
 
-Performs an automated multi-point verification of the execution environment:
-
-```bash
-python utils/health_check.py
+```python
+from utils.health_check import HealthChecker, DiagnosticReport
 ```
 
-### Audited Components:
-- **Python Version**: Validates Python 3.8+ compatibility.
-- **PyTorch & CUDA**: Checks CUDA availability, compute capability, cuDNN version, and VRAM capacity.
-- **Accelerator Backends**: Validates FlashAttention, Triton, xFormers, and TensorRT runtime libraries.
-- **Polyglot Modules**: Verifies native Rust and C++ shared object linkage.
+### Methods:
+
+#### `HealthChecker.run_full_diagnostic(strict: bool = False) -> DiagnosticReport`
+Runs a multi-point audit of the execution host and runtime libraries.
+- `strict` (*bool*): When `True`, raises `EnvironmentError` if recommended accelerator packages (e.g. FlashAttention, Triton) are missing.
+- **Returns**: `DiagnosticReport` object containing hardware specs, installed versions, and pass/warn/fail status flags.
+
+#### `DiagnosticReport.to_dict() -> dict`
+Serializes audit metrics to a JSON-compatible dictionary.
+
+#### `DiagnosticReport.print_rich_table()`
+Renders a color-coded terminal summary table using Rich.
+
+### CLI Usage:
+```bash
+python utils/health_check.py --strict --json-output report.json
+```
 
 ---
 
-## 📊 Live Terminal Monitor (`utils/monitor_training.py`)
+## 📊 Live Training Telemetry (`utils/monitor_training.py`)
 
-A curses/rich-based live dashboard that monitors training runs in real time:
-
-```bash
-python utils/monitor_training.py runs/my_experiment
+```python
+from utils.monitor_training import LiveTrainingMonitor, TelemetryConfig
 ```
 
-### Displays:
-- **Loss Progression**: Step-by-step moving average loss and validation loss curves.
-- **Hardware Telemetry**: GPU utilization %, VRAM consumption, temperature, and power draw.
-- **Throughput**: Real-time Tokens/sec and TFLOPs efficiency metrics.
+A curses/rich live dashboard that tracks GPU hardware metrics and training dynamics in real time.
+
+```python
+# Programmatic usage in custom training loops
+monitor = LiveTrainingMonitor(
+    log_dir="runs/experiment_llama_7b",
+    refresh_rate_hz=2.0,
+    track_gpu_telemetry=True
+)
+
+monitor.start()
+# Inside training step:
+monitor.log_step(step=step, loss=loss_val, lr=current_lr, tokens_per_sec=tok_sec)
+monitor.stop()
+```
+
+### Monitored Metrics:
+- **GPU Hardware**: Compute Utilization %, VRAM Used/Total (GB), Temperature (°C), Power Draw (Watts).
+- **Training Progression**: Step, Moving Average Loss, Validation Loss, Perplexity, Learning Rate.
+- **Throughput**: Instantaneous and cumulative Tokens/Second, Step Time (ms), Estimated Time of Arrival (ETA).
 
 ---
 
-## 📈 Post-Training Visualizer (`utils/visualize_training.py`)
+## 📈 Visualization & Reporting (`utils/visualize_training.py`)
 
-Generates statistical reports and high-resolution plots of completed runs:
-
-```bash
-python utils/visualize_training.py runs/my_experiment --plot --summary
+```python
+from utils.visualize_training import TrainingVisualizer
 ```
 
-### Arguments:
-- `--summary`: Prints total token count, best validation checkpoint, and training wall-clock time.
-- `--plot`: Generates `loss_curve.png` and `lr_schedule.png` in the run directory.
-- `--export-json`: Exports all step metrics into structured JSON format for external BI tools.
+Generates publication-quality charts and summaries of completed training sessions.
+
+```python
+visualizer = TrainingVisualizer(run_directory="runs/experiment_llama_7b")
+
+# Generate loss and learning rate curve plots
+visualizer.plot_curves(
+    output_path="runs/experiment_llama_7b/training_report.png",
+    smooth_weight=0.6,
+    include_validation=True
+)
+
+# Export summary JSON
+summary = visualizer.generate_summary()
+print(f"Total Trained Tokens: {summary['total_tokens']:,}")
+print(f"Final Validation Loss: {summary['final_val_loss']:.4f}")
+```
+
+### CLI Usage:
+```bash
+python utils/visualize_training.py runs/experiment_llama_7b --plot --summary --export-json summary.json
+```
+
+---
+
+## 📦 Checkpoint Exporting & Conversion (`utils/export_model.py`)
+
+```python
+from utils.export_model import export_checkpoint, ConversionTarget
+```
+
+Converts raw PyTorch `.pt` training checkpoints into optimized production formats:
+
+```python
+export_checkpoint(
+    checkpoint_path="checkpoints/epoch_3.pt",
+    output_directory="models/exported_llama/",
+    target=ConversionTarget.SAFETENSORS,  # SAFETENSORS, ONNX, TENSORRT
+    dtype="bfloat16",
+    merge_lora_weights=True
+)
+```
+
+### Supported Export Targets:
+- **`SAFETENSORS`**: Zero-copy memory-mapped tensor format for Hugging Face and vLLM.
+- **`ONNX`**: Open Neural Network Exchange graph with dynamic sequence length axes.
+- **`TENSORRT`**: Compiled TensorRT execution engine optimized for target GPU architecture.
+
+---
+
+## 📑 Dataset Profiling & Tokenizer Metrics (`utils/dataset_profiler.py`)
+
+```python
+from utils.dataset_profiler import DatasetProfiler
+
+profiler = DatasetProfiler(dataset_path="data/train.jsonl", tokenizer_name="meta-llama/Llama-2-7b-hf")
+stats = profiler.analyze_length_distribution(num_buckets=16)
+
+print(f"Min Tokens: {stats.min_len} | Max Tokens: {stats.max_len} | Median: {stats.median_len}")
+profiler.recommend_bucket_edges(target_padding_efficiency=0.95)
+```
+
+---
+
+## 🔗 Related Resources
+- [Health & Diagnostics Getting Started Guide](../getting_started/health_and_diagnostics.md)
+- [CLI Reference & Interactive Terminals](../guides/cli_and_terminals.md)
+- [Trainers API Reference](trainers.md)

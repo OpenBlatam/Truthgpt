@@ -18,7 +18,7 @@ from rich.table import Table
 from rich.syntax import Syntax
 from rich.prompt import Confirm
 
-from truthgpt.interface.core import (
+from interface.core import (
     console, USER_PREFS, clear_screen,
     get_header, wait_for_user, get_input, extract_target_directory,
 )
@@ -190,11 +190,11 @@ async def _rerun_phase(item, key, p_res, trace, config, llm):
         console.print(f"[bold cyan]Invoking {key} for refinement...[/bold cyan]")
 
         if key == "arxiv_discovery_scout":
-            from truthgpt.agents.domains.system_intelligence.research_agent import ResearchAgent
+            from agents.domains.system_intelligence.research_agent import ResearchAgent
             agent = ResearchAgent(llm_engine=llm)
             res = await agent.process(new_prompt)
         else:
-            from truthgpt.agents.registry import registry
+            from optimization_core.agents.framework.registry import registry
             agents_map = registry.get_all_agents()
             agent_cls = agents_map[key]
             sig = inspect.signature(agent_cls.__init__)
@@ -219,7 +219,7 @@ async def _rerun_phase(item, key, p_res, trace, config, llm):
             target_dir = extract_target_directory(guidance)
             if not target_dir:
                 target_dir = Path("truthgpt_collected/generated_code")
-            from truthgpt.interface.swarm.fusion import save_code_blocks_to_directory
+            from interface.swarm.fusion import save_code_blocks_to_directory
             saved = save_code_blocks_to_directory(new_content, target_dir, default_prefix=f"output_{key}")
             if saved:
                 trace["code_file"] = str(saved[-1])

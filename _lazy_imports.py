@@ -582,6 +582,24 @@ _LEARNING_LAZY_IMPORTS: Dict[str, str] = {
     'get_learning_module_info': '.learning',
 }
 
+# Interface & TUI Subsystem Lazy Imports
+_INTERFACE_LAZY_IMPORTS: Dict[str, str] = {
+    'interface': '.interface',
+    'MenuRegistry': '.interface',
+    'ThemeRegistry': '.interface',
+    'InterfaceBuilder': '.interface',
+    'TUIAppBuilder': '.interface',
+    'create_interface': '.interface',
+    'create_tui_app': '.interface',
+    'create_menu': '.interface',
+    'show_main_dashboard': '.interface',
+    'handle_personalize': '.interface',
+    'get_header': '.interface',
+    'get_claude_header': '.interface',
+    'get_system_telemetry': '.interface',
+    'TelemetryProvider': '.interface',
+}
+
 # Combine all lazy imports
 _ALL_LAZY_IMPORTS: Dict[str, str] = {
     **_LAZY_IMPORTS,
@@ -590,6 +608,7 @@ _ALL_LAZY_IMPORTS: Dict[str, str] = {
     **_MODELS_LAZY_IMPORTS,
     **_ENTERPRISE_LAZY_IMPORTS,
     **_LEARNING_LAZY_IMPORTS,
+    **_INTERFACE_LAZY_IMPORTS,
 }
 
 __all__ = [
@@ -599,6 +618,7 @@ __all__ = [
     '_MODELS_LAZY_IMPORTS',
     '_ENTERPRISE_LAZY_IMPORTS',
     '_LEARNING_LAZY_IMPORTS',
+    '_INTERFACE_LAZY_IMPORTS',
     '_ALL_LAZY_IMPORTS',
 ]
 

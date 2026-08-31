@@ -379,8 +379,136 @@ def verify_system_integrity() -> Dict[str, Any]:
     """Execute formal verification of all system variables and paper catalogs."""
     return api.verify_integrity()
 
+# ---------------------------------------------------------------------------
+# 🌌 TruthGPT Cloud & SaaS Subscription Platform Integration
+# ---------------------------------------------------------------------------
+
+try:
+    import truthgpt_cloud as cloud
+    from truthgpt_cloud import (
+        CloudTier,
+        TierConfig,
+        TruthGPTCloudClient,
+        subscription_manager,
+        cloud_router,
+        cloud_verifier,
+        cloud_swarm,
+        ProofCertificate,
+        SwarmExecutionTrace,
+        CloudInferenceResponse,
+        get_all_tiers,
+        get_tier_config
+    )
+    _HAS_CLOUD = True
+except ImportError:
+    try:
+        from optimization_core import truthgpt_cloud as cloud
+        from optimization_core.truthgpt_cloud import (
+            CloudTier,
+            TierConfig,
+            TruthGPTCloudClient,
+            subscription_manager,
+            cloud_router,
+            cloud_verifier,
+            cloud_swarm,
+            ProofCertificate,
+            SwarmExecutionTrace,
+            CloudInferenceResponse,
+            get_all_tiers,
+            get_tier_config
+        )
+        _HAS_CLOUD = True
+    except ImportError:
+        cloud = None
+        _HAS_CLOUD = False
+        logger.warning("truthgpt_cloud module could not be imported. Cloud functions will be unavailable.")
+
+
+# ---------------------------------------------------------------------------
+# 🌐 Cloud Convenience Methods
+# ---------------------------------------------------------------------------
+
+async def cloud_ask(
+    prompt: str,
+    user_id: str = "usr_default_demo",
+    model: Optional[str] = None,
+    enable_formal_verification: bool = True,
+    enable_swarm: Optional[bool] = None,
+    constraints: Optional[List[str]] = None
+) -> Any:
+    """
+    Execute tier-aware cloud inference with mathematical Z3 verification.
+    """
+    if not _HAS_CLOUD:
+        raise RuntimeError("TruthGPT Cloud is not available in current installation.")
+    return await cloud_router.route_inference(
+        prompt=prompt,
+        user_id=user_id,
+        model_override=model,
+        enable_swarm=enable_swarm,
+        enable_formal_verification=enable_formal_verification,
+        constraints=constraints
+    )
+
+
+def verify_formal(
+    claim: str,
+    constraints: Optional[List[str]] = None,
+    depth: int = 2
+) -> Any:
+    """
+    Directly verify a mathematical, invariant, or algorithmic claim in Z3 SMT Prover.
+    Emits a cryptographic ProofCertificate.
+    """
+    if not _HAS_CLOUD:
+        raise RuntimeError("TruthGPT Cloud is not available in current installation.")
+    return cloud_verifier.verify_claim(claim=claim, constraints=constraints, depth_level=depth)
+
+
+async def run_cloud_swarm(
+    prompt: str,
+    user_id: str = "usr_default_demo",
+    max_agents: int = 5
+) -> Any:
+    """
+    Execute an autonomous multi-agent swarm research round in TruthGPT Cloud.
+    """
+    if not _HAS_CLOUD:
+        raise RuntimeError("TruthGPT Cloud is not available in current installation.")
+    return await cloud_swarm.execute_swarm_session(prompt=prompt, user_id=user_id, max_agents=max_agents)
+
+
+def get_subscription_info(user_id: str = "usr_default_demo") -> Dict[str, Any]:
+    """
+    Retrieve user subscription tier, daily token quotas, and active metrics.
+    """
+    if not _HAS_CLOUD:
+        raise RuntimeError("TruthGPT Cloud is not available in current installation.")
+    return subscription_manager.get_user_status_summary(user_id)
+
+
+def upgrade_subscription(
+    user_id: str,
+    tier: Any,
+    billing_cycle: str = "monthly",
+    payment_method: str = "stripe_card"
+) -> Dict[str, Any]:
+    """
+    Upgrade a user's subscription tier (Free -> Pro -> Ultra -> Enterprise).
+    """
+    if not _HAS_CLOUD:
+        raise RuntimeError("TruthGPT Cloud is not available in current installation.")
+    tier_enum = CloudTier(str(tier).lower()) if not isinstance(tier, CloudTier) else tier
+    return subscription_manager.upgrade_subscription(
+        user_id=user_id,
+        target_tier=tier_enum,
+        billing_cycle=billing_cycle,
+        payment_method=payment_method
+    )
+
+
 # Version metadata
-__version__ = "2.0.0"
+__version__ = "2.0.0-cloud"
 __author__ = "Frontier-Model-Run Team"
 __license__ = "MIT"
 
@@ -410,6 +538,22 @@ __all__ = [
     "get_paper_info",
     "apply_paper",
     "verify_system_integrity",
+    # Cloud exports
+    "cloud",
+    "CloudTier",
+    "TierConfig",
+    "TruthGPTCloudClient",
+    "subscription_manager",
+    "cloud_router",
+    "cloud_verifier",
+    "cloud_swarm",
+    "cloud_ask",
+    "verify_formal",
+    "run_cloud_swarm",
+    "get_subscription_info",
+    "upgrade_subscription",
+    "get_all_tiers",
+    "get_tier_config",
     "__version__",
     "__author__",
     "__license__",

@@ -1,6 +1,6 @@
 # 🕵️ Troubleshooting & Diagnostics Guide
 
-This guide provides diagnostics and proven resolutions for common training, compilation, CUDA, and agent issues.
+This guide provides diagnostics, proven resolutions, and architectural FAQs for common training, compilation, CUDA, and agent issues in the TruthGPT Optimization Core.
 
 ---
 
@@ -78,9 +78,25 @@ This guide provides diagnostics and proven resolutions for common training, comp
 
 ---
 
-### 5. Swarm Routing or Tool Execution Errors
+### 5. `torch.compile` is Slow on First Step
+**Explanation**: This is expected behavior. `TorchInductor` traces the computational graph and compiles Triton kernels during the initial 1-3 forward/backward passes. Subsequent iterations run significantly faster.
+- **Tip**: Set `compile_mode: "default"` for rapid development and `"max-autotune"` only for long production runs.
+
+---
+
+### 6. Swarm Routing or Tool Execution Errors
 **Symptoms**: Agents return empty observations or fail to route queries.
 
 **Diagnostic Checklist & Solutions**:
 1. **Inspect Traces**: Query `/v1/traces/recent` to inspect the exact failing tool invocation.
 2. **Check SQLite Memory Lock**: If running multiple concurrent processes, ensure SQLite connection timeouts are configured or switch to PostgreSQL.
+
+---
+
+## ❓ Frequently Asked Questions (FAQ)
+
+#### Q: Does TruthGPT support Apple Silicon (M1/M2/M3/M4)?
+**A**: Yes! TruthGPT automatically selects PyTorch MPS (`Metal Performance Shaders`) when CUDA is not detected.
+
+#### Q: How is TruthGPT different from HuggingFace Accelerate?
+**A**: TruthGPT provides an integrated polyglot compiler subsystem (MLIR, TensorRT, Triton, C++, Rust), built-in 48+ SOTA paper algorithms, autonomous multi-agent swarm orchestration (OpenClaw), and continuous batching inference serving out-of-the-box.

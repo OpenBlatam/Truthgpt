@@ -1,81 +1,140 @@
 # ⚡ Optimizers & Schedulers API Reference
 
-The `optimizers` module provides state-of-the-art optimization algorithms, 8-bit quantized optimizers, and adaptive learning rate schedulers for deep neural network training.
+The `optimizers` and `factories.optimizer` modules provide a unified optimization architecture for TruthGPT, featuring parameter decay grouping, automated kernel fusion fallbacks, 8-bit quantized optimizers, advanced schedulers, and enterprise-grade multi-level optimizer wrappers.
 
 ---
 
-## 🏛️ Supported Optimizers
+## 🏛️ TruthGPT Optimizer System
 
-### 1. `Lion` (EvoLved Sign Momentum)
-Lion tracks only momentum (not variance), using the sign operation to compute updates. It consumes **$50\%$ less optimizer memory** than AdamW and achieves faster empirical convergence on LLMs.
+**Location**: `optimizers.__init__` & `optimizers.core.base_truthgpt_optimizer`
 
 ```python
-from optimizers.lion import Lion
+from optimizers import (
+    create_truthgpt_optimizer,
+    create_production_optimizer,
+    UnifiedTruthGPTOptimizer,
+    ProductionOptimizer,
+    OptimizationLevel
+)
 
-optimizer = Lion(
-    model.parameters(),
+# Initialize multi-level enterprise optimizer
+optimizer = create_truthgpt_optimizer(
+    level="enterprise",
+    config={
+        "learning_rate": 1e-4,
+        "weight_decay": 0.01,
+        "enable_quantization": True,
+        "enable_cuda_graphs": True
+    }
+)
+```
+
+### Optimization Levels
+
+| Level | Enum Value | Features Enabled |
+| :--- | :--- | :--- |
+| `"basic"` | `OptimizationLevel.BASIC` | Parameter decay grouping, baseline AdamW / SGD |
+| `"advanced"` | `OptimizationLevel.ADVANCED` | Fused CUDA kernels, mixed precision AMP scaling, cosine LR schedule |
+| `"expert"` | `OptimizationLevel.EXPERT` | 8-bit quantization, gradient checkpointing, FlashAttention fusion |
+| `"enterprise"` | `OptimizationLevel.ENTERPRISE` | Multi-GPU ZeRO sharding, JIT graph compilation, adaptive memory management |
+
+---
+
+## 🏭 Parameter Groups & Factory Registry
+
+**Location**: `factories.optimizer`
+
+```python
+from factories.optimizer import (
+    create_optimizer,
+    create_param_groups,
+    create_scheduler,
+    OptimizerConfig,
+    LRSchedulerConfig,
+    OPTIMIZERS,
+    SCHEDULERS
+)
+
+# 1. Separate model parameters into decay and no-decay groups (biases & LayerNorm excluded)
+param_groups = create_param_groups(model, weight_decay=0.01)
+
+# 2. Build optimizer from configuration
+opt_config = OptimizerConfig(
+    name="adamw",
     lr=1e-4,
-    betas=(0.9, 0.99),
-    weight_decay=0.01
+    weight_decay=0.01,
+    fused=True
 )
+optimizer = create_optimizer(opt_config, model)
+
+# 3. Build learning rate scheduler
+sched_config = LRSchedulerConfig(
+    name="cosine",
+    warmup_steps=500,
+    total_steps=10000,
+    min_lr=1e-6
+)
+scheduler = create_scheduler(sched_config, optimizer)
 ```
 
 ---
 
-### 2. `Sophia` (Second-Order Stochastic Optimization)
-Sophia estimates the diagonal Hessian using stochastic Hutchinson traces, preventing catastrophic loss spikes and achieving $2\times$ faster pretraining than AdamW.
+## 🏎️ Built-in Optimizer Algorithms
+
+The `OPTIMIZERS` registry includes built-in implementations and dynamic dispatch:
+
+### 1. `adamw` (Fused AdamW)
+Standard decoupled weight decay optimizer with automated PyTorch fused CUDA kernel acceleration:
 
 ```python
-from optimizers.sophia import SophiaG
-
-optimizer = SophiaG(
-    model.parameters(),
-    lr=2e-4,
-    betas=(0.965, 0.99),
-    rho=0.04,
-    weight_decay=0.1
-)
+optimizer = OPTIMIZERS.build("adamw", param_groups, lr=1e-4, weight_decay=0.01, fused=True)
 ```
 
----
-
-### 3. `AdamW8Bit` (BitsAndBytes Quantized Optimizer)
-Compresses optimizer first and second momentum states into 8-bit non-linear blockwise representations, saving up to **$75\%$ of optimizer VRAM**.
+### 2. `adamw_8bit` (BitsAndBytes 8-Bit Quantized)
+Saves up to $75\%$ of optimizer VRAM by compressing first and second momentum tensors into non-linear 8-bit representations:
 
 ```python
-from optimizers.quantized import AdamW8Bit
-
-optimizer = AdamW8Bit(
-    model.parameters(),
-    lr=5e-5,
-    betas=(0.9, 0.999),
-    weight_decay=0.01
-)
+optimizer = OPTIMIZERS.build("adamw_8bit", param_groups, lr=1e-4, weight_decay=0.01)
 ```
 
----
-
-### 4. `Muon` (Momentum Orthogonalized Matrix Optimizer)
-Designed for transformer matrix weights, applying orthogonal updates via Newton-Schulz iterations for maximum stability.
+### 3. `lion` (EvoLved Sign Momentum)
+Uses sign-based momentum updates with $50\%$ less memory than AdamW:
 
 ```python
-from optimizers.muon import Muon
+optimizer = OPTIMIZERS.build("lion", param_groups, lr=1e-4, weight_decay=0.01)
+```
 
-optimizer = Muon(
-    model.parameters(),
-    lr=0.02,
-    momentum=0.95,
-    nesterov=True,
-    ns_steps=5
-)
+### 4. `adafactor` (Sub-Linear Memory Optimizer)
+Low-rank factorization of second-moment statistics for massive model pretraining:
+
+```python
+optimizer = OPTIMIZERS.build("adafactor", param_groups, lr=1e-3)
 ```
 
 ---
 
 ## 📈 Learning Rate Schedulers
 
-| Scheduler | Class | Key Arguments | Description |
+The `SCHEDULERS` registry supports:
+
+| Scheduler | Identifier | Arguments | Description |
 | :--- | :--- | :--- | :--- |
-| **Cosine with Warmup** | `CosineAnnealingWithWarmup` | `warmup_steps`, `max_steps`, `min_lr` | Linear warmup followed by cosine decay down to `min_lr`. Standard for LLM training. |
-| **Linear Decay with Warmup**| `LinearWarmupScheduler` | `warmup_steps`, `total_steps` | Linear ramp up then linear decay to zero. |
-| **WSD (Warmup-Stable-Decay)**| `WSDScheduler` | `warmup_steps`, `stable_steps`, `decay_steps` | Constant maximum learning rate for the majority of training, with rapid power-law decay at the end. |
+| **Cosine with Warmup** | `"cosine"` | `warmup_steps`, `total_steps`, `min_lr` | Linear warmup followed by cosine annealing decay. |
+| **Linear Warmup** | `"linear"` | `warmup_steps`, `total_steps` | Linear warmup followed by linear decay to 0. |
+| **Warmup-Stable-Decay** | `"wsd"` | `warmup_steps`, `stable_steps`, `decay_steps` | Constant learning rate for bulk training, rapid power-law decay. |
+| **One Cycle LR** | `"one_cycle"` | `total_steps`, `max_lr`, `pct_start` | Super-convergence 1cycle policy. |
+| **Polynomial Decay** | `"polynomial"` | `warmup_steps`, `total_steps`, `power` | Polynomial exponent decay. |
+| **Constant with Warmup** | `"constant"` | `warmup_steps` | Linear warmup followed by fixed learning rate. |
+
+---
+
+## 🏢 `ProductionOptimizer`
+
+**Location**: `optimizers.production.production_optimizer`
+
+```python
+from optimizers.production.production_optimizer import ProductionOptimizer
+
+prod_opt = ProductionOptimizer(config={"target": "latency", "precision": "fp16"})
+optimized_model = prod_opt.optimize(model)
+```

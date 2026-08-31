@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 // ---------------------------------------------------------------------------
 // Marketing AI Engine v4.0 API Backend Bridge
 // Research-Backed: Cialdini Persuasion, Causal Forest HTE, Consumer Fatigue

@@ -28,6 +28,14 @@ Welcome to **TruthGPT Optimization Core**. This getting started hub will guide y
     -   Benchmark custom CUDA/Triton kernels.
     -   Accelerate inference with high-throughput polyglot engines.
 
+-   :material-cog: **[Configuration System](configuration.md)**
+    -   Strongly typed dataclasses & YAML configuration management.
+    -   Dynamic CLI parameter overrides and automated schema validation.
+
+-   :material-heart-pulse: **[Health & Diagnostics](health_and_diagnostics.md)**
+    -   Run system-wide hardware compatibility and CUDA audit checks.
+    -   Benchmark raw tensor operations, attention throughput, and memory bandwidth.
+
 </div>
 
 ---

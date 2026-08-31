@@ -116,7 +116,10 @@ sequenceDiagram
 
 ## 📚 Section Breakdown
 
+- [System Architecture Index](index.md)
 - [Polyglot Core Architecture](polyglot_core.md)
 - [Compiler Runtime Architecture](compiler_runtime.md)
 - [PiMoE Physics-Informed MoE](pimoe.md)
 - [OpenClaw Agent Framework](agent_framework.md)
+- [Data Pipeline & Dynamic Bucketing](data_pipeline.md)
+- [Models & Modular Layers](models_and_layers.md)

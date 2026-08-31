@@ -257,3 +257,8 @@ class QuantizationError(DomainError):
         self.source_precision = source_precision
         self.target_precision = target_precision
         self.reason = reason
+
+
+# Compatibility aliases
+DimensionMismatchError = ShapeError
+InvalidConfigurationError = ValidationError

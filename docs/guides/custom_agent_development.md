@@ -1,6 +1,6 @@
 # 🤖 Custom Agent & Tool Development Guide
 
-Learn how to build domain-specialized autonomous agents, register custom tools, and integrate webhook endpoints into the OpenClaw ecosystem.
+Learn how to build domain-specialized autonomous agents, register custom tools, construct multi-step workflows, and integrate webhook endpoints into the OpenClaw ecosystem.
 
 ---
 
@@ -64,7 +64,7 @@ client.add_tool(QueryDatabaseTool())
 
 ## 🐝 3. Adding Agents to the Swarm Router
 
-Register your custom agent into the Swarm Orchestrator so queries are automatically routed:
+Register your custom agent into the Swarm Orchestrator so queries are automatically routed based on semantic intent:
 
 ```python
 from optimization_core.agents.multi_agent.swarm import SwarmOrchestrator
@@ -78,9 +78,30 @@ orchestrator.register_agent(
 
 ---
 
-## 📡 4. Integrating Custom Webhooks
+## 🕸️ 4. Multi-Step Graph Pipelines
 
-OpenClaw supports bidirectional webhook integrations for popular chat platforms:
+For complex sequential workflows that require multi-stage execution with validations:
+
+```python
+from optimization_core.agents.orchestration.graph_orchestrator import GraphOrchestrator
+
+graph = GraphOrchestrator()
+graph.add_node("Extractor", data_extractor_agent)
+graph.add_node("Analyzer", data_analyzer_agent)
+graph.add_node("Validator", validation_agent)
+
+graph.add_edge("Extractor", "Analyzer")
+graph.add_edge("Analyzer", "Validator")
+graph.set_entry_point("Extractor")
+
+result = await graph.run(user_id="user_42", initial_input="Extract and validate Q2 metrics.")
+```
+
+---
+
+## 📡 5. Integrating Custom Webhooks
+
+OpenClaw supports bidirectional webhook integrations for chat platforms:
 
 ```python
 from optimization_core.agents.messaging.telegram import TelegramAdapter

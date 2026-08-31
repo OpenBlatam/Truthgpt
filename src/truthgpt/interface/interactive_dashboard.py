@@ -16,11 +16,11 @@ from prompt_toolkit.widgets import Button, Box, Shadow, TextArea
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.mouse_events import MouseEventType
 
-from truthgpt.interface.core import (
+from interface.core import (
     console as rich_console, USER_PREFS, get_header, get_system_telemetry,
 )
-from truthgpt.interface.cc_style import cc_action, cc_divider
-from truthgpt.interface.tui_base import BaseTUIApp
+from interface.cc_style import cc_action, cc_divider
+from interface.tui_base import BaseTUIApp
 
 
 class InteractiveDashboardApp(BaseTUIApp):
@@ -40,7 +40,7 @@ class InteractiveDashboardApp(BaseTUIApp):
         @self.kb.add('c-o')
         def _(event):
             try:
-                from truthgpt.interface.cc_style import expand_pending
+                from interface.cc_style import expand_pending
                 event.app.run_in_terminal(lambda: expand_pending())
             except Exception:
                 pass
@@ -174,7 +174,7 @@ class InteractiveDashboardApp(BaseTUIApp):
         load_bar = "█" * filled + "░" * (10 - filled)
 
         try:
-            from truthgpt.interface.cc_style import has_pending_expansion
+            from interface.cc_style import has_pending_expansion
             expand_active = has_pending_expansion()
         except Exception:
             expand_active = False

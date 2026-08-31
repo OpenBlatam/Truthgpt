@@ -1,27 +1,56 @@
-# Tutorial: Building Custom OpenClaw Agents
+# Building Custom Agents & Tool Augmentation
 
-This tutorial demonstrates creating a custom autonomous agent from scratch with custom domain knowledge, system prompts, and tool execution capabilities.
+This tutorial guides you through building a specialized domain agent with custom tools and integrating it into the OpenClaw Agent Swarm.
 
 ---
 
-## 🛠️ Step 1: Subclass `BaseAgent`
+## 🛠️ Step 1: Define Custom Python Tools
 
-Create `agents/domains/database_admin.py`:
+Tools in OpenClaw can be defined using callable functions or by subclassing `BaseTool`:
 
 ```python
-from optimization_core.agents.framework.architectures.base_agent import BaseAgent
-from optimization_core.agents.framework.models import AgentResponse
+from agents.framework.tools.tool_base import BaseTool
 
-class DatabaseAdminAgent(BaseAgent):
+def profile_cuda_kernel(kernel_name: str) -> dict:
+    """Profiles active CUDA kernel execution time in microseconds."""
+    return {
+        "kernel": kernel_name,
+        "average_duration_us": 142.6,
+        "occupancy_pct": 94.2,
+        "sm_efficiency_pct": 88.7
+    }
+```
+
+---
+
+## 🐝 Step 2: Implement the Specialist Agent
+
+```python
+from agents.framework.architectures.base_agent import BaseAgent
+from agents.framework.models import AgentResponse
+from agents.unified_agent_registry import agent_registry
+
+@agent_registry.register("gpu_kernel_profiler_agent")
+class GPUKernelProfilerAgent(BaseAgent):
     def __init__(self):
         super().__init__(
-            name="DatabaseAdminAgent",
-            role="Specialist in SQL schema optimization and query indexing"
+            agent_id="gpu_kernel_profiler_agent",
+            name="GPUKernelProfilerAgent",
+            role="Specialist in GPU profiling, occupancy analysis, and SM efficiency optimization"
         )
 
     async def process(self, query: str, context: dict = None) -> AgentResponse:
-        # Custom reasoning and SQL plan inspection
-        analysis = f"Inspected SQL query for optimization: {query}\nRecommendation: Add composite B-Tree index on (user_id, created_at)."
+        # 1. Execute profiling logic
+        profiling_data = profile_cuda_kernel("triton_fused_rmsnorm")
+        
+        # 2. Synthesize recommendations
+        analysis = (
+            f"Profiled {profiling_data['kernel']}:\n"
+            f"- Latency: {profiling_data['average_duration_us']} µs\n"
+            f"- SM Efficiency: {profiling_data['sm_efficiency_pct']}%\n"
+            f"Recommendation: Increase block size to 256 for 100% SM saturation."
+        )
+        
         return AgentResponse(
             content=analysis,
             agent_name=self.name,
@@ -31,21 +60,22 @@ class DatabaseAdminAgent(BaseAgent):
 
 ---
 
-## 🐝 Step 2: Register Agent with Swarm
+## 🚀 Step 3: Test Agent via Swarm Client
 
 ```python
-from openclaw import AgentClient
-from agents.domains.database_admin import DatabaseAdminAgent
+import asyncio
+from agents import AgentClient, AgentConfig
 
-client = AgentClient(use_swarm=True)
-client.register_agent(DatabaseAdminAgent())
+async def main():
+    config = AgentConfig(use_swarm=True, default_agent_name="gpu_kernel_profiler_agent")
+    client = AgentClient(config=config)
+    
+    response = await client.run(
+        user_id="dev_01",
+        prompt="Analyze why our fused RMSNorm kernel is dropping GPU occupancy."
+    )
+    print(response.content)
 
-# Test query routing
-response = await client.run(
-    user_id="dev_1",
-    prompt="My Postgres query on user transactions is taking 4 seconds. How can I optimize it?"
-)
-
-print(f"Handled by: {response.agent_name}")
-print(response.content)
+if __name__ == "__main__":
+    asyncio.run(main())
 ```

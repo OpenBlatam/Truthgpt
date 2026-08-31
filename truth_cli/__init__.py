@@ -40,6 +40,9 @@ app.add_typer(papers_app)
 plugins_app = typer.Typer(name="plugins", help="🔌 Plugin management and discovery")
 app.add_typer(plugins_app)
 
+cloud_app = typer.Typer(name="cloud", help="💎 TruthGPT Cloud subscriptions, formal verification & SaaS")
+app.add_typer(cloud_app)
+
 # Optimization: Only load command modules if we're actually calling a subcommand
 # This significantly speeds up the minimalist dashboard entry point.
 if len(sys.argv) > 1 and sys.argv[1] not in ["--help", "-h"]:
@@ -49,6 +52,7 @@ if len(sys.argv) > 1 and sys.argv[1] not in ["--help", "-h"]:
     from .paper_cmds import register_paper_commands
     from .plugin_cmds import register_plugin_commands
     from .continuity_cmds import register_continuity_commands
+    from .cloud_cmds import register_cloud_commands
 
     register_model_commands(app)
     register_system_commands(app)
@@ -56,6 +60,7 @@ if len(sys.argv) > 1 and sys.argv[1] not in ["--help", "-h"]:
     register_paper_commands(papers_app)
     register_plugin_commands(plugins_app)
     register_continuity_commands(app)
+    register_cloud_commands(cloud_app)
 
 @app.callback(invoke_without_command=True)
 def main_callback(ctx: typer.Context):

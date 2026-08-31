@@ -1,16 +1,24 @@
 """
 Infrastructure & Node Hub
 """
+from __future__ import annotations
+
 import time
 from rich.panel import Panel
-from rich.table import Table
 from rich.prompt import Prompt
+from rich.table import Table
 
 from interface.core import (
-    console, clear_screen, get_header, wait_for_user
+    clear_screen,
+    console,
+    get_header,
+    wait_for_user,
 )
+from interface.registry import MenuRegistry
 
-async def infrastructure_menu():
+
+@MenuRegistry.register("infrastructure", title="Local Infrastructure & Node Hub", category="Infrastructure")
+async def infrastructure_menu() -> None:
     while True:
         clear_screen()
         console.print(get_header())
@@ -19,14 +27,17 @@ async def infrastructure_menu():
         table.add_row("0", "Back", "")
         console.print(Panel(table, border_style="cyan"))
         choice = Prompt.ask("Selection", choices=["0", "1"])
-        if choice == "0": break
+        if choice == "0":
+            break
         elif choice == "1":
             cmd = Prompt.ask("Enter Shell Command")
             console.print(f"[cyan]Executing: {cmd}...[/cyan]")
             time.sleep(1)
         wait_for_user(force=True)
 
-async def task_registry_menu():
+
+@MenuRegistry.register("task_registry", title="System Task Registry", category="Infrastructure")
+async def task_registry_menu() -> None:
     while True:
         clear_screen()
         console.print(get_header())
@@ -35,5 +46,6 @@ async def task_registry_menu():
         table.add_row("0", "Back")
         console.print(table)
         choice = Prompt.ask("Selection", choices=["0", "1"])
-        if choice == "0": break
+        if choice == "0":
+            break
         wait_for_user(force=True)

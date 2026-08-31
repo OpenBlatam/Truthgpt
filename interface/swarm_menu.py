@@ -6,109 +6,105 @@ This module is the slim facade that ties together the submodules under
 existing callers (e.g. ``from interface.swarm_menu import swarm_menu``)
 continue to work without changes.
 """
+from __future__ import annotations
 
 import io
 import logging
-from typing import Optional
+from typing import Any, List, Optional
 
+from prompt_toolkit.formatted_text import ANSI
+from prompt_toolkit.layout import Layout
+from prompt_toolkit.layout.containers import HSplit, Window, WindowAlign
+from prompt_toolkit.layout.controls import FormattedTextControl
+from prompt_toolkit.mouse_events import MouseEventType
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
 from interface.core import (
-    console, USER_PREFS, get_header, wait_for_user, get_input,
+    USER_PREFS,
+    console,
+    get_claude_header,
+    get_input,
     get_theme_panel,
+    wait_for_user,
 )
+from interface.tui_base import BaseTUIApp
 
 # ── Re-exports from submodules (backwards compatibility) ──────────
 
-from interface.swarm.handlers import (                        # noqa: F401
+from interface.swarm.handlers import (  # noqa: F401
+    handle_agent_composer,
+    handle_expert_matrix,
+    handle_math_verification,
+    handle_mcp_connect,
+    handle_persona_tuning,
     handle_swarm_ask,
     handle_swarm_telemetry,
-    handle_persona_tuning,
-    handle_expert_matrix,
-    handle_mcp_connect,
-    handle_math_verification,
-    handle_agent_composer,
 )
-from interface.swarm.missions import (                        # noqa: F401
-    handle_continuous_mission,
-    handle_background_missions,
+from interface.swarm.missions import (  # noqa: F401
     BackgroundMission,
+    handle_background_missions,
+    handle_continuous_mission,
     wait_with_interrupt,
 )
-from interface.swarm.fusion import (                          # noqa: F401
-    handle_swarm_fusion,
+from interface.swarm.fusion import (  # noqa: F401
     execute_swarm_dispatch,
-    save_code_blocks_to_directory,
     extract_filename_from_code,
+    handle_swarm_fusion,
     run_google_simulation,
     run_mcp_simulation,
+    save_code_blocks_to_directory,
 )
-from interface.swarm.inspector import (                       # noqa: F401
-    swarm_phase_inspector,
-    inspect_single_phase,
-    view_and_edit_code,
+from interface.swarm.inspector import (  # noqa: F401
     execute_sandbox_code,
+    inspect_single_phase,
     optimize_sandbox_code,
     safe_panel,
+    swarm_phase_inspector,
+    view_and_edit_code,
 )
 
 logger = logging.getLogger(__name__)
 
-_client_cache = None
+_client_cache: Optional[Any] = None
 
 
-# ── Swarm Menu TUI (prompt_toolkit) ───────────────────────────────
+# ── Swarm Menu TUI (inheriting BaseTUIApp) ─────────────────────────
 
-class SwarmMenuApp:
-    def __init__(self, active_agents):
-        self.active_agents = active_agents
-        self.selected_index = 0
-        from prompt_toolkit.key_binding import KeyBindings
-        self.kb = KeyBindings()
-        self.result = None
-        self._setup_keybindings()
+class SwarmMenuApp(BaseTUIApp):
+    """Interactive Swarm Command Center TUI using prompt_toolkit + Rich."""
+
+    def __init__(self, active_agents: Optional[List[Any]] = None) -> None:
+        super().__init__()
+        self.active_agents = active_agents or []
+
+        # Register Swarm Hotkeys
+        hotkeys = {
+            "a": "A",
+            "f": "F",
+            "b": "B",
+            "m": "M",
+            "s": "S",
+            "t": "T",
+            "x": "X",
+            "c": "C",
+            "p": "P",
+            "q": "0",
+            "0": "0",
+        }
+        self.register_hotkeys(hotkeys)
 
         # Numeric keys for Active Experts
         for i in range(1, 10):
+
             @self.kb.add(str(i))
-            def _(event, i=i):
-                event.app.exit(result=str(i))
+            def _(event, expert_idx=i):
+                self.set_choice(str(expert_idx))
 
-    def _setup_keybindings(self):
-        @self.kb.add('q')
-        @self.kb.add('c-c')
-        @self.kb.add('0')
-        @self.kb.add('escape')
-        def _(event):
-            event.app.exit(result="0")
-
-        _hotkeys = {
-            'a': 'A', 'f': 'F', 'b': 'B', 'm': 'M',
-            's': 'S', 't': 'T', 'x': 'X', 'c': 'C', 'p': 'P',
-        }
-        for lower, val in _hotkeys.items():
-            @self.kb.add(lower)
-            @self.kb.add(lower.upper())
-            def _(event, v=val):
-                event.app.exit(result=v)
-
-    def get_layout(self):
-        from prompt_toolkit.application import get_app
-        from prompt_toolkit.layout.controls import FormattedTextControl
-        from prompt_toolkit.formatted_text import ANSI
-        from prompt_toolkit.layout.containers import Window, WindowAlign, HSplit
-        from prompt_toolkit.layout import Layout
-        from prompt_toolkit.mouse_events import MouseEventType
-
-        def set_choice(val):
-            self.result = val
-            get_app().exit(result=val)
-
+    def get_layout(self) -> Layout:
         # Header
         header_console = Console(file=io.StringIO(), force_terminal=True, width=120)
-        from interface.core import get_claude_header
         swarm_updates = [
             "Recursive Reasoning Enabled",
             "Expert Matrix Optimized",
@@ -116,25 +112,27 @@ class SwarmMenuApp:
             "Latency: 12ms Cluster-Wide",
         ]
         header_console.print(get_claude_header(updates=swarm_updates))
-        static_content = FormattedTextControl(ANSI(header_console.file.getvalue()))
+        static_content = FormattedTextControl(
+            ANSI(header_console.file.getvalue()), show_cursor=False
+        )
 
-        list_items = []
+        list_items: List[Any] = []
 
-        def make_item(lid, name, val, index):
+        def make_item(lid: str, name: str, val: str, index: int) -> Window:
             def get_formatted_text():
                 is_selected = self.selected_index == index
                 style_prefix = "underline cyan" if is_selected else ""
                 return [
-                    ('class:dot', '             ● '),
-                    ('class:id', f' {lid} '),
-                    (f'class:name {style_prefix}', f' {name} '),
+                    ("class:dot", "             ● "),
+                    ("class:id", f" {lid} "),
+                    (f"class:name {style_prefix}", f" {name} "),
                 ]
 
             def mouse_handler(mouse_event):
                 if mouse_event.event_type == MouseEventType.MOUSE_MOVE:
                     self.selected_index = index
                 elif mouse_event.event_type == MouseEventType.MOUSE_UP:
-                    set_choice(val)
+                    self.set_choice(val)
 
             content = FormattedTextControl(get_formatted_text, show_cursor=False)
             content.mouse_handler = mouse_handler
@@ -157,9 +155,18 @@ class SwarmMenuApp:
             list_items.append(Window(height=1))
             h_console = Console(file=io.StringIO(), force_terminal=True, width=100)
             h_console.print("  [bold white]ACTIVE EXPERTS[/bold white]")
-            list_items.append(Window(content=FormattedTextControl(ANSI(h_console.file.getvalue())), height=1))
+            list_items.append(
+                Window(
+                    content=FormattedTextControl(
+                        ANSI(h_console.file.getvalue()), show_cursor=False
+                    ),
+                    height=1,
+                )
+            )
             for i, agent in enumerate(self.active_agents):
-                list_items.append(make_item(str(i + 1), agent.name, str(i + 1), 9 + i))
+                list_items.append(
+                    make_item(str(i + 1), agent.name, str(i + 1), 9 + i)
+                )
 
         list_items.append(Window(height=1))
         list_items.append(make_item("0", "🔙 Back to Kernel", "0", 20))
@@ -168,44 +175,43 @@ class SwarmMenuApp:
         footer_text = [
             ("class:prompt_seg", " ❯ SWARM HUB "),
             ("", " "),
-            ("class:shortcut_seg", " ENTER "), ("class:shortcut_label", " Select "),
-            ("class:shortcut_seg", " 0 "), ("class:shortcut_label", " Back "),
+            ("class:shortcut_seg", " ENTER "),
+            ("class:shortcut_label", " Select "),
+            ("class:shortcut_seg", " 0 "),
+            ("class:shortcut_label", " Back "),
             ("", "  "),
-            ("class:load_label", "SWARM LOAD: "), ("class:load_bar", "█▓▒░ 14%"),
+            ("class:load_label", "SWARM LOAD: "),
+            ("class:load_bar", "█▓▒░ 14%"),
             ("", "  "),
             ("class:version_seg", " Node: CLUSTER-7 "),
         ]
 
-        return Layout(HSplit([
-            Window(content=static_content, wrap_lines=True, ignore_content_height=True),
-            HSplit(list_items),
-            Window(height=1),
-            Window(content=FormattedTextControl(footer_text), height=1),
-        ]))
-
-    async def run(self):
-        from prompt_toolkit.styles import Style
-        from prompt_toolkit.application import Application
-
-        style = Style.from_dict({
-            'dot': 'bold cyan', 'id': 'bold white', 'name': 'white',
-            'prompt_seg': 'bg:magenta black bold',
-            'shortcut_seg': 'bg:white black bold',
-            'shortcut_label': 'white',
-            'load_label': 'dim', 'load_bar': 'bold magenta',
-            'version_seg': 'bg:#222222 dim',
-        })
-        app = Application(
-            layout=self.get_layout(), key_bindings=self.kb,
-            style=style, mouse_support=True, full_screen=True,
+        return Layout(
+            HSplit(
+                [
+                    Window(
+                        content=static_content,
+                        wrap_lines=True,
+                        ignore_content_height=True,
+                    ),
+                    HSplit(list_items),
+                    Window(height=1),
+                    Window(content=FormattedTextControl(footer_text), height=1),
+                ]
+            )
         )
-        self.result = await app.run_async()
-        return self.result
+
+    def build_style(self, **overrides: Any):
+        return super().build_style(
+            prompt_seg="bg:magenta black bold",
+            load_bar="bold magenta",
+            **overrides,
+        )
 
 
 # ── Main Router ───────────────────────────────────────────────────
 
-async def swarm_menu():
+async def swarm_menu() -> None:
     """Top-level swarm hub loop — dispatches to the appropriate handler."""
     global _client_cache
     from agents.framework.interfaces.client.client import AgentClient
@@ -252,12 +258,22 @@ async def swarm_menu():
             if 1 <= idx <= len(active_agents):
                 target = active_agents[idx - 1]
                 prompt = get_input(f"Query {target.name}")
-                console.print(Panel(
-                    "[italic dim]Pensando... analizando contexto y seleccionando herramientas óptimas.[/italic dim]",
-                    title="[bold plum1]Thinking[/bold plum1]",
-                    border_style="plum1",
-                ))
-                response = await target.process(prompt, context={"user_id": "cli"})
-                content = response.content if hasattr(response, "content") else str(response)
-                console.print(get_theme_panel(content, title=f"🤖 {target.name} Response"))
+                console.print(
+                    Panel(
+                        "[italic dim]Thinking... selecting optimal tools and context.[/italic dim]",
+                        title="[bold plum1]Thinking[/bold plum1]",
+                        border_style="plum1",
+                    )
+                )
+                response = await target.process(
+                    prompt, context={"user_id": "cli"}
+                )
+                content = (
+                    response.content
+                    if hasattr(response, "content")
+                    else str(response)
+                )
+                console.print(
+                    get_theme_panel(content, title=f"🤖 {target.name} Response")
+                )
                 wait_for_user(force=True)

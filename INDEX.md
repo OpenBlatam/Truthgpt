@@ -1,22 +1,32 @@
-# 📚 TruthGPT Optimization Core - Índice de Documentación
+# 📚 TruthGPT Optimization Core - Documentation Index
 
-Guía rápida para encontrar la documentación que necesitas.
+Quick index to find the exact documentation or technical guide you need.
 
-## 🚀 Inicio Rápido
+## 🌐 Enterprise Documentation Portal & Local Server
 
-- **¿Primera vez?** → [`README.md`](README.md) - Quick Start
-- **¿Comandos rápidos?** → [`QUICK_REFERENCE.md`](QUICK_REFERENCE.md)
-- **¿Setup automático?** → `./setup_dev.sh` (Linux/Mac) o `.\setup_dev.ps1` (Windows)
+The complete, interactive documentation portal is located in `docs/`:
 
-## 📖 Documentación Principal
+- **Interactive Local Docs Server**: `python docs/serve_docs.py` (Browse at `http://localhost:8000`)
+- **[Documentation Hub](docs/index.md)** - Master Portal & Navigation Matrix
+- **[Getting Started](docs/getting_started/index.md)** - Installation, Quickstarts & Diagnostics
+- **[Architecture & Design](docs/architecture/index.md)** - Stratified System Design, PiMoE & Polyglot
+- **[Engineering Guides](docs/guides/index.md)** - Performance Tuning, Distributed & Custom Kernels
+- **[Tutorials](docs/tutorials/index.md)** - Step-by-Step LoRA, Serving & Research Tutorials
+- **[API Reference](docs/api/index.md)** - Programmatic API Catalog
+- **[Examples & Recipes](docs/examples/index.md)** - Runnable End-to-End Recipes
+- **[Suite en Español](docs/spanish/index.md)** - Documentación completa y guías en español
+- **[Historical Archive](docs/archive/index.md)** - Evolution, Refactoring Logs & Proposals
 
-| Documento | Descripción | Cuándo Usar |
-|-----------|-------------|-------------|
-| [`README.md`](README.md) | Documentación completa principal | Guía principal, ejemplos, troubleshooting |
-| [`QUICK_REFERENCE.md`](QUICK_REFERENCE.md) | Comandos y configuraciones rápidas | Referencia rápida durante trabajo |
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Arquitectura y diseño del sistema | Entender cómo funciona internamente |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Guía para contribuidores | Quieres agregar features o hacer PR |
-| [`CHANGELOG.md`](CHANGELOG.md) | Historial de cambios | Ver qué se ha agregado/cambiado |
+---
+
+## 🚀 Root Files & Quick Reference
+
+- **Quick Start Guide** → [`README.md`](README.md)
+- **Fast Commands Reference** → [`QUICK_REFERENCE.md`](QUICK_REFERENCE.md)
+- **System Architecture Summary** → [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- **Contribution Guidelines** → [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- **Changelog & Releases** → [`CHANGELOG.md`](CHANGELOG.md)
+
 
 ## 🔧 Herramientas
 

@@ -9,7 +9,10 @@ from rich.prompt import Prompt
 from interface.core import (
     console, USER_PREFS, save_user_prefs, clear_screen, get_header, wait_for_user
 )
+from interface.registry import MenuRegistry
+from interface.exceptions import MenuExecutionError
 
+@MenuRegistry.register("messaging_apps", title="Communication Hub & Messaging Bridge", category="Communication")
 async def handle_messaging_apps():
     while True:
         clear_screen()
@@ -46,6 +49,7 @@ async def handle_messaging_apps():
             console.print(f"[green]✓ {adapter_name} connected.[/green]")
         wait_for_user(force=True)
 
+@MenuRegistry.register("marketing_intelligence", title="Marketing Intelligence Agent", category="Marketing")
 async def marketing_intelligence_menu():
     clear_screen()
     console.print(get_header())
@@ -56,31 +60,53 @@ async def marketing_intelligence_menu():
         time.sleep(1)
     wait_for_user(force=True)
 
+@MenuRegistry.register("embodied_rl", title="Embodied RL Labs", category="Robotics")
 async def embodied_rl_menu():
     clear_screen()
     console.print(get_header())
     console.print(Panel("🤖 [bold yellow]Embodied RL Labs[/bold yellow]"))
     time.sleep(1)
     wait_for_user(force=True)
+
+@MenuRegistry.register("executive_prompt", title="Executive Reasoning Engine", category="Executive")
 async def handle_executive_prompt(prompt: str):
     """
     Handle executive-level reasoning prompts.
     """
-    from agents.framework.interfaces.client.client import AgentClient
-    from optimization_core.agents.framework.engines.engines import engine_registry
+    try:
+        from agents.framework.interfaces.client.client import AgentClient
+    except ImportError:
+        try:
+            from optimization_core.agents.framework.interfaces.client.client import AgentClient
+        except ImportError:
+            AgentClient = None
+
+    try:
+        from agents.framework.engines.engines import engine_registry
+    except ImportError:
+        try:
+            from optimization_core.agents.framework.engines.engines import engine_registry
+        except ImportError:
+            engine_registry = None
     
     console.print(Panel(f"[bold blue]Executive Reasoning Engine[/bold blue]\n[dim]Analyzing: {prompt}[/dim]", border_style="blue"))
     
-    llm = engine_registry.get_engine(USER_PREFS.get("preferred_engine", "deepseek"))
-    client = AgentClient(use_swarm=True, llm_engine=llm)
-    
-    with console.status("[bold cyan]Consulting the Swarm...[/bold cyan]"):
-        try:
+    if engine_registry is None or AgentClient is None:
+        console.print("[yellow]Notice: Agent framework modules unavailable in current standalone path.[/yellow]")
+        wait_for_user(force=True)
+        return
+
+    try:
+        llm = engine_registry.get_engine(USER_PREFS.get("preferred_engine", "deepseek"))
+        client = AgentClient(use_swarm=True, llm_engine=llm)
+        
+        with console.status("[bold cyan]Consulting the Swarm...[/bold cyan]"):
             response = await client.swarm.route_and_process(prompt, context={"user_id": "executive"})
             content = response.content if hasattr(response, 'content') else str(response)
             console.print(Panel(content, title="🤖 Executive Response", border_style="green"))
-        except Exception as e:
-            console.print(f"[red]Execution Error: {e}[/red]")
+    except Exception as e:
+        console.print(f"[red]Execution Error: {e}[/red]")
     
     wait_for_user(force=True)
+
 

@@ -10,17 +10,23 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.prompt import Prompt
 
-from truthgpt.interface.core import (
-    console, clear_screen, get_header, wait_for_user, log_event, get_choice, USER_PREFS
+from interface.core import (
+    console, clear_screen, get_header, wait_for_user, log_event, get_choice, USER_PREFS, get_input
 )
-from truthgpt.interface.cc_style import cc_menu, cc_step, cc_action, cc_spinner, cc_divider
+from interface.cc_style import cc_menu, cc_step, cc_action, cc_spinner, cc_divider
+from interface.registry import MenuRegistry
 
-# Import CLI components
+# Import CLI components safely
 try:
     import cli
-except ImportError:
-    from .. import cli
+except Exception:
+    try:
+        from optimization_core import cli
+    except Exception:
+        cli = None
 
+
+@MenuRegistry.register("system", title="System Control & Diagnostics", category="System")
 @cc_menu("System Control & Diagnostics")
 async def system_menu():
     while True:
@@ -39,6 +45,7 @@ async def system_menu():
             console.print("[green]System Health: 98% | CPU: 12% | Mem: 4.2GB[/green]")
         # wait_for_user removed for speed
 
+@MenuRegistry.register("optimizations", title="Optimizations & Benchmarks", category="Optimization")
 @cc_menu("Optimizations & Benchmarks")
 async def opts_menu():
     while True:
@@ -55,7 +62,18 @@ async def opts_menu():
             console.print("[green]Report Generated: All systems optimized for System 5.9 Gold Standard.[/green]")
         elif choice == "6":
             cc_action("Initiating SOTA System Benchmarking", status="RUN")
-            from truthgpt.agents.framework.engines import engine_registry
+            try:
+                from agents.framework.engines.engines import engine_registry
+            except ImportError:
+                try:
+                    from optimization_core.agents.framework.engines.engines import engine_registry
+                except ImportError:
+                    engine_registry = None
+
+            if engine_registry is None:
+                console.print("[yellow]Notice: Engine registry unavailable for benchmark in standalone path.[/yellow]")
+                continue
+
             llm = engine_registry.get_engine(USER_PREFS.get("preferred_engine", "deepseek"))
             
             with cc_spinner("Benchmarking Inference Latency") as sp:
@@ -78,6 +96,7 @@ async def opts_menu():
                 console.print(f"[red]Error: {e}[/red]")
         # wait_for_user removed for speed
 
+@MenuRegistry.register("kernel", title="System Kernel & Security Sentinel", category="System")
 @cc_menu("System Kernel & Security Sentinel")
 async def kernel_menu():
     while True:
@@ -112,6 +131,6 @@ async def kernel_menu():
             time.sleep(1)
             console.print("[green]✓ Ledger Persisted to truthgpt_collected/forensic_ledger.md[/green]")
         elif choice == "EVO":
-            from truthgpt.interface.evolution_menu import handle_system_evolution
+            from interface.evolution_menu import handle_system_evolution
             await handle_system_evolution()
         wait_for_user(force=True)

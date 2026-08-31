@@ -10,11 +10,23 @@ from interface.core import (
     console, USER_PREFS, clear_screen, get_header, wait_for_user
 )
 from interface.cc_style import cc_menu, cc_step
+from interface.registry import MenuRegistry
 
+@MenuRegistry.register("research", title="SOTA Research & Deep Discovery Hub", category="Research")
 @cc_menu("SOTA Research & Deep Discovery")
 async def research_menu():
-    from modules.base.core_system.core.papers.paper_registry import get_paper_registry
-    registry = get_paper_registry(preload_popular=False)
+    try:
+        from modules.base.core_system.core.papers.paper_registry import get_paper_registry
+        registry = get_paper_registry(preload_popular=False)
+    except ImportError:
+        try:
+            from optimization_core.modules.base.core_system.core.papers.paper_registry import get_paper_registry
+            registry = get_paper_registry(preload_popular=False)
+        except Exception:
+            class DummyRegistry:
+                def list_papers(self): return []
+            registry = DummyRegistry()
+
     while True:
         clear_screen()
         console.print(get_header())

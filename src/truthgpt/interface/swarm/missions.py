@@ -8,7 +8,6 @@ import asyncio
 import time
 import inspect
 import logging
-from collections import deque
 from pathlib import Path
 from typing import List, Optional
 
@@ -16,63 +15,16 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.prompt import FloatPrompt, Prompt
 
-from truthgpt.interface.core import (
+from interface.core import (
     console, USER_PREFS, log_activity, clear_screen,
     get_header, wait_for_user, get_input,
     background_missions, save_mission_output, extract_target_directory,
 )
-from truthgpt.interface.cc_style import (
+from interface.cc_style import (
     cc_action, cc_tool_call, cc_result, cc_agent_done, cc_spinner, _fmt_tokens,
 )
 
 logger = logging.getLogger(__name__)
-
-
-# Shared directive injected into every autonomous-mission prompt so agents act
-# without waiting for input. Kept as one constant so the generation and
-# refinement prompts can never drift apart.
-_AUTONOMOUS_DIRECTIVE = (
-    "CRITICAL INSTRUCTION: You are running in a fully autonomous background mission. "
-    "DO NOT ask the user for clarification or wait for input. "
-    "Make your best assumptions, execute the necessary actions, and provide a definitive 'final_answer'."
-)
-
-# A reward strictly below this triggers a self-correction (refine) pass.
-_REFINE_THRESHOLD = 0.75
-
-# Hard ceiling on any single LLM call in an autonomous loop. Without this a
-# hung/unreachable provider freezes the whole mission at "0 tokens" forever
-# (no streamed response ever arrives). On timeout the call is abandoned and the
-# loop's existing retry/fallback path takes over instead of blocking.
-_LLM_CALL_TIMEOUT = 180.0
-
-
-async def _call_with_timeout(awaitable, timeout: float = _LLM_CALL_TIMEOUT):
-    """Await *awaitable* but raise ``asyncio.TimeoutError`` after *timeout* sec.
-
-    Keeps a stalled provider from freezing an autonomous mission. Callers wrap
-    this in their normal try/except so a timeout is treated like any other
-    generation error (retry, fall back, or skip).
-    """
-    return await asyncio.wait_for(awaitable, timeout=timeout)
-
-
-def _parse_reward(text: str, default: float = 0.5) -> float:
-    """Extract a 0.0–1.0 reward score from a free-form LLM judgment.
-
-    Scans for the first in-range number, tolerating formats like ``0.85``,
-    ``.9``, ``1``, or ``Score: 0.7``. Returns *default* when nothing parseable
-    is found and clamps out-of-range values into [0, 1].
-    """
-    import re
-    for tok in re.findall(r"\d*\.\d+|\d+", str(text)):
-        try:
-            val = float(tok)
-        except ValueError:
-            continue
-        if 0.0 <= val <= 1.0:
-            return val
-    return default
 
 
 def _reward_bar(score: float, width: int = 12) -> str:
@@ -147,71 +99,9 @@ def _coerce_agent_payload(content: str):
     return data
 
 
-def _provider_for_model(model_id: str) -> str:
-    """Map a concrete model id back to the provider/engine that owns it.
-
-    Lets the UI always name *which* engine produced an output — Claude,
-    OpenRouter, DeepSeek, etc. — even on the cost cascade or in an ensemble
-    where several providers are in play.
-    """
-    m = (model_id or "").lower()
-    if not m:
-        return "engine"
-    if "/" in m or m.startswith("~"):
-        return "openrouter"
-    if "deepseek" in m:
-        return "deepseek"
-    if m.startswith(("gpt", "o1", "o3", "o4")) or "openai" in m:
-        return "openai"
-    if "gemini" in m or "google" in m:
-        return "google"
-    if "claude" in m or "anthropic" in m:
-        return "claude"
-    return "engine"
-
-
-def _attribution(llm, content: str = "") -> str:
-    """Human ``provider · model`` label for whichever model produced *content*.
-
-    Resolves attribution across all three engine paths so every output can say
-    who did it:
-      • ensemble → the winning engine recorded in the payload metadata,
-      • cascade  → the model the FrugalGPT ladder actually resolved with,
-      • single   → the one configured provider/model.
-    Returns "" when nothing can be determined.
-    """
-    # 1. Ensemble: the merged payload records the winning engine + its model.
-    data = _coerce_agent_payload(content) if content else None
-    meta = data.get("metadata") if isinstance(data, dict) and isinstance(data.get("metadata"), dict) else None
-    if meta:
-        winner = meta.get("winner")
-        model = meta.get("winner_model")
-        if winner and model:
-            return f"{winner} · {model}"
-        if model:
-            return f"{_provider_for_model(model)} · {model}"
-        if winner:
-            return str(winner)
-
-    # 2. Cost cascade: stats track the model that resolved the last call.
-    stats = getattr(llm, "cascade_stats", None)
-    if isinstance(stats, dict) and stats.get("last"):
-        used = stats["last"]
-        if used == "cache":
-            return "caché (sin nueva llamada al modelo)"
-        return f"{_provider_for_model(used)} · {used}"
-
-    # 3. Single engine (or ensemble with no recorded winner).
-    provider = getattr(llm, "provider_name", None)
-    model = getattr(llm, "model_name", None)
-    if provider and model:
-        return f"{provider} · {model}"
-    return model or provider or ""
-
-
 def _render_thinking(thought: str, max_lines: int = 18) -> None:
     """Show the agent reasoning as a dim, collapsible Claude-style block."""
-    from truthgpt.interface.cc_style import SPIN_FRAMES
+    from interface.cc_style import SPIN_FRAMES
     glyph = SPIN_FRAMES[2] if SPIN_FRAMES else "*"
     console.print(f"[magenta]{glyph}[/magenta] [dim]Thinking[/dim]")
     lines = [l.strip() for l in thought.splitlines() if l.strip()]
@@ -317,8 +207,7 @@ def _render_mission_output(content: str, iteration: int, previous: str = "") -> 
         if meta.get("ensemble_mode"):
             bits.append(f"ensemble: {meta['ensemble_mode']}")
         if meta.get("winner"):
-            wm = meta.get("winner_model")
-            bits.append(f"winner: {meta['winner']}" + (f" ({wm})" if wm else ""))
+            bits.append(f"winner: {meta['winner']}")
         engines = meta.get("engines")
         if engines:
             bits.append("engines: " + ", ".join(map(str, engines)))
@@ -413,31 +302,13 @@ class BackgroundMission:
 
     async def run_loop(self):
         cycle = 0
-        recent_answers: deque = deque(maxlen=3)  # rolling memory of prior cycles
         while self.status == "Running":
             cycle += 1
             self.last_run = time.strftime("%H:%M:%S")
             log_activity("BG Mission", f"Cycle: {self.name}", status="Running")
             cc_action(f'Background mission "{self.name}" · cycle {cycle}', status="RUN")
-
-            # Seed the cycle with a rolling summary of prior cycles so each new
-            # cycle ADVANCES the mission instead of restarting from the same
-            # query (which made successive cycles repeat the same work).
-            if recent_answers:
-                history_block = (
-                    "Work already completed in prior cycles (most recent last):\n"
-                    + "\n".join(f"- [cycle {n}] {a[:300]}" for n, a in recent_answers)
-                    + "\n\n"
-                )
-                current_prompt = (
-                    f"Persistent mission: {self.query}\n\n{history_block}"
-                    "Continue by ADVANCING the mission; build on the completed work "
-                    "above, do not repeat it."
-                )
-            else:
-                current_prompt = self.query
+            current_prompt = self.query
             cycle_history = []
-            last_content: Optional[str] = None
 
             try:
                 for key in self.team:
@@ -447,9 +318,9 @@ class BackgroundMission:
                     t0 = time.time()
                     if key == "arxiv_discovery_scout":
                         cc_tool_call(f"{key}: discovering & integrating papers…")
-                        from truthgpt.agents.domains.system_intelligence.research_agent import ResearchAgent
+                        from agents.domains.system_intelligence.research_agent import ResearchAgent
                         agent = ResearchAgent(llm_engine=self.llm)
-                        res = await _call_with_timeout(agent.process(f"discover and integrate papers for {current_prompt}"))
+                        res = await agent.process(f"descubrir e integrar papers de {current_prompt}")
                         content = res.content
                     else:
                         cc_tool_call(f"{key}: running cognitive cycle…")
@@ -461,7 +332,7 @@ class BackgroundMission:
                         if "llm_engine" in sig.parameters:
                             params["llm_engine"] = self.llm
                         agent = agent_cls(**params)
-                        res = await _call_with_timeout(agent.process(current_prompt, context=self.context))
+                        res = await agent.process(current_prompt, context=self.context)
                         content = res.content if hasattr(res, "content") else str(res)
 
                     cc_agent_done(key, ok=True)
@@ -470,19 +341,14 @@ class BackgroundMission:
                         note=f"{time.time() - t0:.1f}s · ~{_fmt_tokens(len(content) // 4)} tokens",
                     )
                     cycle_history.append({"phase": key, "output": content})
-                    last_content = content
                     current_prompt = f"Previous findings: {content}\n\nTask: {current_prompt}"
 
                 self.history.append({"time": self.last_run, "data": cycle_history})
-                # Carry this cycle's final output into the next cycle's memory.
-                if last_content is not None:
-                    recent_answers.append((cycle, last_content.strip()))
                 cc_result(f'cycle {cycle} complete · {len(cycle_history)} phase(s)')
             except Exception as e:
-                detail = str(e) or type(e).__name__
-                log_activity("BG Mission", f"Error in {self.name}: {detail}", status="Error")
-                logger.error(f"Background mission {self.name} encountered error: {detail}")
-                cc_action(f'Background mission "{self.name}" cycle {cycle} failed: {detail}', status="ERROR")
+                log_activity("BG Mission", f"Error in {self.name}: {e}", status="Error")
+                logger.error(f"Background mission {self.name} encountered error: {e}")
+                cc_action(f'Background mission "{self.name}" cycle {cycle} failed: {e}', status="ERROR")
 
             await asyncio.sleep(self.interval * 60)
 
@@ -493,7 +359,7 @@ def _save_code_blocks_if_needed(content: str, query: str, iteration: int):
     """Extract code blocks and persist them if a target directory is detectable."""
     target_dir = extract_target_directory(query)
     if target_dir:
-        from truthgpt.interface.swarm.fusion import save_code_blocks_to_directory
+        from interface.swarm.fusion import save_code_blocks_to_directory
         cc_tool_call(f"Writing code blocks to {target_dir}…")
         save_code_blocks_to_directory(content, target_dir, default_prefix=f"output_iter_{iteration}")
 
@@ -511,21 +377,18 @@ async def handle_continuous_mission():
 
     console.print(
         "\n[bold]Engine tier[/bold] [dim](applies to the whole configured engine set)[/dim]\n"
-        "  [green]1[/green]) Economy  — fast, cheap models (flash / haiku / mini)\n"
-        "  [yellow]2[/yellow]) Standard — balanced models (pro / sonnet / 4o)\n"
-        "  [red]3[/red]) Premium  — best models (reasoner / opus / pro)"
+        "  [green]1[/green]) Económica — modelos rápidos y baratos (flash / haiku / mini)\n"
+        "  [yellow]2[/yellow]) Media     — modelos equilibrados (pro / sonnet / 4o)\n"
+        "  [red]3[/red]) Alta      — los mejores modelos (reasoner / opus / pro)"
     )
     tier_choice = Prompt.ask("Tier", choices=["1", "2", "3"], default="2")
     tier = {"1": "economica", "2": "media", "3": "alta"}[tier_choice]
-    # English label for display only; the internal key above is what the engine
-    # registry's TIER_MODELS / cascade ladders are keyed on, so it stays as-is.
-    tier_label = {"economica": "economy", "media": "standard", "alta": "premium"}[tier]
 
     # Cost optimization: run a FrugalGPT cascade (cheap→tier-top) + semantic cache +
     # prompt compression so the best models are only paid for when really needed.
     console.print(
-        "\n[bold]Cost optimization[/bold] [dim](economy→tier cascade, semantic cache, compression)[/dim]\n"
-        "[dim]Reduces spend on the best models by escalating only when needed.[/dim]"
+        "\n[bold]Optimizar costos[/bold] [dim](cascada económica→tier, caché semántica, compresión)[/dim]\n"
+        "[dim]Reduce el gasto de los mejores modelos escalando solo cuando hace falta.[/dim]"
     )
     cost_optimized = Prompt.ask(
         "Cost optimization", choices=["y", "n"], default="y"
@@ -533,19 +396,14 @@ async def handle_continuous_mission():
 
     console.print(
         f"\n[green]✓ Mission started: '{query}'[/green] "
-        f"[dim](tier: {tier_label}{', cost-opt' if cost_optimized else ''})[/dim]"
+        f"[dim](tier: {tier}{', cost-opt' if cost_optimized else ''})[/dim]"
     )
 
-    from truthgpt.agents.framework.interfaces.client.client import AgentClient
-    from truthgpt.agents.framework.engines import engine_registry
+    from agents.framework.interfaces.client.client import AgentClient
+    from optimization_core.agents.framework.engines.engines import engine_registry
 
-    # Disable the semantic cache on the cost path: this is a self-refining loop,
-    # so near-identical prompts across iterations must NOT replay the first
-    # cached answer (the cause of "always the same response"). The cheap→tier
-    # cascade still applies, so cost optimization is preserved.
     llm = engine_registry.build_tiered_engine(
-        tier, USER_PREFS["preferred_engine"], cost_optimized=cost_optimized,
-        enable_cache=False,
+        tier, USER_PREFS["preferred_engine"], cost_optimized=cost_optimized
     )
     if getattr(llm, "cost_optimizer", None) is not None:
         console.print(f"[dim]🧩 Cascade ({llm.provider_name}): {llm.model_name}[/dim]")
@@ -557,10 +415,10 @@ async def handle_continuous_mission():
     cc_action("Decomposing mission into sub-objectives", status="RUN")
     try:
         with cc_spinner("Planning"):
-            decomposition_res = await _call_with_timeout(client.swarm.route_and_process(
+            decomposition_res = await client.swarm.route_and_process(
                 f"Decompose this mission into 3 distinct sequential steps: {query}",
                 context={"user_id": "rlhf_planner"},
-            ))
+            )
         plan = decomposition_res.content if hasattr(decomposition_res, "content") else str(decomposition_res)
         for line in (l.strip() for l in plan.splitlines() if l.strip()):
             cc_result(line[:160])
@@ -568,57 +426,34 @@ async def handle_continuous_mission():
         cc_action(f"Skipping decomposition: {e}", status="WARN")
 
     try:
+        import re
         iteration = 1
-        recent_answers: deque = deque(maxlen=3)  # rolling memory of prior iterations
+        current_context = query
         previous_answer = ""
-        last_score: Optional[float] = None
         while True:
             console.print()
             cc_action(f"RLHF Iteration {iteration}", status="RUN")
 
-            # Step 1: Generation. Feed back a rolling summary of prior iterations
-            # and explicitly ask the agent to ADVANCE the mission rather than
-            # restate earlier work — otherwise outputs converge on repetition.
-            if recent_answers:
-                history_block = (
-                    "Work already completed in prior iterations (most recent last):\n"
-                    + "\n".join(f"- [iter {n}] {a[:300]}" for n, a in recent_answers)
-                    + "\n\n"
-                )
-            else:
-                history_block = ""
+            # Step 1: Generation
             prompt = (
-                f"Persistent mission: {query}\n\n"
-                f"{history_block}"
-                "Produce the NEXT concrete step that ADVANCES the mission. "
-                "Build on the completed work above; do not repeat or merely restate it.\n\n"
-                f"{_AUTONOMOUS_DIRECTIVE}"
+                f"Execute next step for: {current_context}\n"
+                "CRITICAL INSTRUCTION: You are running in a fully autonomous background mission. "
+                "DO NOT ask the user for clarification or wait for input. "
+                "Make your best assumptions, execute the necessary actions, and provide a definitive 'final_answer'."
             )
             try:
                 t0 = time.time()
                 cc_tool_call("Generating next step…")
                 with cc_spinner("Generating") as sp:
-                    response = await _call_with_timeout(client.swarm.route_and_process(
+                    response = await client.swarm.route_and_process(
                         prompt,
                         context={"user_id": "continuous_mission"},
-                    ))
+                    )
                     if getattr(response, "action_type", None) == "error":
                         raise Exception(f"Agent returned error state: {getattr(response, 'content', 'Unknown error')}")
                     content = response.content if hasattr(response, "content") else str(response)
                     sp.add_tokens(len(content) // 4)
-                gen_note = f"{time.time() - t0:.1f}s · ~{_fmt_tokens(len(content) // 4)} tokens"
-                who = _attribution(llm, content)
-                if who:
-                    gen_note = f"{who} · {gen_note}"
-                cc_result("generation", note=gen_note)
-            except asyncio.TimeoutError:
-                cc_action(
-                    f"Generation timed out after {_LLM_CALL_TIMEOUT:.0f}s — provider unresponsive",
-                    status="ERROR",
-                )
-                cc_tool_call("Retrying in 10 seconds…")
-                await asyncio.sleep(10)
-                continue
+                cc_result("generation", note=f"{time.time() - t0:.1f}s · ~{_fmt_tokens(len(content) // 4)} tokens")
             except Exception as e:
                 cc_action(f"Generation error: {e}", status="ERROR")
                 cc_tool_call("Retrying in 10 seconds…")
@@ -626,45 +461,36 @@ async def handle_continuous_mission():
                 continue
 
 
-            # Step 2: RLHF Reward Evaluation (Self-Refine). Ground the judgment in
-            # the mission so the score reflects progress, not generic polish.
+            # Step 2: RLHF Reward Evaluation (Self-Refine)
             cc_tool_call("Self-evaluating output quality…")
-            judge = ""
             try:
                 eval_prompt = (
-                    "On a scale from 0.0 to 1.0, rate how well the OUTPUT advances the "
-                    "mission in accuracy, depth, and helpfulness. Return ONLY a float "
-                    f"like 0.85.\nMission: {query}\nOutput: {content[:1000]}"
+                    f"Evaluate this output out of 1.0 based on accuracy, depth, and helpfulness. "
+                    f"Return ONLY a float number like 0.85.\nOutput: {content[:1000]}"
                 )
                 with cc_spinner("Scoring"):
-                    eval_res = await _call_with_timeout(llm(eval_prompt))
-                reward_score = _parse_reward(str(eval_res))
-                judge = _attribution(llm, str(eval_res))
+                    eval_res = await llm(eval_prompt)
+                score_match = re.search(r"0\.\d+|1\.0", str(eval_res))
+                reward_score = float(score_match.group()) if score_match else 0.75
             except Exception:
                 reward_score = 0.5
 
-            trend = ""
-            if last_score is not None:
-                delta = reward_score - last_score
-                arrow = "↑" if delta > 0.01 else "↓" if delta < -0.01 else "→"
-                trend = f"  [dim]{arrow} {delta:+.2f} vs prev[/dim]"
-            cc_result(f"reward {_reward_bar(reward_score)}{trend}", note=f"judge: {judge}" if judge else "")
-            last_score = reward_score
+            cc_result(f"reward {_reward_bar(reward_score)}")
 
-            if reward_score < _REFINE_THRESHOLD:
+            if reward_score < 0.75:
                 cc_action("Score below threshold — self-correcting", status="WARN")
                 try:
                     refine_prompt = (
-                        f"This output scored {reward_score:.2f}/1.0 on the mission "
-                        f"'{query}'. Improve it — fix errors, add depth, and make it "
-                        f"more useful:\n{content}\n\n"
-                        f"{_AUTONOMOUS_DIRECTIVE}"
+                        f"Fix and improve this output which scored {reward_score}: {content}\n"
+                        "CRITICAL INSTRUCTION: You are running in a fully autonomous background mission. "
+                        "DO NOT ask the user for clarification or wait for input. "
+                        "Make your best assumptions, execute the necessary actions, and provide a definitive 'final_answer'."
                     )
                     with cc_spinner("Refining") as sp:
-                        refine_res = await _call_with_timeout(client.swarm.route_and_process(
+                        refine_res = await client.swarm.route_and_process(
                             refine_prompt,
                             context={"user_id": "continuous_mission"},
-                        ))
+                        )
                     is_error = getattr(refine_res, "action_type", None) == "error"
                     if is_error:
                         cc_result("refinement hit a reasoning limit — keeping original output")
@@ -678,9 +504,7 @@ async def handle_continuous_mission():
 
             _report_cost_savings(llm)
 
-            # Record this iteration's final (post-refine) output so the next
-            # iteration can build on it instead of repeating it.
-            recent_answers.append((iteration, content.strip()))
+            current_context = f"Original: {query}\nLatest findings: {content[:500]}"
 
             _save_code_blocks_if_needed(content, query, iteration)
 
@@ -691,8 +515,7 @@ async def handle_continuous_mission():
                 new_query = get_input("Enter new persistent mission query", default=query)
                 if new_query.strip():
                     query = new_query.strip()
-                    recent_answers.clear()  # prior history no longer applies
-                    last_score = None
+                    current_context = query
                     console.print(f"[green]✓ Mission query updated to: '{query}'[/green]")
             elif action == "export":
                 save_mission_output(content, mission_name="Continuous", query=query)

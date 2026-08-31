@@ -472,7 +472,7 @@ def cc_menu(
     """
 
     def _wrap(fn: F) -> F:
-        is_coro = asyncio.iscoroutinefunction(fn) or inspect.iscoroutinefunction(fn)
+        is_coro = inspect.iscoroutinefunction(fn)
 
         if is_coro:
             @functools.wraps(fn)
@@ -513,7 +513,7 @@ def cc_step(
     """
 
     def _wrap(fn: F) -> F:
-        is_coro = asyncio.iscoroutinefunction(fn) or inspect.iscoroutinefunction(fn)
+        is_coro = inspect.iscoroutinefunction(fn)
         sp_label = spinner_label or label
 
         if is_coro:

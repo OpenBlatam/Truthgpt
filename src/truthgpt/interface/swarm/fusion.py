@@ -20,16 +20,16 @@ from rich.prompt import FloatPrompt, Confirm
 from rich.console import Group
 from rich.text import Text
 
-from truthgpt.interface.core import (
+from interface.core import (
     console, USER_PREFS, log_activity, log_event, clear_screen,
     get_header, wait_for_user, get_input, get_theme_panel,
     extract_target_directory,
 )
-from truthgpt.interface.cc_style import (
+from interface.cc_style import (
     cc_menu, cc_action, cc_tool_call, cc_result, cc_agent_done,
 )
-from truthgpt.interface.swarm.inspector import swarm_phase_inspector, safe_panel
-from truthgpt.interface.swarm.missions import wait_with_interrupt
+from interface.swarm.inspector import swarm_phase_inspector, safe_panel
+from interface.swarm.missions import wait_with_interrupt
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +95,7 @@ def save_code_blocks_to_directory(
                 code_f.write(code)
             saved_files.append(dest_path)
             try:
-                from truthgpt.interface.cc_style import cc_code_change
+                from interface.cc_style import cc_code_change
                 code_lines = code.splitlines()
                 # Synthesise a unified-diff so the FULL written code is shown
                 # (green +lines) the way Claude Code renders file changes.
@@ -267,7 +267,7 @@ async def _dispatch_mcp(content: str):
         selected_url = mcp_urls[0]
 
     try:
-        from truthgpt.agents.framework.interfaces.client.mcp_client import MCPClient
+        from agents.framework.interfaces.client.mcp_client import MCPClient
         client = MCPClient(selected_url)
         tools = await client.list_tools()
         if tools:
@@ -371,9 +371,9 @@ async def handle_swarm_fusion(initial_prompt: Optional[str] = None):
         if mode == "0":
             return
 
-    from truthgpt.agents.registry import registry
-    from truthgpt.agents.models import AgentConfig
-    from truthgpt.agents.framework.engines import engine_registry
+    from optimization_core.agents.framework.registry import registry
+    from optimization_core.agents.framework.models import AgentConfig
+    from optimization_core.agents.framework.engines.engines import engine_registry
 
     agents_map = registry.get_all_agents()
     config = AgentConfig()
@@ -564,7 +564,7 @@ async def _select_memory() -> Dict[str, Any]:
 
     if mem_choice == "4":
         try:
-            from truthgpt.modules.base.core_system.core.papers.paper_registry import PaperRegistry
+            from modules.base.core_system.core.papers.paper_registry import PaperRegistry
             reg = PaperRegistry()
             mem_papers = reg.list_papers(category="memory")
             if len(mem_papers) < 3:
@@ -652,9 +652,9 @@ async def _execute_fusion(
         try:
             if key == "arxiv_discovery_scout":
                 cc_tool_call("Querying SOTA academic data sources...")
-                from truthgpt.agents.domains.system_intelligence.research_agent import ResearchAgent
+                from agents.domains.system_intelligence.research_agent import ResearchAgent
                 agent = ResearchAgent(llm_engine=llm)
-                res = await agent.process(f"discover and integrate papers for {phase_prompt}")
+                res = await agent.process(f"descubrir e integrar papers de {phase_prompt}")
                 p_content = res.content
                 trace_entry["rationale"] = f"Identified research gaps for {phase_prompt}. Seeking SOTA validation."
             else:
@@ -697,7 +697,7 @@ async def _execute_fusion(
             cc_result(f"Error: {str(e)[:100]}...")
             raise
 
-    import truthgpt.interface.cc_style as cc_style
+    import interface.cc_style as cc_style
     cc_style.SUPPRESS_SPINNERS = True
 
     final_results = []
@@ -767,7 +767,7 @@ async def _post_mission_actions(content, initial_prompt, config, llm):
     post_choice = get_input("Select next autonomous action", choices=["0", "1", "2", "3"], default="0")
 
     if post_choice == "1":
-        from truthgpt.interface.overdrive_menu import handle_overdrive_menu
+        from interface.overdrive_menu import handle_overdrive_menu
         await handle_overdrive_menu()
     elif post_choice == "2":
         console.print("\n[bold yellow]🔁 Recursive Continuity Configuration[/bold yellow]")
@@ -779,7 +779,7 @@ async def _post_mission_actions(content, initial_prompt, config, llm):
         return
     elif post_choice == "3":
         console.print("[bold blue]🛡️ Code Architect is refining the mission output...[/bold blue]")
-        from truthgpt.agents.domains.code_interpreter import CodeInterpreterAgent
+        from agents.domains.code_interpreter import CodeInterpreterAgent
         architect = CodeInterpreterAgent(config=config, llm_engine=llm)
         refinement = await architect.process(f"Refine and industrialize this code for System 5.9: {content}")
         console.print(Panel(refinement.content, title="🛡️ Architectural Refinement", border_style="blue"))
