@@ -600,6 +600,43 @@ _INTERFACE_LAZY_IMPORTS: Dict[str, str] = {
     'TelemetryProvider': '.interface',
 }
 
+# TruthGPT Cloud Platform Lazy Imports
+_TRUTHGPT_CLOUD_LAZY_IMPORTS: Dict[str, str] = {
+    'truthgpt_cloud': '.truthgpt_cloud',
+    'TruthGPTCloudClient': '.truthgpt_cloud',
+    'CloudTier': '.truthgpt_cloud',
+    'TierConfig': '.truthgpt_cloud',
+    'TIER_CONFIGURATIONS': '.truthgpt_cloud',
+    'get_tier_config': '.truthgpt_cloud',
+    'get_all_tiers': '.truthgpt_cloud',
+    'cloud_verifier': '.truthgpt_cloud',
+    'CloudFormalVerifier': '.truthgpt_cloud',
+    'ProofCertificate': '.truthgpt_cloud',
+    'MerkleTree': '.truthgpt_cloud',
+    'cloud_swarm': '.truthgpt_cloud',
+    'CloudSwarmOrchestrator': '.truthgpt_cloud',
+    'SwarmAgentNode': '.truthgpt_cloud',
+    'cloud_router': '.truthgpt_cloud',
+    'CloudIntelligenceRouter': '.truthgpt_cloud',
+    'cloud_telemetry': '.truthgpt_cloud',
+    'CloudTelemetryCollector': '.truthgpt_cloud',
+    'proof_cache': '.truthgpt_cloud',
+    'CloudProofCache': '.truthgpt_cloud',
+    'subscription_manager': '.truthgpt_cloud',
+    'SubscriptionManager': '.truthgpt_cloud',
+    'UserSubscription': '.truthgpt_cloud',
+    'cloud_security': '.truthgpt_cloud',
+    'CloudSecurityManager': '.truthgpt_cloud',
+    'ApiKeyScope': '.truthgpt_cloud',
+    'cloud_rate_limiter': '.truthgpt_cloud',
+    'token_bucket_limiter': '.truthgpt_cloud',
+    'cloud_paper_compiler': '.truthgpt_cloud',
+    'CloudPaperCompiler': '.truthgpt_cloud',
+    'get_all_papers': '.truthgpt_cloud',
+    'get_paper_by_id': '.truthgpt_cloud',
+    'webhook_manager': '.truthgpt_cloud',
+}
+
 # Combine all lazy imports
 _ALL_LAZY_IMPORTS: Dict[str, str] = {
     **_LAZY_IMPORTS,
@@ -609,6 +646,7 @@ _ALL_LAZY_IMPORTS: Dict[str, str] = {
     **_ENTERPRISE_LAZY_IMPORTS,
     **_LEARNING_LAZY_IMPORTS,
     **_INTERFACE_LAZY_IMPORTS,
+    **_TRUTHGPT_CLOUD_LAZY_IMPORTS,
 }
 
 __all__ = [
@@ -619,7 +657,9 @@ __all__ = [
     '_ENTERPRISE_LAZY_IMPORTS',
     '_LEARNING_LAZY_IMPORTS',
     '_INTERFACE_LAZY_IMPORTS',
+    '_TRUTHGPT_CLOUD_LAZY_IMPORTS',
     '_ALL_LAZY_IMPORTS',
 ]
+
 
 

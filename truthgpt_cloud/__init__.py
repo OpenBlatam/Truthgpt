@@ -1,137 +1,213 @@
 """
 🌌 TruthGPT Cloud - Enterprise & Developer Multi-Tier Platform
 The official cloud ecosystem for TruthGPT with Z3 SMT Formal Verification,
-Merkle Proof Trees, Multi-Agent Swarm Orchestration, and Tiered Subscription Management.
+Merkle Proof Trees, Multi-Agent Swarm Orchestration, Tiered Subscriptions,
+Semantic Proof Caching, Telemetry, and SOTA Research Paper Compilation.
 """
 
-from .core.tiers import (
+from .core import (
+    CLOUD_PLATFORM_VERSION,
+    CLOUD_API_VERSION,
     CloudTier,
     TierConfig,
     TIER_CONFIGURATIONS,
     get_tier_config,
-    get_all_tiers
+    get_all_tiers,
+    TruthGPTCloudError,
+    AuthenticationError,
+    InvalidApiKeyError,
+    PermissionDeniedError,
+    TierUnauthorizedError,
+    QuotaExceededError,
+    QuotaExceeded,
+    RateLimitExceededError,
+    RateLimitExceeded,
+    ConcurrencyLimitExceededError,
+    FormalVerificationError,
+    VerificationError,
+    BatchVerificationError,
+    InvalidTierError,
+    ModelUnavailableError,
+    PaymentError,
+    PaymentRequiredError,
+)
+
+from .security import (
+    ApiKeyScope,
+    ApiKeyMetadata,
+    LedgerBlock,
+    CloudSecurityManager,
+    cloud_security,
+    TokenBucketRateLimiter,
+    SlidingWindowRateLimiter,
+    cloud_rate_limiter,
+    token_bucket_limiter,
+    rate_limiter,
 )
 
 from .billing import (
-    UserSubscription,
-    Invoice,
     UsageRecord,
-    SubscriptionManager,
-    subscription_manager,
-    PaymentGatewayService,
-    SlidingWindowRateLimiter,
-    TokenBucketRateLimiter,
-    RateLimitExceeded,
-    rate_limiter,
-    WebhookManager,
+    Invoice,
+    ApiKeyInfo,
     WebhookSubscription,
     WebhookEventPayload,
-    webhook_manager
+    WebhookManager,
+    webhook_manager,
+    UserSubscription,
+    SubscriptionManager,
+    subscription_manager,
+    AtomicJsonStorage,
+    PaymentGatewayService,
 )
 
 from .verification import (
+    ProofStep,
     ProofCertificate,
     ContractVerificationResult,
     MerkleTree,
+    compute_merkle_root,
+    verify_proof_certificate,
+    verify_merkle_inclusion,
     CloudFormalVerifier,
-    cloud_verifier
+    cloud_verifier,
 )
 
-from .swarm_cloud import (
+from .swarm import (
     SwarmAgentNode,
+    DebateRound,
+    get_default_swarm_nodes,
+    get_adversarial_team_nodes,
     SwarmExecutionTrace,
     CloudSwarmOrchestrator,
-    cloud_swarm
+    cloud_swarm,
 )
 
-from .engine_router import (
+from .routing import (
     CloudInferenceResponse,
+    StreamChunk,
     CloudIntelligenceRouter,
-    cloud_router
+    cloud_router,
+)
+
+from .cache import (
+    BaseProofCache,
+    CachedProofEntry,
+    CloudProofCache,
+    proof_cache,
+)
+
+from .telemetry import (
+    AuditLogEntry,
+    CloudTelemetryCollector,
+    cloud_telemetry,
+    format_prometheus_metrics,
+)
+
+from .papers import (
+    PaperItem,
+    SOTA_PAPERS_CATALOG,
+    get_all_papers,
+    get_paper_by_id,
+    CloudPaperCompiler,
+    cloud_paper_compiler,
 )
 
 from .client import TruthGPTCloudClient
 
-from .core.exceptions import (
-    TruthGPTCloudError,
-    QuotaExceededError,
-    TierUnauthorizedError,
-    AuthenticationError,
-    PermissionDeniedError,
-    VerificationError,
-    FormalVerificationError,
-    BatchVerificationError,
-    RateLimitExceededError,
-    ConcurrencyLimitExceededError,
-    InvalidApiKeyError,
-    InvalidTierError,
-    ModelUnavailableError,
-    PaymentRequiredError,
-    PaymentError
-)
+__version__ = CLOUD_PLATFORM_VERSION
 
-__version__ = "2.0.0-cloud"
 __all__ = [
-    # Tiers
+    # Version & Core
+    "__version__",
+    "CLOUD_PLATFORM_VERSION",
+    "CLOUD_API_VERSION",
     "CloudTier",
     "TierConfig",
     "TIER_CONFIGURATIONS",
     "get_tier_config",
     "get_all_tiers",
-    
+    # Security & RBAC
+    "ApiKeyScope",
+    "ApiKeyMetadata",
+    "LedgerBlock",
+    "CloudSecurityManager",
+    "cloud_security",
     # Billing & Rate Limiting
-    "UserSubscription",
-    "Invoice",
     "UsageRecord",
+    "Invoice",
+    "ApiKeyInfo",
+    "WebhookSubscription",
+    "WebhookEventPayload",
+    "WebhookManager",
+    "webhook_manager",
+    "UserSubscription",
     "SubscriptionManager",
     "subscription_manager",
+    "AtomicJsonStorage",
     "PaymentGatewayService",
     "SlidingWindowRateLimiter",
     "TokenBucketRateLimiter",
     "RateLimitExceeded",
+    "RateLimitExceededError",
+    "ConcurrencyLimitExceededError",
+    "cloud_rate_limiter",
+    "token_bucket_limiter",
     "rate_limiter",
-    "WebhookManager",
-    "WebhookSubscription",
-    "WebhookEventPayload",
-    "webhook_manager",
-    
     # Formal Verification
+    "ProofStep",
     "ProofCertificate",
     "ContractVerificationResult",
     "MerkleTree",
+    "compute_merkle_root",
+    "verify_proof_certificate",
+    "verify_merkle_inclusion",
     "CloudFormalVerifier",
     "cloud_verifier",
-    
     # Swarm Orchestration
     "SwarmAgentNode",
+    "DebateRound",
+    "get_default_swarm_nodes",
+    "get_adversarial_team_nodes",
     "SwarmExecutionTrace",
     "CloudSwarmOrchestrator",
     "cloud_swarm",
-    
     # Inference & Routing
     "CloudInferenceResponse",
+    "StreamChunk",
     "CloudIntelligenceRouter",
     "cloud_router",
-    
+    # Cache & Telemetry
+    "BaseProofCache",
+    "CachedProofEntry",
+    "CloudProofCache",
+    "proof_cache",
+    "AuditLogEntry",
+    "CloudTelemetryCollector",
+    "cloud_telemetry",
+    "format_prometheus_metrics",
+    # SOTA Papers
+    "PaperItem",
+    "SOTA_PAPERS_CATALOG",
+    "get_all_papers",
+    "get_paper_by_id",
+    "CloudPaperCompiler",
+    "cloud_paper_compiler",
     # Client SDK
     "TruthGPTCloudClient",
-    
-    # Exceptions
+    # Domain Exceptions
     "TruthGPTCloudError",
-    "QuotaExceededError",
-    "TierUnauthorizedError",
     "AuthenticationError",
-    "PermissionDeniedError",
-    "VerificationError",
-    "FormalVerificationError",
-    "BatchVerificationError",
-    "RateLimitExceededError",
-    "ConcurrencyLimitExceededError",
     "InvalidApiKeyError",
+    "PermissionDeniedError",
+    "TierUnauthorizedError",
+    "QuotaExceededError",
+    "QuotaExceeded",
+    "FormalVerificationError",
+    "VerificationError",
+    "BatchVerificationError",
     "InvalidTierError",
     "ModelUnavailableError",
-    "PaymentRequiredError",
     "PaymentError",
-    
-    "__version__",
+    "PaymentRequiredError",
 ]
+

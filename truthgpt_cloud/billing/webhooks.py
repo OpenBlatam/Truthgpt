@@ -83,7 +83,8 @@ class WebhookManager:
         self,
         event_type: str,
         user_id: str,
-        data: Dict[str, Any]
+        data: Dict[str, Any],
+        custom_secret: Optional[str] = None
     ) -> WebhookEventPayload:
         """
         Emit and sign an event payload.
@@ -102,7 +103,8 @@ class WebhookManager:
         
         # Calculate HMAC signature
         canonical = json.dumps(payload_data, sort_keys=True)
-        sig = hmac.new("tgpt_global_webhook_secret".encode(), canonical.encode(), hashlib.sha256).hexdigest()
+        secret = (custom_secret or "tgpt_global_webhook_secret").encode()
+        sig = hmac.new(secret, canonical.encode(), hashlib.sha256).hexdigest()
         
         event = WebhookEventPayload(
             event_id=event_id,
@@ -126,6 +128,19 @@ class WebhookManager:
                 
         return event
 
+    @staticmethod
+    def verify_webhook_signature(
+        payload_data: Dict[str, Any],
+        signature_header: str,
+        secret: str = "tgpt_global_webhook_secret"
+    ) -> bool:
+        """Verify the HMAC-SHA256 signature of an incoming webhook event."""
+        if signature_header.startswith("sha256="):
+            signature_header = signature_header[7:]
+        canonical = json.dumps(payload_data, sort_keys=True)
+        expected_sig = hmac.new(secret.encode(), canonical.encode(), hashlib.sha256).hexdigest()
+        return hmac.compare_digest(signature_header, expected_sig)
+
     def get_recent_events(self, user_id: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
         """Retrieve recent event history."""
         events = self._event_logs
@@ -136,3 +151,10 @@ class WebhookManager:
 
 # Global Webhook Manager Instance
 webhook_manager = WebhookManager()
+
+__all__ = [
+    "WebhookSubscription",
+    "WebhookEventPayload",
+    "WebhookManager",
+    "webhook_manager",
+]

@@ -164,6 +164,106 @@ def register_cloud_commands(cloud_app: typer.Typer):
         )
         console.print(Panel(info, title="📊 Telemetría y Rendimiento TruthGPT Cloud", border_style="cyan"))
 
+    @cloud_app.command("verify-attention")
+    def verify_attention(
+        num_heads_q: int = typer.Option(32, "--heads-q", "-q", help="Cabezas de consulta (Query)"),
+        num_heads_kv: int = typer.Option(8, "--heads-kv", "-k", help="Cabezas de valor/clave (KV) para GQA"),
+        head_dim: int = typer.Option(128, "--head-dim", "-d", help="Dimensión por cabeza"),
+        arch: str = typer.Option("FlashAttention-3", "--arch", "-a", help="Arquitectura de atención")
+    ):
+        """Formally verify Transformer attention invariants (MHA, GQA, FlashAttention)."""
+        from truthgpt_cloud import cloud_verifier
+        console.print(f"[yellow]⏳ Verificando invariantes de atención para {arch}...[/yellow]")
+        res = cloud_verifier.verify_attention_invariants(
+            query_shape=[1, 2048, num_heads_q * head_dim],
+            key_shape=[1, 2048, num_heads_kv * head_dim],
+            value_shape=[1, 2048, num_heads_kv * head_dim],
+            num_heads_q=num_heads_q,
+            num_heads_kv=num_heads_kv,
+            head_dim=head_dim,
+            architecture_type=arch
+        )
+        color = "green" if res["is_valid"] else "red"
+        output = (
+            f"[bold {color}]Estado: {'VALIDADO / INVARIANTE PRESERVADO' if res['is_valid'] else 'VIOLACIÓN DETECTADA'}[/bold {color}]\n"
+            f"[cyan]Arquitectura:[/cyan] {res['architecture_type']}\n"
+            f"[blue]GQA Config:[/blue] Query Heads={num_heads_q}, KV Heads={num_heads_kv} (Ratio {num_heads_q // num_heads_kv}:1)\n"
+            f"[magenta]Merkle Proof Root:[/magenta] {res['merkle_root']}\n\n"
+            f"[bold]Invariantes Demostrados:[/bold]\n"
+        )
+        for inv in res["invariants_verified"]:
+            output += f" • {inv}\n"
+
+        console.print(Panel(output, title="🛡️ Verificación Formal de Atención Transformer", border_style=color))
+
+    @cloud_app.command("verify-quantization")
+    def verify_quant(
+        min_val: float = typer.Option(-12.5, "--min", help="Valor mínimo observado"),
+        max_val: float = typer.Option(12.5, "--max", help="Valor máximo observado"),
+        fmt: str = typer.Option("INT8", "--format", "-f", help="Formato (FP8_E4M3, INT8, INT4, BITNET)")
+    ):
+        """Formally verify quantization dynamic range and zero-point safety."""
+        from truthgpt_cloud import cloud_verifier
+        console.print(f"[yellow]⏳ Verificando seguridad de cuantización ({fmt})...[/yellow]")
+        res = cloud_verifier.verify_quantization_safety(
+            min_val=min_val,
+            max_val=max_val,
+            quant_format=fmt
+        )
+        color = "green" if res["is_valid"] else "red"
+        output = (
+            f"[bold {color}]Estado: {'RANGO DINÁMICO SEGURO' if res['is_valid'] else 'DESBORDAMIENTO'}[/bold {color}]\n"
+            f"[cyan]Formato Cuantización:[/cyan] {res['quant_format']} ({res['bits']} bits)\n"
+            f"[yellow]Factor de Escala (Delta):[/yellow] {res['scale_factor']:.8f}\n"
+            f"[blue]Zero-Point Integer:[/blue] {res['zero_point']} (Rango [{res['q_min']}, {res['q_max']}])\n"
+            f"[magenta]Merkle Proof Root:[/magenta] {res['merkle_root']}\n"
+        )
+        console.print(Panel(output, title="⚡ Verificación de Cuantización", border_style=color))
+
+    @cloud_app.command("audit-ledger")
+    def inspect_ledger(limit: int = typer.Option(10, "--limit", "-l", help="Cantidad de bloques")):
+        """Inspect the tamper-evident cryptographic SHA-256 audit ledger."""
+        from truthgpt_cloud import cloud_security
+        integrity = cloud_security.verify_ledger_integrity()
+        blocks = cloud_security.get_audit_ledger(limit=limit)
+
+        table = Table(title=f"🔒 Ledger Criptográfico de Auditoría (Integridad: {'✅ OK' if integrity['is_valid'] else '❌ CORRUPTO'})")
+        table.add_column("Bloque", style="cyan")
+        table.add_column("Evento", style="bold yellow")
+        table.add_column("Usuario", style="magenta")
+        table.add_column("Hash del Bloque (SHA-256)", style="green")
+        table.add_column("Prev Hash", style="dim white")
+
+        for b in blocks:
+            table.add_row(
+                f"#{b['block_index']}",
+                b["event_type"],
+                b["user_id"],
+                b["block_hash"][:18] + "...",
+                b["prev_hash"][:14] + "..."
+            )
+        console.print(table)
+
+    @cloud_app.command("swarm-debate")
+    def run_debate(
+        topic: str = typer.Argument(..., help="Tema del debate formal"),
+        claim: str = typer.Argument(..., help="Proposición inicial del Blue Team"),
+        rounds: int = typer.Option(2, "--rounds", "-r", help="Rondas de refutación")
+    ):
+        """Execute a Red Team vs Blue Team adversarial debate on TruthGPT Cloud."""
+        from truthgpt_cloud import TruthGPTCloudClient
+        client = TruthGPTCloudClient()
+        console.print(f"[yellow]⏳ Iniciando Debate Adversarial Red Team vs Blue Team: '{topic}'...[/yellow]")
+        res = client.execute_adversarial_debate(topic=topic, proponent_claim=claim, rounds=rounds)
+        
+        output = (
+            f"[bold green]Veredicto Final:[/bold green] {res['consensus_verdict']}\n"
+            f"[cyan]Acuerdo Inter-Agente:[/cyan] {res['inter_agent_agreement'] * 100:.2f}%\n"
+            f"[blue]Probabilidad Bayesiana de Consenso:[/blue] {res['bayesian_consensus_probability'] * 100:.2f}%\n"
+            f"[magenta]Rondas Ejecutadas:[/magenta] {res['rounds_count']}\n"
+        )
+        console.print(Panel(output, title="🐝 Debate Adversarial Swarm Completado", border_style="green"))
+
     @cloud_app.command("server")
     def run_server(
         port: int = typer.Option(8080, "--port", "-p", help="Puerto HTTP"),
@@ -173,4 +273,5 @@ def register_cloud_commands(cloud_app: typer.Typer):
         from truthgpt_cloud_server import start_server
         console.print(Panel(f"Iniciando TruthGPT Cloud Server en http://{host}:{port}", title="🚀 TruthGPT Cloud Server", border_style="green"))
         start_server(host=host, port=port)
+
 

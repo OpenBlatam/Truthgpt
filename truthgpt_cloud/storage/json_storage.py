@@ -53,7 +53,7 @@ class JsonFileStorageBackend(StorageBackend):
             self._memory_cache = {}
 
     def _flush_to_disk(self) -> None:
-        """Atomically write memory cache to disk via temporary file."""
+        """Atomically write memory cache to disk via temporary file with retry resilience."""
         with self._lock:
             dir_name = os.path.dirname(self.file_path)
             if dir_name and not os.path.exists(dir_name):
@@ -77,8 +77,19 @@ class JsonFileStorageBackend(StorageBackend):
                     except Exception:
                         pass
 
-                # Atomic replacement
-                shutil.move(temp_path, self.file_path)
+                # Atomic replacement with retries for Windows file lock tolerance
+                replaced = False
+                for attempt in range(5):
+                    try:
+                        os.replace(temp_path, self.file_path)
+                        replaced = True
+                        break
+                    except (PermissionError, OSError):
+                        time.sleep(0.02 * (attempt + 1))
+
+                if not replaced:
+                    shutil.move(temp_path, self.file_path)
+
             except Exception as e:
                 logger.error(f"Error during atomic flush to {self.file_path}: {e}")
                 if os.path.exists(temp_path):

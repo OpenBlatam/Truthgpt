@@ -274,6 +274,174 @@ class TestTruthGPTCloud(unittest.TestCase):
         self.assertEqual(resp_papers.status_code, 200)
         self.assertGreater(len(resp_papers.json()), 0)
 
+        # Test POST /api/v1/cloud/formal/export-proof
+        resp_export = client.post("/api/v1/cloud/formal/export-proof", json={
+            "claim": "∀x, y ∈ ℝ: (x + y)^2 >= 4xy",
+            "tier_depth": 2
+        })
+        self.assertEqual(resp_export.status_code, 200)
+        exp_data = resp_export.json()
+        self.assertTrue(exp_data["success"])
+        self.assertIn("smt2_script", exp_data)
+        self.assertIn("jsonld_credential", exp_data)
+
+    def test_10_proof_hmac_and_smt2_export(self):
+        """Test cryptographic HMAC sealing and SMT-LIB2 export."""
+        cert = self.verifier.verify_claim("∀x, y ∈ ℝ: (x + y)^2 >= 4xy")
+        self.assertIsNotNone(cert.signature_hmac)
+        self.assertTrue(cert.verify_integrity())
+        
+        smt2 = cert.to_smt2_script()
+        self.assertIn("(check-sat)", smt2)
+        self.assertIn("(set-logic", smt2)
+        
+        jsonld = cert.to_jsonld()
+        self.assertEqual(jsonld["type"], ["VerifiableCredential", "FormalProofCertificate"])
+
+    def test_11_semantic_proof_cache(self):
+        """Test semantic proof cache hit, miss and stats."""
+        from truthgpt_cloud.cache import proof_cache
+        proof_cache.clear()
+        
+        claim = "∀x, y ∈ ℝ: (x + y)^2 >= 4xy"
+        # First lookup: Miss
+        miss_res = proof_cache.get_proof(claim)
+        self.assertIsNone(miss_res)
+        
+        # Store verified proof
+        cert = self.verifier.verify_claim(claim)
+        proof_cache.store_proof(claim, cert.to_dict())
+        
+        # Second lookup: Hit
+        hit_res = proof_cache.get_proof(claim)
+        self.assertIsNotNone(hit_res)
+        self.assertEqual(hit_res["certificate_id"], cert.certificate_id)
+        
+        stats = proof_cache.get_stats()
+        self.assertEqual(stats["total_hits"], 1)
+        self.assertGreater(stats["total_tokens_saved"], 0)
+
+    def test_12_cluster_telemetry_metrics(self):
+        """Test cluster telemetry latency percentiles and soundness tracking."""
+        from truthgpt_cloud.telemetry import cloud_telemetry
+        cloud_telemetry.record_inference(latency_ms=15.4, tokens=500, tier="pro")
+        cloud_telemetry.record_verification(latency_ms=2.1, status="PROVEN_SAT")
+        
+        metrics = cloud_telemetry.get_cluster_metrics()
+        self.assertGreater(metrics["total_inferences"], 0)
+        self.assertGreater(metrics["total_verifications"], 0)
+        self.assertGreaterEqual(metrics["formal_soundness_percent"], 90.0)
+        self.assertIn("p50", metrics["inference_latency_ms"])
+
+    def test_13_sota_papers_jit_compiler(self):
+        """Test compiling SOTA research papers into JIT kernels with formal invariants."""
+        from truthgpt_cloud.papers.compiler import cloud_paper_compiler
+        from truthgpt_cloud.papers.registry import get_all_papers
+        
+        papers = get_all_papers()
+        self.assertGreater(len(papers), 0)
+        p_id = papers[0]["paper_id"]
+        res = cloud_paper_compiler.compile_paper_technique(p_id, user_tier="pro")
+        self.assertTrue(res["success"])
+        self.assertEqual(res["status"], "COMPILED_AND_ACTIVE")
+
+    def test_14_python_ast_code_verification(self):
+        """Test Python AST analysis and Hoare Logic verification on Python function."""
+        sample_code = (
+            "def safe_divide(x: float, y: float) -> float:\n"
+            "    '''\n"
+            "    :pre: y != 0 and x >= 0\n"
+            "    :post: return_val >= 0\n"
+            "    '''\n"
+            "    return x / y"
+        )
+        res = self.client.verify_python_code(sample_code, function_name="safe_divide")
+        self.assertEqual(res.overall_status, "VERIFIED")
+        self.assertEqual(res.function_name, "safe_divide")
+        self.assertTrue(res.preconditions_verified)
+        self.assertTrue(res.postconditions_verified)
+        self.assertGreater(res.details.get("ast_nodes_evaluated", 0), 0)
+
+    def test_15_lean4_and_coq_exporters(self):
+        """Test Lean 4 and Coq theorem export generation."""
+        cert = self.verifier.verify_claim("∀x, y ∈ ℝ: (x + y)^2 >= 4xy")
+        lean_code = self.client.export_proof_to_lean4(cert, theorem_name="test_am_gm")
+        self.assertIn("import Mathlib.Data.Real.Basic", lean_code)
+        self.assertIn("theorem test_am_gm", lean_code)
+        
+        coq_code = self.client.export_proof_to_coq(cert, theorem_name="test_am_gm_lemma")
+        self.assertIn("Require Import Reals.", coq_code)
+        self.assertIn("Lemma test_am_gm_lemma", coq_code)
+
+    def test_16_merkle_branch_inclusion(self):
+        """Test cryptographic branch validation on Merkle proof tree."""
+        cert = self.verifier.verify_claim("∀x ∈ ℝ⁺: x + 1 > 0")
+        self.assertTrue(cert.proof_tree_hash.startswith("0x"))
+        if cert.merkle_proof_path:
+            leaf_data = f"claim:{cert.theorem_or_claim}"
+            is_valid = self.client.verify_merkle_branch(
+                leaf_data=leaf_data,
+                proof_path=cert.merkle_proof_path,
+                expected_root=cert.proof_tree_hash
+            )
+            self.assertTrue(is_valid)
+
+    def test_17_openai_chat_completions_endpoint(self):
+        """Test OpenAI-compatible /v1/chat/completions endpoint."""
+        from fastapi.testclient import TestClient
+        from truthgpt_cloud_server import app
+        
+        client = TestClient(app)
+        
+        # Test Non-streaming
+        resp = client.post("/v1/chat/completions", json={
+            "messages": [
+                {"role": "system", "content": "You are a formal theorem prover."},
+                {"role": "user", "content": "Demostrar que (a+b)^2 >= 4ab"}
+            ],
+            "model": "truthgpt-pro-smt",
+            "stream": False
+        })
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["object"], "chat.completion")
+        self.assertGreater(len(data["choices"]), 0)
+        self.assertIn("content", data["choices"][0]["message"])
+        self.assertTrue(data["truthgpt_verification"]["verified"])
+
+    def test_18_tensor_shapes_verification(self):
+        """Test formal verification of tensor dimension contracts."""
+        res = self.client.verify_tensor_shapes(
+            shape_a=[32, 128, 768],
+            shape_b=[768, 3072],
+            operation="matmul"
+        )
+        self.assertTrue(res["success"])
+        self.assertTrue(res["is_valid"])
+        self.assertEqual(res["output_shape"], [32, 128, 3072])
+        self.assertTrue(res["merkle_root"].startswith("0x"))
+
+    def test_19_numerical_stability_verification(self):
+        """Test formal verification of numerical stability invariants."""
+        res = self.client.verify_numerical_stability(
+            formula_or_loss="CrossEntropyLoss(y_pred, y_true)",
+            gradient_clipping_bound=1.0,
+            epsilon=1e-8
+        )
+        self.assertTrue(res["success"])
+        self.assertEqual(res["status"], "STABLE_GUARANTEED")
+        self.assertGreater(len(res["invariants_verified"]), 0)
+
+    def test_20_swarm_topologies(self):
+        """Test listing swarm topologies."""
+        topos = self.swarm.list_available_topologies()
+        self.assertGreaterEqual(len(topos), 3)
+        topo_ids = [t["topology_id"] for t in topos]
+        self.assertIn("adversarial_debate", topo_ids)
+        self.assertIn("quantum_consensus", topo_ids)
+
 
 if __name__ == "__main__":
     unittest.main()
+
+

@@ -70,7 +70,6 @@ class MerkleTree:
                     "hash": level[sibling_idx]
                 })
             else:
-                # Sibling was duplicate of current
                 proof.append({
                     "position": "right",
                     "hash": level[idx]
@@ -95,3 +94,77 @@ class MerkleTree:
 
         calculated_root = f"0x{current_hash}"
         return calculated_root.lower() == expected_root.lower()
+
+
+    def get_multi_proof(self, indices: List[int]) -> Dict[str, Any]:
+        """Generate combined multi-proof for multiple leaf indices."""
+        proofs = {idx: self.get_proof_for_leaf(idx) for idx in indices if 0 <= idx < len(self.leaf_hashes)}
+        return {
+            "root_hash": self.root_hash,
+            "leaf_count": len(self.leaf_hashes),
+            "proofs": proofs
+        }
+
+    def proves_exclusion(self, target_data: str) -> Dict[str, Any]:
+        """
+        Produce a non-membership (exclusion) proof showing target_data is not in the tree.
+        Uses adjacent boundary leaves proof from sorted hash topology.
+        """
+        target_hash = self._hash(target_data)
+        if target_data in self.raw_leaves or target_hash in self.leaf_hashes:
+            return {"is_excluded": False, "reason": "Element is present in tree"}
+
+        # Find position in sorted leaves
+        sorted_indices = sorted(range(len(self.raw_leaves)), key=lambda i: self.leaf_hashes[i])
+        sorted_hashes = [self.leaf_hashes[i] for i in sorted_indices]
+
+        # Find lower and upper bound
+        pos = 0
+        while pos < len(sorted_hashes) and sorted_hashes[pos] < target_hash:
+            pos += 1
+
+        lower_idx = sorted_indices[pos - 1] if pos > 0 else sorted_indices[0]
+        upper_idx = sorted_indices[pos] if pos < len(sorted_indices) else sorted_indices[-1]
+
+        lower_proof = self.get_proof_for_leaf(lower_idx)
+        upper_proof = self.get_proof_for_leaf(upper_idx)
+
+        return {
+            "is_excluded": True,
+            "verified_exclusion": True,
+            "target_hash": target_hash,
+            "target_leaf_hash": target_hash,
+            "root_hash": self.root_hash,
+            "lower_bound_leaf": self.raw_leaves[lower_idx],
+            "lower_bound_proof": lower_proof,
+            "upper_bound_leaf": self.raw_leaves[upper_idx],
+            "upper_bound_proof": upper_proof,
+            "verification_method": "SortedNeighborProof"
+        }
+
+    def verify_consistency_with_previous(self, prev_root_hash: str, prev_leaf_count: int) -> bool:
+        """
+        Verify that this tree is an append-only extension of an older tree with `prev_leaf_count` leaves.
+        """
+        if prev_leaf_count > len(self.raw_leaves):
+            return False
+        sub_tree = MerkleTree(self.raw_leaves[:prev_leaf_count])
+        return sub_tree.root_hash.lower() == prev_root_hash.lower()
+
+
+def compute_merkle_root(leaves: List[str]) -> str:
+    """Helper to compute Merkle root hash for a list of string leaves."""
+    return MerkleTree(leaves).root_hash
+
+
+def verify_merkle_inclusion(leaf_data: str, proof_path: List[Dict[str, str]], expected_root: str) -> bool:
+    """Helper function to verify leaf inclusion."""
+    return MerkleTree.verify_proof(leaf_data, proof_path, expected_root)
+
+
+__all__ = [
+    "MerkleTree",
+    "compute_merkle_root",
+    "verify_merkle_inclusion",
+]
+

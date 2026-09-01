@@ -14,8 +14,21 @@ class SwarmAgentNode:
     specialization: str
     status: str = "idle"  # "idle", "reasoning", "adversarial_audit", "verifying", "done"
     contribution: Optional[str] = None
+    reasoning_steps: List[str] = field(default_factory=list)
     confidence: float = 0.98
     phase: int = 1
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "agent_id": self.agent_id,
+            "role_name": self.role_name,
+            "specialization": self.specialization,
+            "status": self.status,
+            "contribution": self.contribution,
+            "reasoning_steps": self.reasoning_steps,
+            "confidence": self.confidence,
+            "phase": self.phase
+        }
 
 
 @dataclass
@@ -27,6 +40,16 @@ class DebateRound:
     resolution: str
     cove_backtracking_triggered: bool = False
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "round_number": self.round_number,
+            "topic": self.topic,
+            "proponent_claim": self.proponent_claim,
+            "adversary_critique": self.adversary_critique,
+            "resolution": self.resolution,
+            "cove_backtracking_triggered": self.cove_backtracking_triggered
+        }
+
 
 def get_default_swarm_nodes(max_agents: int = 5) -> List[SwarmAgentNode]:
     """Spawn standard multi-agent research personas based on quota."""
@@ -34,15 +57,27 @@ def get_default_swarm_nodes(max_agents: int = 5) -> List[SwarmAgentNode]:
         SwarmAgentNode(
             agent_id="agt_lead_theoretician",
             role_name="Lead Theoretical Scientist",
-            specialization="Decomposición del problema y formulación de hipótesis matemáticas",
+            specialization="Descomposición axiomática y formulación rigurosa de hipótesis matemáticas",
             status="reasoning",
+            reasoning_steps=[
+                "Descomposición del enunciado en lemas fundamentales",
+                "Formulación de invariantes y precondiciones de frontera",
+                "Construcción del grafo de dependencias axiomáticas"
+            ],
+            confidence=0.995,
             phase=1
         ),
         SwarmAgentNode(
             agent_id="agt_formal_verifier",
             role_name="Z3 Formal Logic & SMT Prover",
-            specialization="Verificación de invariantes, contratos Hoare y teoremas",
+            specialization="Verificación formal de invariantes, cláusulas SMT y contratos Hoare",
             status="reasoning",
+            reasoning_steps=[
+                "Traducción a AST de cláusulas de primer orden para Z3 SMT",
+                "Comprobación de satisfacibilidad y búsqueda de refutación",
+                "Emisión de hash de raíz Merkle SHA-256"
+            ],
+            confidence=0.999,
             phase=1
         ),
         SwarmAgentNode(
@@ -50,6 +85,12 @@ def get_default_swarm_nodes(max_agents: int = 5) -> List[SwarmAgentNode]:
             role_name="High-Performance Systems Architect",
             specialization="Generación de algoritmos paralelos y optimización CUDA/TensorRT",
             status="reasoning",
+            reasoning_steps=[
+                "Análisis de complejidad asintótica temporal O(N log N)",
+                "Preservación de invariantes en bucles vectorizados",
+                "Optimización de jerarquía de memoria compartida y registros"
+            ],
+            confidence=0.99,
             phase=1
         )
     ]
@@ -61,6 +102,12 @@ def get_default_swarm_nodes(max_agents: int = 5) -> List[SwarmAgentNode]:
                 role_name="SOTA AI Literature Sentinel",
                 specialization="Indexación y contraste con papers de NeurIPS/ICML/ArXiv",
                 status="reasoning",
+                reasoning_steps=[
+                    "Búsqueda semántica en base de conocimientos de 2025/2026",
+                    "Contraste metodológico con Chain-of-Verification (CoVe)",
+                    "Validación de novedad y consistencia con teoremas establecidos"
+                ],
+                confidence=0.985,
                 phase=2
             )
         )
@@ -71,6 +118,12 @@ def get_default_swarm_nodes(max_agents: int = 5) -> List[SwarmAgentNode]:
                 role_name="Quantum Consensus Arbiter",
                 specialization="Votación ponderada, debate adversarial y eliminación de alucinaciones",
                 status="reasoning",
+                reasoning_steps=[
+                    "Evaluación cruzada de las ramas de deducción",
+                    "Ejecución de auditoría adversarial y análisis de contradicciones",
+                    "Síntesis del consenso unánime con certificado de verdad"
+                ],
+                confidence=0.999,
                 phase=3
             )
         )
@@ -83,6 +136,11 @@ def get_default_swarm_nodes(max_agents: int = 5) -> List[SwarmAgentNode]:
                     role_name=f"Distributed Sub-Domain Solver #{i}",
                     specialization=f"Exploración de ramas de deducción paralela #{i}",
                     status="reasoning",
+                    reasoning_steps=[
+                        f"Evaluación de invariante de sub-espacio #{i}",
+                        "Verificación de cotas de convergencia local"
+                    ],
+                    confidence=0.98,
                     phase=2
                 )
             )
@@ -90,8 +148,54 @@ def get_default_swarm_nodes(max_agents: int = 5) -> List[SwarmAgentNode]:
     return nodes
 
 
+def get_adversarial_team_nodes() -> List[SwarmAgentNode]:
+    """Spawn specialized Red Team vs Blue Team adversarial swarm nodes."""
+    return [
+        SwarmAgentNode(
+            agent_id="agt_blue_proponent",
+            role_name="Blue Team Lead Proponent",
+            specialization="Construcción de hipótesis constructivas, derivaciones y modelos",
+            status="reasoning",
+            reasoning_steps=[
+                "Formulación del teorema y lemas constructivos",
+                "Cálculo de cotas de error y estabilidad asintótica"
+            ],
+            confidence=0.99,
+            phase=1
+        ),
+        SwarmAgentNode(
+            agent_id="agt_red_adversary",
+            role_name="Red Team Adversarial Invariant Attacker",
+            specialization="Búsqueda activa de contraejemplos, singularidades y divisiones por cero",
+            status="adversarial_audit",
+            reasoning_steps=[
+                "Inyección de condiciones de borde patológicas",
+                "Exploración de regiones de inestabilidad de gradiente",
+                "Verificación de refutación SMT con Z3"
+            ],
+            confidence=0.995,
+            phase=2
+        ),
+        SwarmAgentNode(
+            agent_id="agt_neutral_judge",
+            role_name="Sovereign Truth Arbitrator",
+            specialization="Resolución formal de debates y síntesis de consenso matemático",
+            status="verifying",
+            reasoning_steps=[
+                "Evaluación de la solidez de los contraejemplos del Red Team",
+                "Verificación de las defensas y parches del Blue Team",
+                "Emisión de veredicto vinculante con árbol Merkle"
+            ],
+            confidence=0.999,
+            phase=3
+        )
+    ]
+
+
 __all__ = [
     "SwarmAgentNode",
     "DebateRound",
     "get_default_swarm_nodes",
+    "get_adversarial_team_nodes",
 ]
+

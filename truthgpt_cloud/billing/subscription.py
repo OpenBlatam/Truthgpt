@@ -51,6 +51,12 @@ class SubscriptionManager:
                 usage = UsageRecord(**usage_dict) if usage_dict else UsageRecord()
                 invoices = [Invoice(**inv) for inv in udata.get("invoices", [])]
                 tier_val = CloudTier(udata.get("tier", "free"))
+                
+                # Load api keys detail if present
+                api_details = [
+                    ApiKeyInfo(**d) for d in udata.get("api_key_details", udata.get("api_keys_detail", []))
+                ]
+                
                 user = UserSubscription(
                     user_id=udata["user_id"],
                     email=udata.get("email", ""),
@@ -63,6 +69,7 @@ class SubscriptionManager:
                     next_billing_date=udata.get("next_billing_date", ""),
                     usage=usage,
                     invoices=invoices,
+                    api_key_details=api_details,
                     custom_limits=udata.get("custom_limits")
                 )
                 self._users[uid] = user
@@ -70,13 +77,27 @@ class SubscriptionManager:
                     self._api_key_to_user[key] = uid
 
         self._ensure_demo_users()
+        self._sync_security_registry()
+
+    def _sync_security_registry(self) -> None:
+        """Synchronize loaded user API keys into the cryptographic security registry."""
+        try:
+            from ..security import cloud_security
+            for uid, user in self._users.items():
+                for key in user.api_keys:
+                    cloud_security.register_existing_key(
+                        raw_key=key,
+                        user_id=uid,
+                        name=f"{user.name} Key"
+                    )
+        except Exception as e:
+            logger.debug(f"Security sync note: {e}")
 
     def _save_storage(self) -> None:
         """Save subscription records to atomic disk storage."""
         raw_data = {}
         for uid, user in self._users.items():
-            data = asdict(user)
-            data["tier"] = user.tier.value
+            data = user.to_dict()
             raw_data[uid] = data
         self._storage.save(raw_data)
 
@@ -105,7 +126,12 @@ class SubscriptionManager:
         if modified:
             self._save_storage()
 
-    def register_user(self, email: str, name: str, tier: Union[CloudTier, str] = CloudTier.FREE) -> UserSubscription:
+    def register_user(
+        self,
+        email: str,
+        name: str,
+        tier: Union[CloudTier, str] = CloudTier.FREE
+    ) -> UserSubscription:
         """Register a new user in TruthGPT Cloud with an initial API key."""
         if isinstance(tier, str):
             try:
@@ -127,6 +153,19 @@ class SubscriptionManager:
         self._users[user_id] = user
         self._api_key_to_user[api_key] = user_id
         self._save_storage()
+        
+        try:
+            from ..security import cloud_security
+            cloud_security.register_existing_key(
+                raw_key=api_key,
+                user_id=user_id,
+                name=f"{name} Primary Key"
+            )
+            from ..telemetry import cloud_telemetry
+            cloud_telemetry.record_audit_event("signup", user_id, {"email": email, "tier": user.tier.value})
+        except Exception:
+            pass
+            
         return user
 
     def get_user(self, user_id: str) -> Optional[UserSubscription]:
@@ -161,11 +200,29 @@ class SubscriptionManager:
             
         new_key = f"tgpt_cloud_live_{uuid.uuid4().hex[:24]}"
         actual_scopes = scopes or ["inference", "verify", "swarm", "read"]
-        if hasattr(user, "api_keys_detail") and user.api_keys_detail is not None:
-            user.api_keys_detail.append(ApiKeyInfo(key=new_key, label=label, scopes=actual_scopes))
+        
+        if hasattr(user, "api_key_details"):
+            user.api_key_details.append(
+                ApiKeyInfo(key=new_key, key_id=f"key_{uuid.uuid4().hex[:8]}", label=label, scopes=actual_scopes)
+            )
         user.api_keys.append(new_key)
         self._api_key_to_user[new_key] = user_id
         self._save_storage()
+        
+        try:
+            from ..security import cloud_security, ApiKeyScope
+            scope_enums = {ApiKeyScope(s) for s in actual_scopes if s in ApiKeyScope._value2member_map_}
+            cloud_security.register_existing_key(
+                raw_key=new_key,
+                user_id=user_id,
+                name=label,
+                scopes=scope_enums or None
+            )
+            from ..telemetry import cloud_telemetry
+            cloud_telemetry.record_audit_event("key_generated", user_id, {"label": label, "scopes": actual_scopes})
+        except Exception:
+            pass
+            
         return new_key
 
     def revoke_api_key(self, user_id: str, api_key: str) -> bool:
@@ -177,6 +234,16 @@ class SubscriptionManager:
         if api_key in self._api_key_to_user:
             del self._api_key_to_user[api_key]
         self._save_storage()
+        
+        try:
+            from ..security import cloud_security
+            h = cloud_security.hash_key(api_key)
+            cloud_security.revoke_key(h)
+            from ..telemetry import cloud_telemetry
+            cloud_telemetry.record_audit_event("key_revoked", user_id, {"key_prefix": api_key[:16] + "..."})
+        except Exception:
+            pass
+            
         return True
 
     def upgrade_subscription(
@@ -184,9 +251,10 @@ class SubscriptionManager:
         user_id: str,
         target_tier: Union[CloudTier, str],
         billing_cycle: str = "monthly",
-        payment_method: str = "stripe_card"
+        payment_method: str = "stripe_card",
+        promo_code: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Upgrade or modify subscription tier and create invoice."""
+        """Upgrade or modify subscription tier, applying optional promo codes, and create invoice."""
         user = self.get_user(user_id)
         if not user:
             raise AuthenticationError(f"Usuario {user_id} no encontrado.")
@@ -195,12 +263,29 @@ class SubscriptionManager:
             target_tier = CloudTier(target_tier.lower())
 
         target_cfg = get_tier_config(target_tier)
-        amount = target_cfg.price_yearly_usd if billing_cycle == "yearly" else target_cfg.price_monthly_usd
+        base_amount = target_cfg.price_yearly_usd if billing_cycle == "yearly" else target_cfg.price_monthly_usd
         
+        # Apply promo code discount if provided
+        discount_usd = 0.0
+        applied_promo = None
+        if promo_code:
+            code_clean = promo_code.strip().upper()
+            if code_clean == "TRUTH2026":
+                discount_usd = round(base_amount * 0.20, 2)
+                applied_promo = code_clean
+            elif code_clean == "DEV50":
+                discount_usd = round(base_amount * 0.50, 2)
+                applied_promo = code_clean
+            elif code_clean in ["SINGULARITY100", "FREE100"]:
+                discount_usd = base_amount
+                applied_promo = code_clean
+
+        final_amount = max(0.0, round(base_amount - discount_usd, 2))
+
         # Process payment gateway
         payment_res = PaymentGatewayService.process_payment(
             user_id=user_id,
-            amount_usd=amount,
+            amount_usd=final_amount,
             tier_id=target_tier.value,
             billing_cycle=billing_cycle,
             payment_method=payment_method
@@ -211,10 +296,12 @@ class SubscriptionManager:
             invoice_id=payment_res["invoice_id"],
             user_id=user_id,
             tier_id=target_tier.value,
-            amount_usd=amount,
+            amount_usd=final_amount,
             billing_cycle=billing_cycle,
             payment_method=payment_method,
             status="paid",
+            discount_applied_usd=discount_usd,
+            promo_code=applied_promo,
             created_at=datetime.now(timezone.utc).isoformat()
         )
         
@@ -224,9 +311,23 @@ class SubscriptionManager:
         user.status = "active"
         user.invoices.insert(0, invoice)
         user.usage.tokens_consumed_today = 0
-        user.usage.daily_request_count = 0
-        
         self._save_storage()
+        
+        try:
+            from ..telemetry import cloud_telemetry
+            cloud_telemetry.record_audit_event(
+                "subscription_upgraded",
+                user_id,
+                {"tier": target_tier.value, "amount_usd": final_amount, "discount_usd": discount_usd, "billing_cycle": billing_cycle}
+            )
+            from .webhooks import webhook_manager
+            webhook_manager.emit_event(
+                "subscription.upgraded",
+                user_id,
+                {"new_tier": target_tier.value, "amount_usd": final_amount, "invoice_id": invoice.invoice_id}
+            )
+        except Exception:
+            pass
         
         return {
             "success": True,
@@ -253,7 +354,7 @@ class SubscriptionManager:
         is_verification: bool = False,
         is_swarm: bool = False
     ) -> bool:
-        """Verify that user has enough daily quota and record token usage."""
+        """Verify that user has enough daily quota and record token usage, triggering warning events if thresholds crossed."""
         user = self.get_user(user_id)
         if not user:
             user = self.get_user_by_api_key(user_id)
@@ -274,6 +375,14 @@ class SubscriptionManager:
             
         # Check token quota
         if user and (user.usage.tokens_consumed_today + estimated_tokens > tier_cfg.daily_token_limit):
+            try:
+                from .webhooks import webhook_manager
+                webhook_manager.emit_event("quota.exceeded", user.user_id, {
+                    "consumed": user.usage.tokens_consumed_today,
+                    "limit": tier_cfg.daily_token_limit
+                })
+            except Exception:
+                pass
             raise QuotaExceededError(
                 message=(
                     f"Límite diario de tokens alcanzado ({user.usage.tokens_consumed_today}/{tier_cfg.daily_token_limit}). "
@@ -285,9 +394,23 @@ class SubscriptionManager:
         
         # Record consumption
         if user:
+            prev_pct = (user.usage.tokens_consumed_today / max(1, tier_cfg.daily_token_limit))
             user.usage.total_tokens_consumed += estimated_tokens
             user.usage.tokens_consumed_today += estimated_tokens
             user.usage.daily_request_count += 1
+            new_pct = (user.usage.tokens_consumed_today / max(1, tier_cfg.daily_token_limit))
+
+            # Trigger warning event if 80% threshold crossed
+            if prev_pct < 0.8 <= new_pct:
+                try:
+                    from .webhooks import webhook_manager
+                    webhook_manager.emit_event("quota.warning", user.user_id, {
+                        "consumed": user.usage.tokens_consumed_today,
+                        "limit": tier_cfg.daily_token_limit,
+                        "percentage": round(new_pct * 100, 1)
+                    })
+                except Exception:
+                    pass
             
             if is_verification:
                 user.usage.verifications_run += 1
@@ -296,6 +419,7 @@ class SubscriptionManager:
                 
             self._save_storage()
         return True
+
 
     def get_user_status_summary(self, user_id: str) -> Dict[str, Any]:
         """Get comprehensive usage, tier, and remaining quota metrics for user."""
@@ -351,6 +475,45 @@ class SubscriptionManager:
             },
             "recent_invoices": [asdict(inv) for inv in user.invoices[:5]],
             "invoices": [asdict(inv) for inv in user.invoices]
+        }
+
+
+    def get_usage_analytics(self, user_id: str) -> Dict[str, Any]:
+        """
+        Generate detailed telemetry analytics and cost breakdown for user.
+        """
+        summary = self.get_user_status_summary(user_id)
+        m = summary["metrics"]
+        user = self.get_user(user_id) or self.get_user_by_api_key(user_id)
+        
+        # Breakdown estimations
+        prompt_tokens = int(m["total_tokens_all_time"] * 0.4)
+        completion_tokens = int(m["total_tokens_all_time"] * 0.6)
+        
+        return {
+            "user_id": user_id,
+            "tier": summary["tier"],
+            "tier_name": summary["tier_name"],
+            "period": "current_billing_cycle",
+            "tokens": {
+                "total": m["total_tokens_all_time"],
+                "today": m["tokens_consumed_today"],
+                "remaining_today": m["remaining_tokens"],
+                "estimated_prompt_tokens": prompt_tokens,
+                "estimated_completion_tokens": completion_tokens,
+                "daily_limit": m["daily_token_limit"]
+            },
+            "operations": {
+                "formal_verifications": m["verifications_completed"],
+                "swarm_sessions": m["swarm_runs"],
+                "daily_requests": m["requests_today"]
+            },
+            "efficiency": {
+                "quota_utilization_pct": m["percent_quota_used"],
+                "cache_hit_savings_estimated_usd": round(m["verifications_completed"] * 0.002, 4)
+            },
+            "active_api_keys_count": len(summary["api_keys"]),
+            "invoices_count": len(summary["invoices"])
         }
 
 

@@ -1,7 +1,28 @@
 """
-Core package for TruthGPT Cloud.
-Exposes domain tiers, configurations, and domain exception classes.
+🏛️ TruthGPT Cloud - Core Subpackage
+Defines subscription tier models, exceptions, constants, and foundational types.
 """
+
+from .constants import (
+    CLOUD_PLATFORM_VERSION,
+    CLOUD_API_VERSION,
+    DEFAULT_SLIDING_WINDOW_SECONDS,
+    DEFAULT_CACHE_MAX_ENTRIES,
+    DEFAULT_TELEMETRY_MAX_HISTORY,
+    DEFAULT_SMT_TIMEOUT_MS,
+    DEFAULT_PROOF_CERT_ESTIMATED_SAVED_TOKENS,
+    DEFAULT_CERTIFICATE_SECRET,
+    DEFAULT_WEBHOOK_SECRET,
+    STANDARD_WARMUP_THEOREMS,
+)
+
+from .tiers import (
+    CloudTier,
+    TierConfig,
+    TIER_CONFIGURATIONS,
+    get_tier_config,
+    get_all_tiers,
+)
 
 from .exceptions import (
     TruthGPTCloudError,
@@ -23,15 +44,25 @@ from .exceptions import (
     PaymentRequiredError,
 )
 
-from .tiers import (
-    CloudTier,
-    TierConfig,
-    TIER_CONFIGURATIONS,
-    get_tier_config,
-    get_all_tiers
-)
-
 __all__ = [
+    # Constants
+    "CLOUD_PLATFORM_VERSION",
+    "CLOUD_API_VERSION",
+    "DEFAULT_SLIDING_WINDOW_SECONDS",
+    "DEFAULT_CACHE_MAX_ENTRIES",
+    "DEFAULT_TELEMETRY_MAX_HISTORY",
+    "DEFAULT_SMT_TIMEOUT_MS",
+    "DEFAULT_PROOF_CERT_ESTIMATED_SAVED_TOKENS",
+    "DEFAULT_CERTIFICATE_SECRET",
+    "DEFAULT_WEBHOOK_SECRET",
+    "STANDARD_WARMUP_THEOREMS",
+    # Tiers
+    "CloudTier",
+    "TierConfig",
+    "TIER_CONFIGURATIONS",
+    "get_tier_config",
+    "get_all_tiers",
+    # Exceptions
     "TruthGPTCloudError",
     "AuthenticationError",
     "InvalidApiKeyError",
@@ -49,9 +80,4 @@ __all__ = [
     "ModelUnavailableError",
     "PaymentError",
     "PaymentRequiredError",
-    "CloudTier",
-    "TierConfig",
-    "TIER_CONFIGURATIONS",
-    "get_tier_config",
-    "get_all_tiers",
 ]

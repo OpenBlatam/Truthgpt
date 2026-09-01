@@ -159,13 +159,37 @@ async def test_swarm_and_router():
     print("[PASS] Swarm, Router & Streaming test passed!")
 
 
+def test_tensor_and_stability():
+    print("[TEST] Testing Tensor Dimension Contracts & Numerical Stability...")
+    client = TruthGPTCloudClient()
+    
+    t_res = client.verify_tensor_shapes(
+        shape_a=[16, 64, 512],
+        shape_b=[512, 2048],
+        operation="matmul"
+    )
+    assert t_res["success"] is True
+    assert t_res["output_shape"] == [16, 64, 2048]
+    assert t_res["merkle_root"].startswith("0x")
+    
+    s_res = client.verify_numerical_stability(
+        formula_or_loss="AdamW(lr=1e-4, eps=1e-8)",
+        gradient_clipping_bound=1.0
+    )
+    assert s_res["success"] is True
+    assert s_res["status"] == "STABLE_GUARANTEED"
+    
+    print("[PASS] Tensor & Numerical Stability tests passed!")
+
+
 async def run_all_tests():
     print("==================================================")
-    print(">> Starting TruthGPT Cloud v2.1 Verification Suite")
+    print(">> Starting TruthGPT Cloud v2.2 Verification Suite")
     print("==================================================")
     test_tier_matrix()
     test_subscription_and_billing()
     test_formal_verifier_and_contracts()
+    test_tensor_and_stability()
     await test_swarm_and_router()
     print("==================================================")
     print(">> ALL TRUTHGPT CLOUD TESTS PASSED SUCCESSFULLY!")

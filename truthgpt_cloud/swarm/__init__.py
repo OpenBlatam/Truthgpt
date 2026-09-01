@@ -6,6 +6,7 @@ from .agents import (
     SwarmAgentNode,
     DebateRound,
     get_default_swarm_nodes,
+    get_adversarial_team_nodes,
 )
 
 from .orchestrator import (
@@ -18,6 +19,7 @@ __all__ = [
     "SwarmAgentNode",
     "DebateRound",
     "get_default_swarm_nodes",
+    "get_adversarial_team_nodes",
     "SwarmExecutionTrace",
     "CloudSwarmOrchestrator",
     "cloud_swarm",

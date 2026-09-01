@@ -1,8 +1,8 @@
 # 🌌 TruthGPT Cloud - Plataforma Nube de Frontier AI y Verificación Formal
 
-**TruthGPT Cloud** es el ecosistema en la nube de nivel de producción para **TruthGPT**, diseñado para ofrecer inferencia acelerada por GPU, orquestación de swarms multi-agente autónomos y **garantías matemáticas de veracidad mediante Solucionadores Formales Z3 SMT y Lógica de Hoare**.
+**TruthGPT Cloud** es el ecosistema en la nube de nivel de producción para **TruthGPT**, diseñado para ofrecer inferencia acelerada por GPU, orquestación de swarms multi-agente autónomos, compilación JIT de papers SOTA y **garantías matemáticas de veracidad mediante Solucionadores Formales Z3 SMT, Lógica de Hoare y Árboles Merkle**.
 
-TruthGPT Cloud introduce un modelo comercial de **suscripciones por niveles escalonados** análogo a los modelos de suscripción de frontier AI como **Google Gemini (Free / Advanced / Ultra / Enterprise)** y **OpenAI ChatGPT (Free / Plus / Pro / Enterprise)**, pero con una ventaja diferencial única en la industria: **verificación formal de teoremas y código con emisión de certificados criptográficos de verdad**.
+TruthGPT Cloud implementa un modelo de **suscripciones por niveles escalonados** análogo a los modelos de frontier AI líderes (**Google Gemini, OpenAI ChatGPT, Anthropic Claude**), potenciado con una ventaja diferencial única en la industria: **demostrabilidad formal con emisión de certificados criptográficos de verdad**.
 
 ---
 
@@ -18,66 +18,96 @@ TruthGPT Cloud introduce un modelo comercial de **suscripciones por niveles esca
 | **Peticiones por Minuto (RPM)**| 15 RPM | 120 RPM | 600 RPM | 2,000+ RPM |
 | **Modelos Frontier Disponibles**| `deepseek-chat`, `truthgpt-lite` | `deepseek-v3`, `claude-3-7-sonnet`, `gpt-4o`, `gemini-2-5-pro`, `truthgpt-pro-smt` | `truthgpt-quantum-singularity`, `ensemble-supreme`, `deepseek-r1`, `claude-3-7-thinking` | `truthgpt-sovereign-cluster`, Modelos Fine-Tuned Privados |
 | **Verificación Formal Z3 SMT** | Nivel 1: SymPy Algebraico | Nivel 2: Z3 SMT Solver & Contratos Hoare | Nivel 3: Demostrador Cuántico & Consenso | Nivel 4: Auditoría Formal Soberana & DbC |
-| **Certificados Criptográficos** | ❌ No | ✅ SHA-256 Proof Trees | ✅ SHA-256 + Merkle Audit | ✅ Criptográfico con Firma HSM |
+| **Certificados Criptográficos** | ❌ No | ✅ SHA-256 Proof Trees | ✅ SHA-256 + Merkle Audit | ✅ Criptográfico con Firma HMAC/HSM |
 | **Swarm de Agentes Autónomos** | 1 Agente | Swarm de hasta 5 Agentes | Swarm Masivo de 20 Agentes | Agentes Ilimitados en Paralelo |
+| **Topologías de Swarm** | Star | Star, Hierarchical | Star, Hierarchical, Mesh, Ring | Topologías Personalizadas Dinámicas |
 | **Infraestructura & GPU** | Cola Estándar CPU/GPU | GPU Prioritaria (TensorRT-LLM) | Zero-Queue Dedicado (H100/H200) | Clúster Soberano Dedicado / On-Prem |
-| **Claves de API Dedicadas** | 1 Clave | 5 Claves | 20 Claves | Ilimitadas |
+| **Claves de API Dedicadas** | 1 Clave | 5 Claves (con Scopes RBAC) | 20 Claves | Ilimitadas |
 | **Garantía SLA Uptime** | 99.0% | 99.9% | 99.99% | 99.999% |
 
 ---
 
-## 🏛️ Componentes y Arquitectura de TruthGPT Cloud
+## 🏛️ Arquitectura Modular del Paquete `truthgpt_cloud`
 
-El sistema está estructurado de forma modular y desacoplada:
+El sistema ha sido refactorizado en submódulos canónicos con alta cohesión y bajo acoplamiento:
 
-1. **`truthgpt_cloud/tiers.py`**:
-   - Define el catálogo `CloudTier` (`FREE`, `PRO`, `ULTRA`, `ENTERPRISE`) y el esquema `TierConfig` con todos los parámetros técnicos y cuotas.
-
-2. **`truthgpt_cloud/billing.py`**:
-   - Motor de suscripciones, registro de usuarios, cálculo de consumo de tokens en tiempo real, gestión y rotación de API keys, pasarela de cobro y generación de facturas compliant (`Invoice`).
-
-3. **`truthgpt_cloud/verifier.py`**:
-   - Solucionador SMT basado en **Z3** y **SymPy**. Genera objetos `ProofCertificate` con estado de satisfacción lógica (`PROVEN_SAT`, `PROVEN_UNSAT`, `VERIFIED_SYMBOLIC`), invariantes evaluados y hash criptográfico `0xSHA256`.
-
-4. **`truthgpt_cloud/swarm_cloud.py`**:
-   - Orquestador de agentes autónomos especializados:
-     - 🧮 **Mathematician Agent**: Modelado riguroso y formulación de hipótesis.
-     - 🔍 **Logic & Boundary Auditor**: Detección de casos de borde y contradicciones.
-     - 🛡️ **Formal Theorem Prover**: Generación de cláusulas SMT para Z3.
-     - ⚡ **Empirical Validator**: Pruebas de estrés y benchmarking de complejidad.
-     - ⚖️ **Consensus Arbiter**: Síntesis y emisión del veredicto final.
-
-5. **`truthgpt_cloud/engine_router.py`**:
-   - Enrutador de inferencia con control de acceso por nivel, selección automática de modelos y control dinámico de cuotas.
-
-6. **`truthgpt_cloud/client.py`**:
-   - SDK cliente en Python (`TruthGPTCloudClient`) con métodos sincrónicos y asincrónicos para integración instantánea.
-
-7. **`truthgpt_cloud_server.py`**:
-   - Servidor **FastAPI** con endpoints REST documentados en OpenAPI/Swagger.
-
-8. **`truthgpt_cloud_cli.py`**:
-   - Terminal interactiva rica para usuarios y administradores.
-
-9. **`web_app/`**:
-   - Panel de control Next.js con interfaz visual moderna, checkout Stripe/Crypto, terminal de chat con Z3 y gestor de API keys.
+```
+truthgpt_cloud/
+├── __init__.py               # Re-exporta la API pública completa
+├── core/                     # Dominio central: Tiers, configuraciones y excepciones
+│   ├── tiers.py              # Definición de CloudTier y TierConfig
+│   ├── exceptions.py         # Jerarquía tipada de errores de dominio
+│   └── __init__.py
+├── billing/                  # Motor de suscripciones, límites y pagos
+│   ├── models.py             # UserSubscription, Invoice, UsageRecord
+│   ├── subscription.py       # SubscriptionManager con soporte concurrente
+│   ├── rate_limiter.py       # SlidingWindowRateLimiter y TokenBucketRateLimiter
+│   ├── webhooks.py           # WebhookManager para eventos asíncronos
+│   ├── gateways.py           # Stripe, Crypto USDC y Mock Payment Gateways
+│   ├── storage.py            # Adaptador de almacenamiento de billing
+│   └── __init__.py
+├── cache/                    # Caché semántica LRU de pruebas formales y KV
+│   ├── models.py             # CachedProofEntry
+│   ├── proof_cache.py        # CloudProofCache y singleton proof_cache
+│   └── __init__.py
+├── telemetry/                # Telemetría de clúster, percentiles p50/p95/p99 y Prometheus
+│   ├── models.py             # AuditLogEntry
+│   ├── collector.py          # CloudTelemetryCollector y singleton cloud_telemetry
+│   ├── prometheus.py         # Formateador de métricas Prometheus
+│   └── __init__.py
+├── security/                 # Seguridad, RBAC, hash SHA-256 de claves y rate limiter
+│   ├── scopes.py             # ApiKeyScope
+│   ├── models.py             # ApiKeyMetadata
+│   ├── rate_limiter.py       # TokenBucketRateLimiter de seguridad
+│   ├── manager.py            # CloudSecurityManager y singleton cloud_security
+│   └── __init__.py
+├── rate_limiting/            # Controladores de tasa de ventana deslizante
+│   ├── sliding_window.py     # SlidingWindowRateLimiter y cloud_rate_limiter
+│   └── __init__.py
+├── verification/             # Demostración formal y criptografía
+│   ├── verifier.py           # CloudFormalVerifier (Z3 SMT, Hoare, AST, Tensores)
+│   ├── certificate.py        # ProofCertificate (JSON-LD, SMT2, Lean4, Coq)
+│   ├── merkle.py             # MerkleTree criptográfico con validación de ramas
+│   └── __init__.py
+├── swarm/                    # Orquestación multi-agente
+│   ├── agents.py             # SwarmAgentNode y agentes especializados
+│   ├── orchestrator.py       # CloudSwarmOrchestrator con topologías
+│   └── __init__.py
+├── routing/                  # Enrutamiento de inferencia
+│   ├── router.py             # CloudIntelligenceRouter con cuotas y fallback GPU
+│   └── __init__.py
+├── client/                   # SDK Cliente
+│   ├── client.py             # TruthGPTCloudClient con sync, async y streaming SSE
+│   └── __init__.py
+├── storage/                  # Capa de persistencia
+│   ├── base.py               # Protocolo StorageBackend
+│   ├── json_storage.py       # JsonFileStorageBackend con respaldos atómicos
+│   └── __init__.py
+├── papers/                   # Catálogo y compilador JIT de investigación SOTA
+│   ├── registry.py           # SOTA_PAPERS_CATALOG (FlashAttention-3, DeepSeek, etc.)
+│   ├── compiler.py           # CloudPaperCompiler (JIT runtime hooks)
+│   └── __init__.py
+└── [Bridges de compatibilidad]: billing.py, cache.py, client.py, engine_router.py,
+                                 exceptions.py, rate_limiter.py, security.py,
+                                 swarm_cloud.py, telemetry.py, tiers.py, verifier.py
+```
 
 ---
 
-## 🚀 Guía de Uso
+## 🚀 Guía de Inicio Rápido
 
-### 1. Iniciar el Servidor de TruthGPT Cloud (FastAPI)
+### 1. Iniciar el Servidor FastAPI de TruthGPT Cloud
 ```bash
 python truthgpt_cloud_server.py
 ```
-*El servidor iniciará en `http://localhost:8000` con documentación interactiva en `http://localhost:8000/docs`.*
+*El servidor iniciará en `http://localhost:8000` con documentación OpenAPI interactiva en `http://localhost:8000/docs`.*
 
 ### 2. Uso mediante el SDK de Python
 ```python
 import asyncio
 from truthgpt_cloud import TruthGPTCloudClient, CloudTier
 
-# Inicializar cliente con API Key o usuario
+# Inicializar cliente
 client = TruthGPTCloudClient(api_key="tgpt_cloud_live_tu_clave_aqui")
 
 # Consultar estado de la suscripción y cuotas
@@ -92,47 +122,81 @@ async def main():
     )
     print("Respuesta:", res.content)
     if res.proof_certificate:
-        print("Certificado Z3:", res.proof_certificate["proof_tree_hash"])
+        print("Certificado Z3 (Merkle Root):", res.proof_certificate["proof_tree_hash"])
         print("Estado:", res.proof_certificate["status"])
 
 asyncio.run(main())
 ```
 
-### 3. Actualización de Plan (Upgrade Tier)
+### 3. Verificación Formal de Contratos de Código Python
 ```python
-# Actualizar de Free a Pro ($19.99/mes)
-upgrade_result = client.upgrade_tier(target_tier="pro", billing_cycle="monthly", payment_method="stripe_card")
-print("Nuevo plan:", upgrade_result["tier_name"])
-print("Factura:", upgrade_result["invoice"]["invoice_id"])
+code = """
+def is_even(n: int) -> bool:
+    '''
+    :pre: n >= 0
+    :post: (return_val == True and n % 2 == 0) or (return_val == False and n % 2 == 1)
+    '''
+    return n % 2 == 0
+"""
+result = client.verify_python_code(code)
+print("Verificado:", result.overall_status)
+print("Merkle Root:", result.certificate.proof_tree_hash)
 ```
 
-### 4. CLI Interactiva
+### 4. Verificación de Formas de Tensores, Atención Transformer y Cuantización
+```python
+# Verificación de atención Transformer (FlashAttention-3 / GQA)
+attn_res = client.verify_attention_invariants(
+    query_shape=[1, 2048, 4096],
+    key_shape=[1, 2048, 1024],
+    value_shape=[1, 2048, 1024],
+    num_heads_q=32,
+    num_heads_kv=8,
+    head_dim=128
+)
+print("Atención Validada:", attn_res["is_valid"])
+
+# Verificación de seguridad de cuantización (FP8 / INT8 / BitNet b1.58)
+quant_res = client.verify_quantization_safety(min_val=-12.0, max_val=12.0, quant_format="INT8")
+print("Escala Delta:", quant_res["scale_factor"])
+
+# Verificación de convergencia de optimizadores (AdamW, Muon, Lion, Sophia)
+opt_res = client.verify_optimizer_convergence(optimizer_name="Muon", learning_rate=0.02)
+print("Convergencia:", opt_res["is_valid"])
+```
+
+### 5. Debate Adversarial Multi-Agente y Ledger Criptográfico
+```python
+# Debate Red Team vs Blue Team
+debate_res = client.execute_adversarial_debate(
+    topic="Convergencia de FlashAttention en FP8",
+    proponent_claim="Softmax renormalizado previene divergencia numérica"
+)
+print("Consenso:", debate_res["consensus_verdict"])
+
+# Inspección de integridad del Ledger Criptográfico SHA-256
+ledger_integrity = client.verify_ledger_integrity()
+print("Integridad Ledger:", ledger_integrity["is_valid"])
+```
+
+### 6. CLI Interactiva y Comandos de Terminal
 ```bash
 python truthgpt_cloud_cli.py
+# O vía truth_cli
+python truth_cli.py cloud verify-attention --heads-q 32 --heads-kv 8 --head-dim 128
+python truth_cli.py cloud audit-ledger
+python truth_cli.py cloud swarm-debate "Convergencia de Muon" "Muon acelera 2.5x"
 ```
-
-### 5. Iniciar la Interfaz Web (Next.js)
-```bash
-cd web_app
-npm run dev
-```
-*Accede al dashboard en `http://localhost:3000` para disfrutar de la experiencia visual completa.*
 
 ---
 
 ## 🧪 Validación y Tests Automatizados
 
-La plataforma cuenta con una suite completa de pruebas unitarias y de integración que verifica:
-- Catálogo de tiers y coherencia de cuotas.
-- Registro y persistencia de cuentas y claves API.
-- Actualización de niveles y emisión de facturas.
-- Solución de teoremas en Z3 SMT y generación de hashes criptográficos.
-- Ejecución distribuida de Swarms multi-agente.
-- Enrutamiento por cuotas y límites diarios de tokens.
-- Endpoints HTTP del servidor FastAPI.
+La plataforma cuenta con 69 tests automatizados que garantizan cobertura total en 7 suites:
 
-Para ejecutar los tests:
 ```bash
-python test_truthgpt_cloud_suite.py
+python -m pytest tests/test_truthgpt_cloud.py tests/test_truthgpt_cloud_refactor.py tests/unit/test_truthgpt_cloud_modular_refactor.py test_truthgpt_cloud_complete.py test_truthgpt_cloud_comprehensive.py test_truthgpt_cloud_suite.py tests/unit/test_truthgpt_cloud_enhancements.py -v
 ```
-Resultado: **7/7 tests superados exitosamente (OK)**.
+
+**Resultado: 69/69 tests superados exitosamente (100% OK)**.
+
