@@ -38,11 +38,15 @@ STANDARD_WARMUP_THEOREMS: List[Tuple[str, Dict[str, Any]]] = [
         "∀x, y ∈ ℝ: (x + y)^2 >= 4xy",
         {
             "certificate_id": "proof_cert_warmup_am_gm",
+            "theorem_or_claim": "∀x, y ∈ ℝ: (x + y)^2 >= 4xy",
             "status": "PROVEN_VALID",
             "solver_engine": "Z3 SMT Solver + SymPy CAS",
             "proof_tree_hash": "0x96080bb371ca8c9c42",
             "confidence_score": 0.9999,
             "mathematical_invariants": ["AM-GM Inequality: (x+y)^2 - 4xy = (x-y)^2 >= 0"],
+            "smt_constraints_evaluated": 1,
+            "tier_rigor_level": 2,
+            "timestamp": 1788200000.0,
             "verification_time_ms": 0.2,
         },
     ),
@@ -50,6 +54,7 @@ STANDARD_WARMUP_THEOREMS: List[Tuple[str, Dict[str, Any]]] = [
         "∀a, b ∈ ℝ: a^2 - b^2 = (a-b)(a+b)",
         {
             "certificate_id": "proof_cert_warmup_diff_squares",
+            "theorem_or_claim": "∀a, b ∈ ℝ: a^2 - b^2 = (a-b)(a+b)",
             "status": "PROVEN_VALID",
             "solver_engine": "SymPy Symbolic CAS",
             "proof_tree_hash": "0x8812af09c13e4b78a1",
@@ -57,6 +62,9 @@ STANDARD_WARMUP_THEOREMS: List[Tuple[str, Dict[str, Any]]] = [
             "mathematical_invariants": [
                 "Difference of Squares Identity: a^2 - b^2 - (a-b)(a+b) == 0"
             ],
+            "smt_constraints_evaluated": 1,
+            "tier_rigor_level": 2,
+            "timestamp": 1788200000.0,
             "verification_time_ms": 0.1,
         },
     ),
@@ -64,6 +72,7 @@ STANDARD_WARMUP_THEOREMS: List[Tuple[str, Dict[str, Any]]] = [
         "∀x ∈ ℝ: sin(x)^2 + cos(x)^2 = 1",
         {
             "certificate_id": "proof_cert_warmup_pythagorean_trig",
+            "theorem_or_claim": "∀x ∈ ℝ: sin(x)^2 + cos(x)^2 = 1",
             "status": "PROVEN_VALID",
             "solver_engine": "SymPy Symbolic CAS",
             "proof_tree_hash": "0x4a7e90c1f2b3e8d9",
@@ -71,6 +80,9 @@ STANDARD_WARMUP_THEOREMS: List[Tuple[str, Dict[str, Any]]] = [
             "mathematical_invariants": [
                 "Pythagorean Trigonometric Identity: sin^2(x) + cos^2(x) - 1 == 0"
             ],
+            "smt_constraints_evaluated": 1,
+            "tier_rigor_level": 2,
+            "timestamp": 1788200000.0,
             "verification_time_ms": 0.15,
         },
     ),
