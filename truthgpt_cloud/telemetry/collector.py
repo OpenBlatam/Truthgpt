@@ -296,8 +296,6 @@ class CloudTelemetryCollector:
         """Alias for reset()."""
         self.reset()
 
-    reset_metrics = reset
-
     # ---------------------------------------------------------------------------
     # 🚨 Alert Rules Engine
     # ---------------------------------------------------------------------------
