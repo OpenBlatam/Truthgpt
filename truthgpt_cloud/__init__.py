@@ -98,6 +98,7 @@ from .cache import (
 
 from .telemetry import (
     AuditLogEntry,
+    AlertRule,
     CloudTelemetryCollector,
     cloud_telemetry,
     format_prometheus_metrics,
@@ -190,6 +191,7 @@ __all__ = [
     "CloudProofCache",
     "proof_cache",
     "AuditLogEntry",
+    "AlertRule",
     "CloudTelemetryCollector",
     "cloud_telemetry",
     "format_prometheus_metrics",

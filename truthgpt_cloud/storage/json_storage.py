@@ -160,9 +160,7 @@ class JsonFileStorageBackend(StorageBackend):
 
     def create_snapshot(self) -> str:
         with self._lock:
-            if self._dirty or not os.path.exists(self.file_path):
-                self._flush_to_disk()
-                self._dirty = False
+            self.flush_now()
             timestamp = int(time.time())
             snap_path = f"{self.file_path}.snapshot.{timestamp}.json"
             shutil.copy2(self.file_path, snap_path)
