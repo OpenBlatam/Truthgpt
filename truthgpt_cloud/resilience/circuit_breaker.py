@@ -194,6 +194,23 @@ class CircuitBreaker:
             self._on_failure(e)
             raise
 
+    @property
+    def is_closed(self) -> bool:
+        return self.state == CircuitState.CLOSED
+
+    @property
+    def is_open(self) -> bool:
+        return self.state == CircuitState.OPEN
+
+    @property
+    def is_half_open(self) -> bool:
+        return self.state == CircuitState.HALF_OPEN
+
+    def force_open(self) -> None:
+        """Force transition to OPEN state (for testing / manual circuit trip)."""
+        with self._lock:
+            self._transition_to(CircuitState.OPEN)
+
     def reset(self) -> None:
         """Force reset to CLOSED state (for testing / admin)."""
         with self._lock:

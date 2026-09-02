@@ -276,7 +276,17 @@ class CloudFormalVerifier:
         cached_data = self._cache.get_proof(claim_text, constraints)
         if cached_data:
             elapsed_ms = (time.perf_counter() - start_time) * 1000.0
-            cached_cert = ProofCertificate(**cached_data)
+            data_copy = dict(cached_data)
+            if "theorem_or_claim" not in data_copy or not data_copy["theorem_or_claim"]:
+                data_copy["theorem_or_claim"] = claim_text
+            if "smt_constraints_evaluated" not in data_copy:
+                data_copy["smt_constraints_evaluated"] = len(constraints)
+            if "tier_rigor_level" not in data_copy:
+                data_copy["tier_rigor_level"] = tier_depth
+            if "timestamp" not in data_copy:
+                data_copy["timestamp"] = time.time()
+            data_copy.pop("is_expired", None)
+            cached_cert = ProofCertificate(**data_copy)
             cached_cert.verification_time_ms = round(max(0.05, elapsed_ms), 2)
             try:
                 cloud_telemetry.record_verification(cached_cert.verification_time_ms, cached_cert.status)
