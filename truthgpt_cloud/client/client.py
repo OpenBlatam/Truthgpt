@@ -676,6 +676,86 @@ class TruthGPTCloudClient:
         return self.telemetry.get_health_status()
 
     # ---------------------------------------------------------------------------
+    # ⚡ Resilience & Fault Tolerance APIs
+    # ---------------------------------------------------------------------------
+
+    def get_circuit_breaker_status(self) -> Dict[str, Any]:
+        """Get the current state and operational metrics of the inference circuit breaker."""
+        if hasattr(self.router, "_circuit_breaker"):
+            return self.router._circuit_breaker.get_status()
+        return {"state": "CLOSED", "status": "unavailable"}
+
+    def reset_circuit_breaker(self) -> None:
+        """Reset the inference circuit breaker to CLOSED state."""
+        if hasattr(self.router, "_circuit_breaker"):
+            self.router._circuit_breaker.reset()
+
+    # ---------------------------------------------------------------------------
+    # 🚨 SRE Alerting & Error Budget APIs
+    # ---------------------------------------------------------------------------
+
+    def register_alert_rule(
+        self,
+        name: str,
+        metric_key: str,
+        threshold: float,
+        comparison: str = "gte",
+        callback: Optional[Any] = None,
+        cooldown_seconds: float = 60.0
+    ):
+        """Register an automated alerting rule evaluated on each metric event."""
+        return self.telemetry.register_alert_rule(
+            name=name,
+            metric_key=metric_key,
+            threshold=threshold,
+            comparison=comparison,
+            callback=callback,
+            cooldown_seconds=cooldown_seconds
+        )
+
+    def list_alert_rules(self) -> List[Dict[str, Any]]:
+        """List all active alert rules."""
+        return self.telemetry.list_alert_rules()
+
+    def get_alert_history(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Retrieve recent alert trigger events."""
+        return self.telemetry.get_alert_history(limit=limit)
+
+    def get_error_budget_burndown(self, sla_target: float = 99.9) -> Dict[str, Any]:
+        """Calculate detailed error budget burndown and projected exhaustion."""
+        return self.telemetry.get_error_budget_burndown(sla_target=sla_target)
+
+    def purge_expired_cache(self) -> int:
+        """Manually purge expired entries from the semantic proof cache."""
+        return self.cache.purge_expired()
+
+    # ---------------------------------------------------------------------------
+    # 🐝 Swarm Debate & Papers Hub Helpers
+    # ---------------------------------------------------------------------------
+
+    def execute_adversarial_debate(
+        self,
+        topic: str,
+        proponent_claim: str,
+        adversary_focus: str = "Búsqueda de singularidades y contraejemplos",
+        rounds: int = 2
+    ) -> Dict[str, Any]:
+        """Execute a formal Red Team vs Blue Team adversarial debate session."""
+        return _run_sync(
+            self.swarm.execute_adversarial_debate(
+                topic=topic,
+                proponent_claim=proponent_claim,
+                adversary_focus=adversary_focus,
+                rounds=rounds,
+                user_id=self.user_id
+            )
+        )
+
+    def compile_paper(self, paper_id: str) -> Dict[str, Any]:
+        """Compile SOTA research paper architecture and synthesize kernel."""
+        return self.paper_compiler.compile_paper_technique(paper_id=paper_id, user_tier=self.tier.value)
+
+    # ---------------------------------------------------------------------------
     # Ergonomic Aliases
     # ---------------------------------------------------------------------------
     verify = verify_claim
