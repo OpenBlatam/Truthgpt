@@ -339,12 +339,12 @@
     "subscription_start_date": "2026-08-28T21:32:28.702717+00:00",
     "next_billing_date": "2026-08-28T21:32:28.702721+00:00",
     "usage": {
-      "total_tokens_consumed": 108950,
-      "tokens_consumed_today": 610,
-      "verifications_run": 177,
+      "total_tokens_consumed": 110786,
+      "tokens_consumed_today": 2446,
+      "verifications_run": 180,
       "swarm_sessions_count": 0,
       "last_reset_timestamp": 1788385356.1000743,
-      "daily_request_count": 16
+      "daily_request_count": 19
     },
     "invoices": [
       {
@@ -18915,6 +18915,60 @@
       }
     ],
     "api_key_details": [],
+    "webhooks": [],
+    "custom_limits": null
+  },
+  "usr_689b2c6259": {
+    "user_id": "usr_689b2c6259",
+    "email": "tester_cloud_v2@truthgpt.ai",
+    "name": "Cloud Tester",
+    "tier": "pro",
+    "billing_cycle": "yearly",
+    "status": "active",
+    "api_keys": [
+      "tgpt_cloud_live_62b4b357a472468aaf78",
+      "tgpt_cloud_live_8f51ca2d00454c38b22f31b3"
+    ],
+    "subscription_start_date": "2026-09-02T21:50:44.558457+00:00",
+    "next_billing_date": "2026-09-02T21:50:44.558473+00:00",
+    "usage": {
+      "total_tokens_consumed": 1000,
+      "tokens_consumed_today": 0,
+      "verifications_run": 0,
+      "swarm_sessions_count": 0,
+      "last_reset_timestamp": 1788385844.5584464,
+      "daily_request_count": 1
+    },
+    "invoices": [
+      {
+        "invoice_id": "inv_tgpt_e3ea6c635a",
+        "user_id": "usr_689b2c6259",
+        "tier_id": "pro",
+        "amount_usd": 199.9,
+        "billing_cycle": "yearly",
+        "payment_method": "stripe_card",
+        "status": "paid",
+        "discount_applied_usd": 0.0,
+        "promo_code": null,
+        "created_at": "2026-09-02T21:50:44.621603+00:00"
+      }
+    ],
+    "api_key_details": [
+      {
+        "key": "tgpt_cloud_live_8f51ca2d00454c38b22f31b3",
+        "key_id": "key_d581b645",
+        "key_prefix": "tgpt_cloud_live_...",
+        "label": "Analytics Key",
+        "name": "Default API Key",
+        "created_at": 1788385844.6526992,
+        "last_used_at": null,
+        "is_active": true,
+        "scopes": [
+          "read",
+          "inference"
+        ]
+      }
+    ],
     "webhooks": [],
     "custom_limits": null
   }
