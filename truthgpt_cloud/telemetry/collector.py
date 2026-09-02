@@ -5,7 +5,7 @@ Aggregates inference latencies (p50/p95/p99), proof solve rates, token economics
 
 import time
 import threading
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Callable, Tuple
 from dataclasses import dataclass, field, asdict
 
 from ..core.constants import DEFAULT_TELEMETRY_MAX_HISTORY
@@ -21,6 +21,32 @@ class AuditLogEntry:
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
+
+
+@dataclass
+class AlertRule:
+    """Configurable alert rule evaluated on metric recording."""
+    name: str
+    metric_key: str  # e.g. "p99_latency_ms", "soundness_percent", "error_rate"
+    threshold: float
+    comparison: str = "gte"  # "gte", "lte", "gt", "lt"
+    callback: Optional[Callable[[str, float, float], None]] = None
+    is_active: bool = True
+    triggered_count: int = 0
+    last_triggered_at: float = 0.0
+    cooldown_seconds: float = 60.0  # Don't re-fire within this window
+
+    def evaluate(self, current_value: float) -> bool:
+        """Check if current value violates the threshold."""
+        if self.comparison == "gte":
+            return current_value >= self.threshold
+        elif self.comparison == "lte":
+            return current_value <= self.threshold
+        elif self.comparison == "gt":
+            return current_value > self.threshold
+        elif self.comparison == "lt":
+            return current_value < self.threshold
+        return False
 
 
 class CloudTelemetryCollector:
@@ -46,6 +72,8 @@ class CloudTelemetryCollector:
             "FAILED": 0,
         }
         self._audit_logs: List[AuditLogEntry] = []
+        self._alert_rules: List[AlertRule] = []
+        self._alert_history: List[Dict[str, Any]] = []
         self.start_timestamp: float = time.time()
 
     def record_inference(self, latency_ms: float, tokens: int = 0, tier: str = "pro") -> None:
@@ -54,6 +82,7 @@ class CloudTelemetryCollector:
             self._latencies_ms.append(latency_ms)
             if len(self._latencies_ms) > self.max_history:
                 self._latencies_ms.pop(0)
+            self._evaluate_alerts()
 
     def record_verification(self, latency_ms: float, status: str = "PROVEN_VALID") -> None:
         with self._lock:
@@ -62,6 +91,7 @@ class CloudTelemetryCollector:
             if len(self._smt_latencies_ms) > self.max_history:
                 self._smt_latencies_ms.pop(0)
             self._proof_statuses[status] = self._proof_statuses.get(status, 0) + 1
+            self._evaluate_alerts()
 
     def record_swarm(self) -> None:
         with self._lock:
@@ -258,7 +288,165 @@ class CloudTelemetryCollector:
             for k in self._proof_statuses:
                 self._proof_statuses[k] = 0
             self._audit_logs.clear()
+            self._alert_history.clear()
             self.start_timestamp = time.time()
+
+    # ---------------------------------------------------------------------------
+    # 🚨 Alert Rules Engine
+    # ---------------------------------------------------------------------------
+
+    def register_alert_rule(
+        self,
+        name: str,
+        metric_key: str,
+        threshold: float,
+        comparison: str = "gte",
+        callback: Optional[Callable[[str, float, float], None]] = None,
+        cooldown_seconds: float = 60.0,
+    ) -> AlertRule:
+        """
+        Register an alert rule that is automatically evaluated on each metric recording.
+
+        Args:
+            name: Human-readable alert name.
+            metric_key: One of "p99_latency_ms", "p95_latency_ms", "avg_latency_ms",
+                        "soundness_percent", "error_rate_percent", "total_failures".
+            threshold: The value that triggers the alert.
+            comparison: "gte", "lte", "gt", "lt".
+            callback: Optional function(alert_name, threshold, current_value) invoked on trigger.
+            cooldown_seconds: Minimum interval between re-triggers.
+        """
+        rule = AlertRule(
+            name=name,
+            metric_key=metric_key,
+            threshold=threshold,
+            comparison=comparison,
+            callback=callback,
+            cooldown_seconds=cooldown_seconds,
+        )
+        with self._lock:
+            self._alert_rules.append(rule)
+        return rule
+
+    def _evaluate_alerts(self) -> None:
+        """Evaluate all active alert rules against current metrics. Must be called with lock held."""
+        if not self._alert_rules:
+            return
+
+        now = time.time()
+        metrics = self._calc_percentiles(self._latencies_ms)
+        smt_metrics = self._calc_percentiles(self._smt_latencies_ms)
+
+        total_proofs = sum(self._proof_statuses.values())
+        invalid_statuses = {"UNKNOWN", "FAILED", "VIOLATED", "COUNTEREXAMPLE_FOUND"}
+        failed_proofs = sum(v for k, v in self._proof_statuses.items() if k in invalid_statuses)
+        success_proofs = total_proofs - failed_proofs
+        soundness = (success_proofs / max(1, total_proofs)) * 100.0 if total_proofs > 0 else 100.0
+        error_rate = (failed_proofs / max(1, total_proofs)) * 100.0 if total_proofs > 0 else 0.0
+
+        metric_values = {
+            "p99_latency_ms": metrics["p99"],
+            "p95_latency_ms": metrics["p95"],
+            "p50_latency_ms": metrics["p50"],
+            "avg_latency_ms": metrics["avg"],
+            "max_latency_ms": metrics["max"],
+            "smt_p99_latency_ms": smt_metrics["p99"],
+            "smt_avg_latency_ms": smt_metrics["avg"],
+            "soundness_percent": soundness,
+            "error_rate_percent": error_rate,
+            "total_failures": float(failed_proofs),
+            "total_inferences": float(self._total_inferences),
+        }
+
+        for rule in self._alert_rules:
+            if not rule.is_active:
+                continue
+            current_val = metric_values.get(rule.metric_key)
+            if current_val is None:
+                continue
+            if rule.evaluate(current_val):
+                if now - rule.last_triggered_at >= rule.cooldown_seconds:
+                    rule.triggered_count += 1
+                    rule.last_triggered_at = now
+                    alert_event = {
+                        "alert_name": rule.name,
+                        "metric_key": rule.metric_key,
+                        "threshold": rule.threshold,
+                        "current_value": current_val,
+                        "comparison": rule.comparison,
+                        "triggered_at": now,
+                        "triggered_count": rule.triggered_count,
+                    }
+                    self._alert_history.append(alert_event)
+                    if len(self._alert_history) > self.max_history:
+                        self._alert_history.pop(0)
+                    if rule.callback:
+                        try:
+                            rule.callback(rule.name, rule.threshold, current_val)
+                        except Exception:
+                            pass
+
+    def get_alert_history(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Retrieve recent alert trigger events."""
+        with self._lock:
+            return list(self._alert_history[-limit:])
+
+    def list_alert_rules(self) -> List[Dict[str, Any]]:
+        """List all registered alert rules and their trigger counts."""
+        with self._lock:
+            return [
+                {
+                    "name": r.name,
+                    "metric_key": r.metric_key,
+                    "threshold": r.threshold,
+                    "comparison": r.comparison,
+                    "is_active": r.is_active,
+                    "triggered_count": r.triggered_count,
+                    "cooldown_seconds": r.cooldown_seconds,
+                }
+                for r in self._alert_rules
+            ]
+
+    def get_error_budget_burndown(self, sla_target: float = 99.9) -> Dict[str, Any]:
+        """
+        Calculate error budget burndown for SRE workflows.
+        Shows how much of the error budget has been consumed and projected exhaustion.
+        """
+        with self._lock:
+            total_ops = self._total_inferences + self._total_verifications
+            failed_ops = self._proof_statuses.get("FAILED", 0) + self._proof_statuses.get("UNKNOWN", 0)
+            uptime_pct = ((total_ops - failed_ops) / max(1, total_ops)) * 100.0 if total_ops > 0 else 100.0
+
+            error_budget_total = 100.0 - sla_target  # e.g. 0.1% for 99.9%
+            error_budget_consumed = max(0.0, 100.0 - uptime_pct)
+            budget_remaining_pct = max(0.0, error_budget_total - error_budget_consumed)
+            budget_burn_rate = (error_budget_consumed / max(0.001, error_budget_total)) * 100.0
+
+            uptime_seconds = time.time() - self.start_timestamp
+            if failed_ops > 0 and uptime_seconds > 0:
+                failure_rate_per_hour = (failed_ops / uptime_seconds) * 3600
+                if failure_rate_per_hour > 0 and total_ops > 0:
+                    ops_per_hour = (total_ops / uptime_seconds) * 3600
+                    projected_error_pct_per_hour = (failure_rate_per_hour / max(1, ops_per_hour)) * 100
+                    hours_until_exhaustion = budget_remaining_pct / max(0.0001, projected_error_pct_per_hour)
+                else:
+                    hours_until_exhaustion = float("inf")
+            else:
+                hours_until_exhaustion = float("inf")
+
+            return {
+                "sla_target_percent": sla_target,
+                "current_uptime_percent": round(uptime_pct, 4),
+                "error_budget_total_percent": round(error_budget_total, 4),
+                "error_budget_consumed_percent": round(error_budget_consumed, 4),
+                "error_budget_remaining_percent": round(budget_remaining_pct, 4),
+                "burn_rate_percent": round(budget_burn_rate, 2),
+                "projected_hours_until_exhaustion": round(hours_until_exhaustion, 2) if hours_until_exhaustion != float("inf") else None,
+                "is_budget_exceeded": error_budget_consumed >= error_budget_total,
+                "total_operations": total_ops,
+                "failed_operations": failed_ops,
+                "uptime_seconds": round(uptime_seconds, 1),
+            }
 
 
 

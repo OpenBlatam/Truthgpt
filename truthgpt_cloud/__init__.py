@@ -114,6 +114,14 @@ from .papers import (
 
 from .client import TruthGPTCloudClient
 
+from .resilience import (
+    CircuitBreaker,
+    CircuitBreakerOpen,
+    CircuitState,
+    retry_with_backoff,
+    RetryConfig,
+)
+
 __version__ = CLOUD_PLATFORM_VERSION
 
 __all__ = [
@@ -194,6 +202,12 @@ __all__ = [
     "cloud_paper_compiler",
     # Client SDK
     "TruthGPTCloudClient",
+    # Resilience & Fault Tolerance
+    "CircuitBreaker",
+    "CircuitBreakerOpen",
+    "CircuitState",
+    "retry_with_backoff",
+    "RetryConfig",
     # Domain Exceptions
     "TruthGPTCloudError",
     "AuthenticationError",

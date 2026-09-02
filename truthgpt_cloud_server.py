@@ -190,6 +190,12 @@ class WebhookTestTriggerRequest(BaseModel):
     data: Optional[Dict[str, Any]] = None
 
 
+class WebhookVerifyRequest(BaseModel):
+    payload: Dict[str, Any]
+    signature: str
+    secret: Optional[str] = "tgpt_global_webhook_secret"
+
+
 class ApplyPaperRequest(BaseModel):
     paper_id: str
     user_id: Optional[str] = "usr_default_demo"
@@ -859,23 +865,6 @@ class ExportSmt2Request(BaseModel):
     claim: str
     constraints: Optional[List[str]] = None
     tier_depth: Optional[int] = 2
-
-
-class WebhookVerifyRequest(BaseModel):
-    payload: Dict[str, Any]
-    signature: str
-    secret: Optional[str] = "tgpt_global_webhook_secret"
-
-
-@app.post("/api/v1/cloud/webhooks/verify")
-async def verify_webhook_endpoint(req: WebhookVerifyRequest):
-    """Verify cryptographic authenticity of a received webhook payload."""
-    is_valid = webhook_manager.verify_webhook_signature(
-        payload=req.payload,
-        signature=req.signature,
-        secret=req.secret or "tgpt_global_webhook_secret"
-    )
-    return {"success": True, "is_valid": is_valid}
 
 
 @app.post("/api/v1/cloud/formal/verify/differential-privacy")

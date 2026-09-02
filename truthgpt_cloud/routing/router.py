@@ -12,13 +12,20 @@ from dataclasses import dataclass, asdict, field
 from typing import Dict, List, Optional, Any, AsyncGenerator
 
 from ..core.tiers import CloudTier, TierConfig, get_tier_config
+from ..core.exceptions import TruthGPTCloudError
 from ..billing.subscription import subscription_manager
 from ..verification.verifier import cloud_verifier
 from ..swarm.orchestrator import cloud_swarm
 from ..telemetry import cloud_telemetry
 from ..cache import proof_cache
+from ..resilience.circuit_breaker import CircuitBreaker, CircuitBreakerOpen
+from ..security.rate_limiter import cloud_rate_limiter
 
 logger = logging.getLogger("TruthGPT.CloudRouter")
+
+# Module-level constants for input validation
+_MIN_PROMPT_LENGTH = 1
+_MAX_PROMPT_LENGTH = 500_000  # Safety cap; actual limit is tier-based
 
 
 @dataclass
@@ -61,7 +68,7 @@ class CloudIntelligenceRouter:
     """
     Core Router for TruthGPT Cloud.
     Coordinates tier authorization, quota gating, model ensemble routing,
-    formal verification proof emission, and swarm execution.
+    formal verification proof emission, swarm execution, and circuit breaker resilience.
     """
 
     def __init__(self):
@@ -70,6 +77,33 @@ class CloudIntelligenceRouter:
         self.swarm = cloud_swarm
         self.telemetry = cloud_telemetry
         self.cache = proof_cache
+        self.rate_limiter = cloud_rate_limiter
+        self._circuit_breaker = CircuitBreaker(
+            name="inference_router",
+            failure_threshold=10,
+            recovery_timeout_seconds=30.0,
+            success_threshold=3,
+        )
+
+    @staticmethod
+    def _validate_prompt(prompt: str, max_tokens: int) -> str:
+        """Validate prompt content and length."""
+        if not prompt or not prompt.strip():
+            raise TruthGPTCloudError(
+                message="El prompt no puede estar vacío.",
+                code="INVALID_PROMPT",
+                status_code=400
+            )
+        prompt = prompt.strip()
+        estimated_tokens = int(len(prompt.split()) * 1.4)
+        effective_limit = min(_MAX_PROMPT_LENGTH, max_tokens)
+        if estimated_tokens > effective_limit:
+            raise TruthGPTCloudError(
+                message=f"El prompt excede el límite de {effective_limit} tokens estimados para su plan (estimado: {estimated_tokens}).",
+                code="PROMPT_TOO_LONG",
+                status_code=400
+            )
+        return prompt
 
     async def route_inference(
         self,
@@ -81,7 +115,8 @@ class CloudIntelligenceRouter:
         constraints: Optional[List[str]] = None
     ) -> CloudInferenceResponse:
         """
-        Execute tier-aware cloud inference with mathematical verification.
+        Execute tier-aware cloud inference with input validation, rate limiting,
+        circuit breaker protection, and mathematical verification.
         """
         start_time = time.perf_counter()
         response_id = f"resp_tgpt_{uuid.uuid4().hex[:14]}"
@@ -95,7 +130,21 @@ class CloudIntelligenceRouter:
         tier_cfg = get_tier_config(current_tier)
         uid = user.user_id if user else user_id
 
-        # 2. Check Quotas
+        # 2. Validate prompt
+        prompt = self._validate_prompt(prompt, tier_cfg.context_window_tokens)
+
+        # 3. Rate limit check (before quota to give faster feedback)
+        try:
+            self.rate_limiter.check_and_record(
+                user_id=uid,
+                max_rpm=tier_cfg.requests_per_minute,
+                max_concurrency=tier_cfg.concurrent_requests,
+            )
+        except Exception:
+            # Rate limiter exceptions already have proper types; re-raise
+            raise
+
+        # 4. Check Quotas
         estimated_input_tokens = max(10, int(len(prompt.split()) * 1.4))
         estimated_output_tokens = min(tier_cfg.max_output_tokens, 600)
         total_estimated = estimated_input_tokens + estimated_output_tokens
@@ -107,31 +156,54 @@ class CloudIntelligenceRouter:
             is_swarm=bool(enable_swarm)
         )
 
-        # 3. Model Selection
+        # 5. Model Selection
         selected_model = model_override if (model_override and model_override in tier_cfg.available_models) else tier_cfg.default_model
 
-        # 4. Swarm Execution if requested and permitted
-        swarm_trace_data = None
-        should_run_swarm = enable_swarm if enable_swarm is not None else tier_cfg.swarm_multi_agent
-        if should_run_swarm and tier_cfg.swarm_multi_agent:
-            swarm_trace = await self.swarm.execute_swarm_session(
-                prompt=prompt,
-                user_id=uid,
-                max_agents=tier_cfg.max_swarm_agents,
-                depth_level=tier_cfg.smt_z3_verification_depth
-            )
-            swarm_trace_data = swarm_trace.to_dict() if hasattr(swarm_trace, "to_dict") else asdict(swarm_trace)
+        # 6. Execute within circuit breaker
+        try:
+            async with self._circuit_breaker:
+                # 6a. Swarm Execution if requested and permitted
+                swarm_trace_data = None
+                should_run_swarm = enable_swarm if enable_swarm is not None else tier_cfg.swarm_multi_agent
+                if should_run_swarm and tier_cfg.swarm_multi_agent:
+                    swarm_trace = await self.swarm.execute_swarm_session(
+                        prompt=prompt,
+                        user_id=uid,
+                        max_agents=tier_cfg.max_swarm_agents,
+                        depth_level=tier_cfg.smt_z3_verification_depth
+                    )
+                    swarm_trace_data = swarm_trace.to_dict() if hasattr(swarm_trace, "to_dict") else asdict(swarm_trace)
 
-        # 5. Formal Verification with Z3 SMT Prover
-        proof_cert_data = None
-        should_verify = enable_formal_verification if enable_formal_verification is not None else tier_cfg.proof_certificate_generation
-        if should_verify:
-            proof_cert = self.verifier.verify_expression(
-                claim_text=prompt,
-                constraints=constraints,
-                tier_depth=tier_cfg.smt_z3_verification_depth
+                # 6b. Formal Verification with Z3 SMT Prover
+                proof_cert_data = None
+                should_verify = enable_formal_verification if enable_formal_verification is not None else tier_cfg.proof_certificate_generation
+                if should_verify:
+                    proof_cert = self.verifier.verify_expression(
+                        claim_text=prompt,
+                        constraints=constraints,
+                        tier_depth=tier_cfg.smt_z3_verification_depth
+                    )
+                    proof_cert_data = proof_cert.to_dict() if hasattr(proof_cert, "to_dict") else asdict(proof_cert)
+        except CircuitBreakerOpen as cbo:
+            # Return degraded response when circuit breaker is open
+            elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+            return CloudInferenceResponse(
+                response_id=response_id,
+                content=(
+                    f"⚠️ **[TruthGPT Cloud - Modo Degradado]**\n\n"
+                    f"El servicio está temporalmente en modo de protección. "
+                    f"Reintente en {cbo.recovery_time_remaining:.0f} segundos.\n\n"
+                    f"> *\"{prompt[:80]}...\"*"
+                ),
+                tier_used=current_tier.value,
+                model_name=selected_model,
+                execution_time_ms=round(elapsed_ms, 2),
+                tokens_consumed=0,
+                tokens_remaining_today=0,
+                verification_passed=False,
+                confidence_score=0.0,
+                priority_routing=False
             )
-            proof_cert_data = proof_cert.to_dict() if hasattr(proof_cert, "to_dict") else asdict(proof_cert)
 
         # 6. Generate Response Content based on Tier Capabilities
         await asyncio.sleep(0.02 if tier_cfg.priority_gpu_routing else 0.05)

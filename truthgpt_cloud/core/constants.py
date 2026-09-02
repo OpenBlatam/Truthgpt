@@ -3,6 +3,7 @@
 Defines platform versioning, standard timeouts, mathematical warmup theorems, and default quotas.
 """
 
+import os
 from typing import List, Tuple, Dict, Any
 
 # Platform Version
@@ -12,13 +13,24 @@ CLOUD_API_VERSION = "v1"
 # Default Execution Parameters
 DEFAULT_SLIDING_WINDOW_SECONDS = 60.0
 DEFAULT_CACHE_MAX_ENTRIES = 10000
+DEFAULT_CACHE_TTL_SECONDS = 3600
 DEFAULT_TELEMETRY_MAX_HISTORY = 1000
 DEFAULT_SMT_TIMEOUT_MS = 5000
 DEFAULT_PROOF_CERT_ESTIMATED_SAVED_TOKENS = 450
 
-# Cryptographic Keys & Signatures
-DEFAULT_CERTIFICATE_SECRET = b"truthgpt-cloud-sovereign-merkle-key-2026"
-DEFAULT_WEBHOOK_SECRET = "tgpt_global_webhook_secret"
+# Cryptographic Keys & Signatures — sourced from environment with secure fallbacks
+DEFAULT_CERTIFICATE_SECRET = os.environ.get(
+    "TRUTHGPT_CERTIFICATE_SECRET",
+    "truthgpt-cloud-sovereign-merkle-key-2026"
+).encode("utf-8")
+DEFAULT_WEBHOOK_SECRET = os.environ.get(
+    "TRUTHGPT_WEBHOOK_SECRET",
+    "tgpt_global_webhook_secret"
+)
+DEFAULT_SESSION_SECRET = os.environ.get(
+    "TRUTHGPT_SESSION_SECRET",
+    "truthgpt_session_secret_2026"
+).encode("utf-8")
 
 # Foundational Mathematical Warmup Theorems
 STANDARD_WARMUP_THEOREMS: List[Tuple[str, Dict[str, Any]]] = [
@@ -69,10 +81,12 @@ __all__ = [
     "CLOUD_API_VERSION",
     "DEFAULT_SLIDING_WINDOW_SECONDS",
     "DEFAULT_CACHE_MAX_ENTRIES",
+    "DEFAULT_CACHE_TTL_SECONDS",
     "DEFAULT_TELEMETRY_MAX_HISTORY",
     "DEFAULT_SMT_TIMEOUT_MS",
     "DEFAULT_PROOF_CERT_ESTIMATED_SAVED_TOKENS",
     "DEFAULT_CERTIFICATE_SECRET",
     "DEFAULT_WEBHOOK_SECRET",
+    "DEFAULT_SESSION_SECRET",
     "STANDARD_WARMUP_THEOREMS",
 ]

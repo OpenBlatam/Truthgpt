@@ -14,6 +14,7 @@ from typing import Dict, Optional, Any, List, Tuple
 from .base import BaseProofCache
 from ..core.constants import (
     DEFAULT_CACHE_MAX_ENTRIES,
+    DEFAULT_CACHE_TTL_SECONDS,
     DEFAULT_PROOF_CERT_ESTIMATED_SAVED_TOKENS,
     STANDARD_WARMUP_THEOREMS,
 )
@@ -30,9 +31,19 @@ class CachedProofEntry:
     created_at: float = field(default_factory=time.time)
     last_accessed: float = field(default_factory=time.time)
     tokens_saved: int = DEFAULT_PROOF_CERT_ESTIMATED_SAVED_TOKENS
+    ttl_seconds: float = DEFAULT_CACHE_TTL_SECONDS
+
+    @property
+    def is_expired(self) -> bool:
+        """Check if this entry has exceeded its TTL."""
+        if self.ttl_seconds <= 0:
+            return False  # TTL of 0 means no expiration
+        return (time.time() - self.created_at) > self.ttl_seconds
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        d = asdict(self)
+        d["is_expired"] = self.is_expired
+        return d
 
 
 class CloudProofCache(BaseProofCache):
@@ -45,15 +56,22 @@ class CloudProofCache(BaseProofCache):
     def __init__(
         self,
         max_entries: int = DEFAULT_CACHE_MAX_ENTRIES,
-        storage_path: Optional[str] = None
+        default_ttl_seconds: float = DEFAULT_CACHE_TTL_SECONDS,
+        storage_path: Optional[str] = None,
+        auto_warmup: bool = True,
     ):
         self.max_entries = max_entries
+        self.default_ttl_seconds = default_ttl_seconds
         self.storage_path = storage_path
         self._lock = threading.RLock()
         self._proof_cache: Dict[str, CachedProofEntry] = {}
         self._total_hits: int = 0
         self._total_misses: int = 0
         self._total_tokens_saved: int = 0
+        self._total_ttl_evictions: int = 0
+
+        if auto_warmup:
+            self.warm_up()
 
     def _normalize_claim(self, claim: str, constraints: Optional[List[str]] = None) -> str:
         """Normalize mathematical claim string for deterministic hashing, handling commutativity and variable alpha-equivalence."""
@@ -78,12 +96,28 @@ class CloudProofCache(BaseProofCache):
         normalized = self._normalize_claim(claim, constraints)
         return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
+    def _evict_expired(self) -> int:
+        """Remove all TTL-expired entries. Must be called with lock held."""
+        expired_keys = [k for k, v in self._proof_cache.items() if v.is_expired]
+        for k in expired_keys:
+            del self._proof_cache[k]
+        self._total_ttl_evictions += len(expired_keys)
+        return len(expired_keys)
+
     def get_proof(self, claim: str, constraints: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
-        """Retrieve cached proof certificate if available."""
+        """Retrieve cached proof certificate if available. Evicts expired entries on read."""
         h = self.compute_hash(claim, constraints)
         with self._lock:
+            # Periodic TTL eviction on reads
+            self._evict_expired()
+
             if h in self._proof_cache:
                 entry = self._proof_cache[h]
+                if entry.is_expired:
+                    del self._proof_cache[h]
+                    self._total_ttl_evictions += 1
+                    self._total_misses += 1
+                    return None
                 entry.hit_count += 1
                 entry.last_accessed = time.time()
                 self._total_hits += 1
@@ -99,13 +133,16 @@ class CloudProofCache(BaseProofCache):
         claim: str,
         certificate_data: Dict[str, Any],
         constraints: Optional[List[str]] = None,
-        estimated_tokens: int = DEFAULT_PROOF_CERT_ESTIMATED_SAVED_TOKENS
+        estimated_tokens: int = DEFAULT_PROOF_CERT_ESTIMATED_SAVED_TOKENS,
+        ttl_seconds: Optional[float] = None
     ) -> None:
-        """Store a verified proof certificate in the semantic cache."""
+        """Store a verified proof certificate in the semantic cache with configurable TTL."""
         h = self.compute_hash(claim, constraints)
+        ttl = ttl_seconds if ttl_seconds is not None else self.default_ttl_seconds
 
         with self._lock:
-            # Evict oldest if capacity reached
+            # Evict expired first, then LRU if still over capacity
+            self._evict_expired()
             if len(self._proof_cache) >= self.max_entries and h not in self._proof_cache:
                 oldest_key = min(
                     self._proof_cache.keys(),
@@ -117,10 +154,11 @@ class CloudProofCache(BaseProofCache):
                 claim_hash=h,
                 claim_text=claim,
                 certificate_data=certificate_data,
-                tokens_saved=estimated_tokens
+                tokens_saved=estimated_tokens,
+                ttl_seconds=ttl
             )
             self._proof_cache[h] = entry
-            logger.debug(f"Stored proof in cache for hash {h[:12]}")
+            logger.debug(f"Stored proof in cache for hash {h[:12]} (TTL: {ttl}s)")
 
     def warm_up(
         self,
@@ -178,15 +216,18 @@ class CloudProofCache(BaseProofCache):
     def get_stats(self) -> Dict[str, Any]:
         """Return cache statistics and efficiency metrics."""
         with self._lock:
+            self._evict_expired()
             total_requests = self._total_hits + self._total_misses
             hit_ratio = (self._total_hits / total_requests * 100.0) if total_requests > 0 else 0.0
             return {
                 "cached_entries": len(self._proof_cache),
                 "max_capacity": self.max_entries,
+                "default_ttl_seconds": self.default_ttl_seconds,
                 "total_hits": self._total_hits,
                 "total_misses": self._total_misses,
                 "hit_ratio_percent": round(hit_ratio, 2),
                 "total_tokens_saved": self._total_tokens_saved,
+                "total_ttl_evictions": self._total_ttl_evictions,
                 "estimated_compute_ms_saved": round(self._total_hits * 14.5, 2)
             }
 
