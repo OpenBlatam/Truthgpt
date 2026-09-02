@@ -208,18 +208,22 @@ class CloudSecurityManager:
         payload_json = json.dumps(payload_dict, sort_keys=True)
         b64_payload = base64.urlsafe_b64encode(payload_json.encode()).decode().rstrip("=")
         sig = hmac.new(b"truthgpt_session_secret_2026", b64_payload.encode(), hashlib.sha256).hexdigest()[:32]
-        return f"sess_tgpt.{b64_payload}.{sig}"
+        return f"sess_tgpt_{b64_payload}.{sig}"
 
     def validate_session_token(self, token: str) -> Dict[str, Any]:
         """Validate signature and expiration of a session token."""
-        if not token.startswith("sess_tgpt."):
+        if token.startswith("sess_tgpt_"):
+            token_body = token[len("sess_tgpt_"):]
+        elif token.startswith("sess_tgpt."):
+            token_body = token[len("sess_tgpt."):]
+        else:
             return {"is_valid": False, "reason": "Invalid token prefix"}
         
-        parts = token.split(".")
-        if len(parts) != 3:
+        parts = token_body.split(".")
+        if len(parts) != 2:
             return {"is_valid": False, "reason": "Malformed token structure"}
 
-        _, b64_payload, signature = parts
+        b64_payload, signature = parts
         expected_sig = hmac.new(b"truthgpt_session_secret_2026", b64_payload.encode(), hashlib.sha256).hexdigest()[:32]
         if not hmac.compare_digest(signature, expected_sig):
             return {"is_valid": False, "reason": "Invalid token signature"}

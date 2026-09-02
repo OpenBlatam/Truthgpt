@@ -277,12 +277,12 @@
     "subscription_start_date": "2026-08-28T21:32:28.702676+00:00",
     "next_billing_date": "2026-08-28T21:32:28.702699+00:00",
     "usage": {
-      "total_tokens_consumed": 285799,
-      "tokens_consumed_today": 10380,
-      "verifications_run": 401,
+      "total_tokens_consumed": 288241,
+      "tokens_consumed_today": 12822,
+      "verifications_run": 403,
       "swarm_sessions_count": 0,
       "last_reset_timestamp": 1788385437.6452186,
-      "daily_request_count": 17
+      "daily_request_count": 21
     },
     "invoices": [
       {
@@ -339,14 +339,38 @@
     "subscription_start_date": "2026-08-28T21:32:28.702717+00:00",
     "next_billing_date": "2026-08-28T21:32:28.702721+00:00",
     "usage": {
-      "total_tokens_consumed": 104680,
+      "total_tokens_consumed": 105900,
       "tokens_consumed_today": 0,
-      "verifications_run": 170,
+      "verifications_run": 172,
       "swarm_sessions_count": 0,
       "last_reset_timestamp": 1788385356.1000743,
-      "daily_request_count": 9
+      "daily_request_count": 11
     },
     "invoices": [
+      {
+        "invoice_id": "inv_tgpt_09c3072e4a",
+        "user_id": "usr_pro_sample",
+        "tier_id": "pro",
+        "amount_usd": 10.0,
+        "billing_cycle": "monthly",
+        "payment_method": "stripe_card",
+        "status": "paid",
+        "discount_applied_usd": 9.99,
+        "promo_code": "DEV50",
+        "created_at": "2026-09-02T21:47:59.466073+00:00"
+      },
+      {
+        "invoice_id": "inv_tgpt_eaa87e6f6e",
+        "user_id": "usr_pro_sample",
+        "tier_id": "pro",
+        "amount_usd": 10.0,
+        "billing_cycle": "monthly",
+        "payment_method": "stripe_card",
+        "status": "paid",
+        "discount_applied_usd": 9.99,
+        "promo_code": "DEV50",
+        "created_at": "2026-09-02T21:47:34.010760+00:00"
+      },
       {
         "invoice_id": "inv_tgpt_14c2cbb112",
         "user_id": "usr_pro_sample",
@@ -17873,6 +17897,82 @@
         "discount_applied_usd": 9.99,
         "promo_code": "DEV50",
         "created_at": "2026-09-02T21:46:59.517259+00:00"
+      }
+    ],
+    "api_key_details": [],
+    "webhooks": [],
+    "custom_limits": null
+  },
+  "usr_dc5184a612": {
+    "user_id": "usr_dc5184a612",
+    "email": "promo_user@truthgpt.ai",
+    "name": "Promo Tester",
+    "tier": "pro",
+    "billing_cycle": "monthly",
+    "status": "active",
+    "api_keys": [
+      "tgpt_cloud_live_87e31b76f6074a48a9c2"
+    ],
+    "subscription_start_date": "2026-09-02T21:47:33.915465+00:00",
+    "next_billing_date": "2026-09-02T21:47:33.915478+00:00",
+    "usage": {
+      "total_tokens_consumed": 0,
+      "tokens_consumed_today": 0,
+      "verifications_run": 0,
+      "swarm_sessions_count": 0,
+      "last_reset_timestamp": 1788385653.915457,
+      "daily_request_count": 0
+    },
+    "invoices": [
+      {
+        "invoice_id": "inv_tgpt_ffdb4288e4",
+        "user_id": "usr_dc5184a612",
+        "tier_id": "pro",
+        "amount_usd": 10.0,
+        "billing_cycle": "monthly",
+        "payment_method": "stripe_card",
+        "status": "paid",
+        "discount_applied_usd": 9.99,
+        "promo_code": "DEV50",
+        "created_at": "2026-09-02T21:47:33.944238+00:00"
+      }
+    ],
+    "api_key_details": [],
+    "webhooks": [],
+    "custom_limits": null
+  },
+  "usr_dbfa506486": {
+    "user_id": "usr_dbfa506486",
+    "email": "promo_user@truthgpt.ai",
+    "name": "Promo Tester",
+    "tier": "pro",
+    "billing_cycle": "monthly",
+    "status": "active",
+    "api_keys": [
+      "tgpt_cloud_live_42cf5e9dea104233a091"
+    ],
+    "subscription_start_date": "2026-09-02T21:47:59.370785+00:00",
+    "next_billing_date": "2026-09-02T21:47:59.370799+00:00",
+    "usage": {
+      "total_tokens_consumed": 0,
+      "tokens_consumed_today": 0,
+      "verifications_run": 0,
+      "swarm_sessions_count": 0,
+      "last_reset_timestamp": 1788385679.370775,
+      "daily_request_count": 0
+    },
+    "invoices": [
+      {
+        "invoice_id": "inv_tgpt_3e0ff3a9e4",
+        "user_id": "usr_dbfa506486",
+        "tier_id": "pro",
+        "amount_usd": 10.0,
+        "billing_cycle": "monthly",
+        "payment_method": "stripe_card",
+        "status": "paid",
+        "discount_applied_usd": 9.99,
+        "promo_code": "DEV50",
+        "created_at": "2026-09-02T21:47:59.400177+00:00"
       }
     ],
     "api_key_details": [],

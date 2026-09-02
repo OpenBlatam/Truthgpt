@@ -201,9 +201,16 @@ class CloudProofCache(BaseProofCache):
         with self._lock:
             for h, data in snapshot.items():
                 if isinstance(data, dict) and "certificate_data" in data:
-                    self._proof_cache[h] = CachedProofEntry(**data)
+                    clean_data = dict(data)
+                    clean_data.pop("is_expired", None)
+                    self._proof_cache[h] = CachedProofEntry(**clean_data)
                     count += 1
         return count
+
+    def purge_expired(self) -> int:
+        """Manually evict and purge all TTL-expired proof entries."""
+        with self._lock:
+            return self._evict_expired()
 
     def clear(self) -> None:
         """Flush the cache."""
