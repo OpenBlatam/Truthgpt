@@ -277,12 +277,12 @@
     "subscription_start_date": "2026-08-28T21:32:28.702676+00:00",
     "next_billing_date": "2026-08-28T21:32:28.702699+00:00",
     "usage": {
-      "total_tokens_consumed": 289462,
-      "tokens_consumed_today": 14043,
-      "verifications_run": 404,
+      "total_tokens_consumed": 292515,
+      "tokens_consumed_today": 17096,
+      "verifications_run": 408,
       "swarm_sessions_count": 0,
       "last_reset_timestamp": 1788385437.6452186,
-      "daily_request_count": 23
+      "daily_request_count": 28
     },
     "invoices": [
       {
@@ -339,14 +339,26 @@
     "subscription_start_date": "2026-08-28T21:32:28.702717+00:00",
     "next_billing_date": "2026-08-28T21:32:28.702721+00:00",
     "usage": {
-      "total_tokens_consumed": 106510,
+      "total_tokens_consumed": 107730,
       "tokens_consumed_today": 0,
-      "verifications_run": 173,
+      "verifications_run": 175,
       "swarm_sessions_count": 0,
       "last_reset_timestamp": 1788385356.1000743,
-      "daily_request_count": 12
+      "daily_request_count": 14
     },
     "invoices": [
+      {
+        "invoice_id": "inv_tgpt_ba8bcc1e79",
+        "user_id": "usr_pro_sample",
+        "tier_id": "pro",
+        "amount_usd": 10.0,
+        "billing_cycle": "monthly",
+        "payment_method": "stripe_card",
+        "status": "paid",
+        "discount_applied_usd": 9.99,
+        "promo_code": "DEV50",
+        "created_at": "2026-09-02T21:49:41.624499+00:00"
+      },
       {
         "invoice_id": "inv_tgpt_3c229a644b",
         "user_id": "usr_pro_sample",
@@ -18023,6 +18035,174 @@
         "discount_applied_usd": 9.99,
         "promo_code": "DEV50",
         "created_at": "2026-09-02T21:48:27.180699+00:00"
+      }
+    ],
+    "api_key_details": [],
+    "webhooks": [],
+    "custom_limits": null
+  },
+  "usr_a627d0ade0": {
+    "user_id": "usr_a627d0ade0",
+    "email": "promo_user@truthgpt.ai",
+    "name": "Promo Tester",
+    "tier": "pro",
+    "billing_cycle": "monthly",
+    "status": "active",
+    "api_keys": [
+      "tgpt_cloud_live_39c56e67c3164af597a7"
+    ],
+    "subscription_start_date": "2026-09-02T21:49:41.479938+00:00",
+    "next_billing_date": "2026-09-02T21:49:41.479949+00:00",
+    "usage": {
+      "total_tokens_consumed": 0,
+      "tokens_consumed_today": 0,
+      "verifications_run": 0,
+      "swarm_sessions_count": 0,
+      "last_reset_timestamp": 1788385781.4799304,
+      "daily_request_count": 0
+    },
+    "invoices": [
+      {
+        "invoice_id": "inv_tgpt_5aa6684047",
+        "user_id": "usr_a627d0ade0",
+        "tier_id": "pro",
+        "amount_usd": 10.0,
+        "billing_cycle": "monthly",
+        "payment_method": "stripe_card",
+        "status": "paid",
+        "discount_applied_usd": 9.99,
+        "promo_code": "DEV50",
+        "created_at": "2026-09-02T21:49:41.509533+00:00"
+      }
+    ],
+    "api_key_details": [],
+    "webhooks": [],
+    "custom_limits": null
+  },
+  "usr_9ae783160e": {
+    "user_id": "usr_9ae783160e",
+    "email": "tester_e5021f@truthgpt.ai",
+    "name": "Cloud Tester",
+    "tier": "pro",
+    "billing_cycle": "monthly",
+    "status": "active",
+    "api_keys": [
+      "tgpt_cloud_live_7f71bb42fe3e43d09c1a",
+      "tgpt_cloud_live_571c4f5f70594c618f807567"
+    ],
+    "subscription_start_date": "2026-09-02T21:49:53.560436+00:00",
+    "next_billing_date": "2026-09-02T21:49:53.560458+00:00",
+    "usage": {
+      "total_tokens_consumed": 0,
+      "tokens_consumed_today": 0,
+      "verifications_run": 0,
+      "swarm_sessions_count": 0,
+      "last_reset_timestamp": 1788385793.5604277,
+      "daily_request_count": 0
+    },
+    "invoices": [
+      {
+        "invoice_id": "inv_tgpt_e8b864ed5c",
+        "user_id": "usr_9ae783160e",
+        "tier_id": "pro",
+        "amount_usd": 19.99,
+        "billing_cycle": "monthly",
+        "payment_method": "stripe_card",
+        "status": "paid",
+        "discount_applied_usd": 0.0,
+        "promo_code": null,
+        "created_at": "2026-09-02T21:49:53.600317+00:00"
+      }
+    ],
+    "api_key_details": [
+      {
+        "key": "tgpt_cloud_live_571c4f5f70594c618f807567",
+        "key_id": "key_c2525127",
+        "key_prefix": "tgpt_cloud_live_...",
+        "label": "Worker Key",
+        "name": "Default API Key",
+        "created_at": 1788385793.6337967,
+        "last_used_at": null,
+        "is_active": true,
+        "scopes": [
+          "inference",
+          "verify"
+        ]
+      }
+    ],
+    "webhooks": [],
+    "custom_limits": null
+  },
+  "usr_feea6f6d43": {
+    "user_id": "usr_feea6f6d43",
+    "email": "upgrade_756cc5@truthgpt.ai",
+    "name": "Upgrader",
+    "tier": "pro",
+    "billing_cycle": "monthly",
+    "status": "active",
+    "api_keys": [
+      "tgpt_cloud_live_0f1f8963769442008d6a"
+    ],
+    "subscription_start_date": "2026-09-02T21:49:53.669342+00:00",
+    "next_billing_date": "2026-09-02T21:49:53.669358+00:00",
+    "usage": {
+      "total_tokens_consumed": 0,
+      "tokens_consumed_today": 0,
+      "verifications_run": 0,
+      "swarm_sessions_count": 0,
+      "last_reset_timestamp": 1788385793.6693335,
+      "daily_request_count": 0
+    },
+    "invoices": [
+      {
+        "invoice_id": "inv_tgpt_ef5ed86f4f",
+        "user_id": "usr_feea6f6d43",
+        "tier_id": "pro",
+        "amount_usd": 19.99,
+        "billing_cycle": "monthly",
+        "payment_method": "stripe_card",
+        "status": "paid",
+        "discount_applied_usd": 0.0,
+        "promo_code": null,
+        "created_at": "2026-09-02T21:49:53.706354+00:00"
+      }
+    ],
+    "api_key_details": [],
+    "webhooks": [],
+    "custom_limits": null
+  },
+  "usr_2757fc002d": {
+    "user_id": "usr_2757fc002d",
+    "email": "api_user_434738@truthgpt.ai",
+    "name": "API Tester",
+    "tier": "ultra",
+    "billing_cycle": "yearly",
+    "status": "active",
+    "api_keys": [
+      "tgpt_cloud_live_a850078ed6d142deb2b2"
+    ],
+    "subscription_start_date": "2026-09-02T21:49:54.746641+00:00",
+    "next_billing_date": "2026-09-02T21:49:54.746655+00:00",
+    "usage": {
+      "total_tokens_consumed": 0,
+      "tokens_consumed_today": 0,
+      "verifications_run": 0,
+      "swarm_sessions_count": 0,
+      "last_reset_timestamp": 1788385794.7466347,
+      "daily_request_count": 0
+    },
+    "invoices": [
+      {
+        "invoice_id": "inv_tgpt_d49bc124e0",
+        "user_id": "usr_2757fc002d",
+        "tier_id": "ultra",
+        "amount_usd": 999.0,
+        "billing_cycle": "yearly",
+        "payment_method": "crypto_usdc",
+        "status": "paid",
+        "discount_applied_usd": 0.0,
+        "promo_code": null,
+        "created_at": "2026-09-02T21:49:54.785569+00:00"
       }
     ],
     "api_key_details": [],

@@ -704,6 +704,75 @@ async def get_cache_stats():
     return {"success": True, "cache": proof_cache.get_stats()}
 
 
+@app.post("/api/v1/cloud/cache/purge")
+async def purge_cache_endpoint():
+    """Purge all expired entries from semantic proof cache."""
+    purged_count = proof_cache.purge_expired()
+    return {"success": True, "purged_entries": purged_count, "stats": proof_cache.get_stats()}
+
+
+@app.get("/api/v1/cloud/resilience/status")
+async def get_resilience_status():
+    """Retrieve circuit breaker status and operational metrics."""
+    cb_status = cloud_router._circuit_breaker.get_status() if hasattr(cloud_router, "_circuit_breaker") else {"state": "CLOSED"}
+    return {"success": True, "circuit_breaker": cb_status}
+
+
+@app.post("/api/v1/cloud/resilience/reset")
+async def reset_circuit_breaker_endpoint():
+    """Force reset circuit breaker to CLOSED state."""
+    if hasattr(cloud_router, "_circuit_breaker"):
+        cloud_router._circuit_breaker.reset()
+    return {"success": True, "message": "Circuit breaker reset to CLOSED state"}
+
+
+class RegisterAlertRuleRequest(BaseModel):
+    name: str
+    metric_key: str
+    threshold: float
+    comparison: Optional[str] = "gte"
+    cooldown_seconds: Optional[float] = 60.0
+
+
+@app.get("/api/v1/cloud/telemetry/alerts")
+async def list_alerts_endpoint():
+    """List active alert rules and recent alert trigger history."""
+    return {
+        "success": True,
+        "rules": cloud_telemetry.list_alert_rules(),
+        "history": cloud_telemetry.get_alert_history()
+    }
+
+
+@app.post("/api/v1/cloud/telemetry/alerts")
+async def register_alert_rule_endpoint(req: RegisterAlertRuleRequest):
+    """Register a new automated alerting rule."""
+    rule = cloud_telemetry.register_alert_rule(
+        name=req.name,
+        metric_key=req.metric_key,
+        threshold=req.threshold,
+        comparison=req.comparison or "gte",
+        cooldown_seconds=req.cooldown_seconds or 60.0
+    )
+    return {
+        "success": True,
+        "rule": {
+            "name": rule.name,
+            "metric_key": rule.metric_key,
+            "threshold": rule.threshold,
+            "comparison": rule.comparison,
+            "cooldown_seconds": rule.cooldown_seconds
+        }
+    }
+
+
+@app.get("/api/v1/cloud/telemetry/error-budget")
+async def get_error_budget_endpoint(sla_target: float = Query(99.9, ge=90.0, le=100.0)):
+    """Calculate error budget burndown and projected exhaustion for SRE workflows."""
+    burndown = cloud_telemetry.get_error_budget_burndown(sla_target=sla_target)
+    return {"success": True, "error_budget": burndown}
+
+
 class TensorShapesVerifyRequest(BaseModel):
     shape_a: List[int]
     shape_b: List[int]

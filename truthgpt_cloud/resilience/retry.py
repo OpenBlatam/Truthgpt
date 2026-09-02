@@ -119,7 +119,8 @@ def retry_with_backoff(
                     time.sleep(delay)
             raise last_exception
 
-        if asyncio.iscoroutinefunction(func):
+        import inspect
+        if inspect.iscoroutinefunction(func):
             return async_wrapper
         return sync_wrapper
 

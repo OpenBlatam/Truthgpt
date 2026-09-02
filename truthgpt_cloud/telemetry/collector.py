@@ -288,8 +288,15 @@ class CloudTelemetryCollector:
             for k in self._proof_statuses:
                 self._proof_statuses[k] = 0
             self._audit_logs.clear()
+            self._alert_rules.clear()
             self._alert_history.clear()
             self.start_timestamp = time.time()
+
+    def reset_metrics(self) -> None:
+        """Alias for reset()."""
+        self.reset()
+
+    reset_metrics = reset
 
     # ---------------------------------------------------------------------------
     # 🚨 Alert Rules Engine
