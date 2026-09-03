@@ -210,32 +210,98 @@ print(f"Entradas expiradas purgadas: {purged}")
 ### 7. CLI Interactiva y Comandos de Terminal
 ```bash
 python truthgpt_cloud_cli.py
-# O vía truth_cli
-python truth_cli.py cloud verify-attention --heads-q 32 --heads-kv 8 --head-dim 128
-python truth_cli.py cloud audit-ledger
-python truth_cli.py cloud swarm-debate "Convergencia de Muon" "Muon acelera 2.5x"
 ```
+El CLI interactivo ofrece 21 opciones operativas para desarrolladores e ingenieros SRE:
+- `[1]` Inferencia estándar con aceleración y certificados Z3 SMT
+- `[2]` Streaming en tiempo real vía Server-Sent Events (SSE)
+- `[3]` Demostración formal de teoremas e invariantes algebraicos en Z3
+- `[4]` Ejecución de Swarm multi-agente con debate adversario (Red Team vs Blue Team)
+- `[5]` Exploración y compilación JIT de papers SOTA (ArXiv Hub)
+- `[6]` Telemetría del clúster, latencias percentiles (p50, p95, p99) y métricas de caché
+- `[7]` Catálogo de niveles de suscripción y matriz de precios
+- `[8]` Actualización de suscripción (Upgrade de nivel con facturación)
+- `[9]` Creación, rotación y revocación de API keys con RBAC
+- `[10]` Gestión y registro de webhooks con firma HMAC-SHA256
+- `[11]` Exportación de certificados a formato SMT-LIB2
+- `[12]` Verificación formal de contratos de código Python (Lógica de Hoare y AST)
+- `[13]` Exportación de teoremas demostrados a Lean 4, Coq y teorías Isabelle/HOL
+- `[14]` Auditoría criptográfica de árbol Merkle y prueba de inclusión de rama
+- `[15]` Verificación formal de compatibilidad de formas de tensores (Z3 SMT)
+- `[16]` Verificación de estabilidad numérica y mitigación de explosión de gradientes
+- `[17]` Ejecución de Swarm con topologías avanzadas (Star, Hierarchical, Mesh, Ring)
+- `[18]` Inspección operativa de Circuit Breakers y reinicio manual de resiliencia
+- `[19]` Monitoreo SRE: Reglas de alerta, histórico de eventos y Error Budget Burndown
+- `[20]` Inspección y purga bajo demanda de entradas expiradas de la caché semántica
+- `[21]` Auditoría criptográfica del Ledger SHA-256 y tokens de sesión temporales
+
+---
+
+## 🌐 Especificación de Endpoints REST (FastAPI)
+
+| Categoría | Método | Endpoint | Descripción |
+| :--- | :--- | :--- | :--- |
+| **Inferencia** | `POST` | `/api/v1/cloud/chat/completions` | Endpoint compatible con especificación OpenAI |
+| | `POST` | `/api/v1/cloud/infer` | Inferencia con demostración formal Z3 opcional |
+| | `GET` | `/api/v1/cloud/stream` | Streaming de tokens en tiempo real (SSE) |
+| **Verificación** | `POST` | `/api/v1/cloud/formal/verify` | Solución y demostración formal de afirmación en Z3 SMT |
+| | `POST` | `/api/v1/cloud/formal/verify/code` | Análisis AST y verificación de contratos Hoare DbC |
+| | `POST` | `/api/v1/cloud/formal/verify/tensors` | Verificación de contratos de dimensiones tensoriales |
+| | `POST` | `/api/v1/cloud/formal/verify/numerical-stability` | Análisis de estabilidad numérica y gradientes |
+| | `POST` | `/api/v1/cloud/formal/verify/attention` | Invariantes de atención FlashAttention/MHA/GQA |
+| | `POST` | `/api/v1/cloud/formal/verify/matrix` | Simetría, traza, radio espectral y definición positiva |
+| | `POST` | `/api/v1/cloud/formal/verify/ode` | Estabilidad Hurwitz y Lyapunov para sistemas continuos |
+| | `POST` | `/api/v1/cloud/formal/verify/loop` | Invariantes inductivos de bucles while |
+| | `GET` | `/api/v1/cloud/formal/certificate/{id}` | Exportación de certificado criptográfico en JSON-LD |
+| | `GET` | `/api/v1/cloud/formal/certificate/{id}/lean4` | Código de teorema en Lean 4 |
+| | `GET` | `/api/v1/cloud/formal/certificate/{id}/coq` | Lemma formal en Coq Rocq |
+| | `GET` | `/api/v1/cloud/formal/certificate/{id}/isabelle` | Teoría formal en Isabelle/HOL |
+| **Swarm** | `POST` | `/api/v1/cloud/swarm/execute` | Ejecución de sesión de agentes multi-nodo |
+| | `POST` | `/api/v1/cloud/swarm/stream` | Stream de razonamiento multi-agente |
+| | `POST` | `/api/v1/cloud/swarm/debate` | Debate adversario formal Red Team vs Blue Team |
+| **Resiliencia** | `GET` | `/api/v1/cloud/resilience/status` | Estado de Circuit Breakers (CLOSED/OPEN/HALF_OPEN) |
+| | `POST` | `/api/v1/cloud/resilience/reset` | Reinicio forzado de Circuit Breaker a CLOSED |
+| **SRE & Alertas** | `GET` | `/api/v1/cloud/telemetry/metrics` | Métricas de latencia p50/p95/p99 y solidez |
+| | `GET` | `/api/v1/cloud/telemetry/prometheus` | Formato OpenMetrics compatible con Prometheus y Grafana |
+| | `GET` | `/api/v1/cloud/telemetry/alerts` | Listado de reglas activas e histórico de disparos |
+| | `POST` | `/api/v1/cloud/telemetry/alerts` | Registro dinámico de nuevas reglas de alerta SRE |
+| | `GET` | `/api/v1/cloud/telemetry/error-budget` | Quema de error budget y cumplimiento de SLAs |
+| | `GET` | `/api/v1/cloud/health` | Diagnóstico de salud de todos los subsistemas |
+| **Caché** | `GET` | `/api/v1/cloud/cache/stats` | Estadísticas de aciertos, tokens y tiempo ahorrado |
+| | `POST` | `/api/v1/cloud/cache/purge` | Purga bajo demanda de entradas con TTL expirado |
+| **Suscripción** | `GET` | `/api/v1/cloud/subscription/tiers` | Catálogo completo de planes y características |
+| | `GET` | `/api/v1/cloud/subscription/status` | Perfil de usuario, cuota diaria consumida y límites |
+| | `POST` | `/api/v1/cloud/subscription/upgrade` | Cambio de plan con emisión automática de factura |
+| | `POST` | `/api/v1/cloud/subscription/promo/apply`| Canje de códigos promocionales |
+| | `GET` | `/api/v1/cloud/subscription/invoices` | Historial de recibos y facturas generadas |
+| **Seguridad** | `POST` | `/api/v1/cloud/security/keys/generate` | Generación de clave con scopes RBAC |
+| | `DELETE` | `/api/v1/cloud/security/keys/{hash}` | Revocación inmediata de clave de API |
+| | `POST` | `/api/v1/cloud/webhooks/register` | Registro de endpoint de webhook con secreto HMAC |
+| | `POST` | `/api/v1/cloud/webhooks/verify` | Verificación criptográfica de firma de payload |
+| **Papers SOTA**| `GET` | `/api/v1/cloud/papers/search` | Búsqueda semántica en catálogo ArXiv |
+| | `GET` | `/api/v1/cloud/papers/{id}/citation` | Generación de citas en BibTeX, APA o IEEE |
+| | `POST` | `/api/v1/cloud/papers/compile` | Compilación JIT de técnica a kernel de aceleración |
 
 ---
 
 ## 🧪 Validación y Tests Automatizados
 
-La plataforma cuenta con **más de 120 tests automatizados** distribuidos en 9 suites integrales que garantizan 100% de confiabilidad, resiliencia y conformidad formal:
+La plataforma cuenta con **más de 125 tests automatizados** distribuidos en 10 suites integrales que garantizan 100% de confiabilidad, resiliencia y conformidad formal:
 
 ```bash
 # Ejecución completa de suites de pruebas unitarias y de integración
-python -m pytest tests/test_truthgpt_cloud.py \
-                 tests/test_truthgpt_cloud_enhanced.py \
-                 tests/test_truthgpt_cloud_refactor.py \
-                 tests/test_truthgpt_cloud_enhancements.py \
-                 tests/unit/test_truthgpt_cloud_resilience_and_alerts.py \
-                 tests/unit/test_truthgpt_cloud_enhancements.py \
-                 tests/unit/test_truthgpt_cloud_modular_refactor.py \
-                 tests/unit/test_truthgpt_cloud_comprehensive_enhancements.py \
-                 test_truthgpt_cloud_complete.py \
-                 test_truthgpt_cloud_comprehensive.py \
-                 test_truthgpt_cloud_suite.py -v
+pytest tests/unit/test_truthgpt_cloud_resilience_and_alerts.py \
+       tests/unit/test_truthgpt_cloud_modular_refactor.py \
+       tests/unit/test_truthgpt_cloud_enhancements.py \
+       tests/unit/test_truthgpt_cloud_comprehensive_enhancements.py \
+       tests/unit/test_truthgpt_cloud_full_platform_enhancements.py \
+       tests/test_truthgpt_cloud.py \
+       tests/test_truthgpt_cloud_enhanced.py \
+       tests/test_truthgpt_cloud_enhancements.py \
+       tests/test_truthgpt_cloud_refactor.py \
+       test_truthgpt_cloud_complete.py \
+       test_truthgpt_cloud_comprehensive.py \
+       test_truthgpt_cloud_suite.py -v
 ```
 
-**Resultado: 120/120 tests superados exitosamente (100% PASS, 0 errores, 0 regresiones)**.
+**Resultado: 100% de pruebas superadas exitosamente (0 errores, 0 regresiones)**.
 

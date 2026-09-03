@@ -65,6 +65,10 @@ async def main_cli():
         print(" [15] 📐 Verificación Formal de Formas de Tensores (Z3 SMT)")
         print(" [16] 🔬 Verificación de Estabilidad Numérica y Gradientes")
         print(" [17] 🐝 Ejecutar Swarm con Topología Personalizada (Star, Ring, Mesh)")
+        print(" [18] ⚡ Inspeccionar Circuit Breakers & Resiliencia del Clúster")
+        print(" [19] 🚨 Monitorear Reglas de Alerta & Error Budget Burndown (SRE)")
+        print(" [20] 🧹 Gestionar & Purgar Caché Semántica con TTL")
+        print(" [21] 🔒 Auditoría Criptográfica de Seguridad & Tokens de Sesión")
         print(" [0]  🚪 Salir")
         
         choice = input("\nSeleccione una opción: ").strip()
@@ -321,6 +325,94 @@ async def main_cli():
             print(f"\n✅ Swarm completado con Topología [{trace.topology.upper()}]:")
             print(f" • Consenso: {round(trace.consensus_score * 100, 1)}%")
             print(f" • Resumen: {trace.consensus_summary}")
+
+        elif choice == "18":
+            cb_status = client.get_circuit_breaker_status()
+            print("\n⚡ ESTADO DE RESILIENCIA Y CIRCUIT BREAKERS:")
+            cb_items = cb_status.items() if (isinstance(cb_status, dict) and any(isinstance(v, dict) and "state" in v for v in cb_status.values())) else [(cb_status.get("name", "inference_router"), cb_status)]
+            for name, cb in cb_items:
+                state = cb.get("state", "UNKNOWN")
+                st_icon = "🟢" if state == "CLOSED" else ("🟡" if state == "HALF_OPEN" else "🔴")
+                metrics = cb.get("metrics", {})
+                total_calls = metrics.get("total_calls", cb.get("total_calls", 0))
+                total_successes = metrics.get("total_successes", cb.get("total_successes", 0))
+                total_failures = metrics.get("total_failures", cb.get("total_failures", 0))
+                total_rejections = metrics.get("total_rejections", cb.get("total_rejections", 0))
+                consecutive_failures = metrics.get("consecutive_failures", cb.get("consecutive_failures", 0))
+                failure_threshold = cb.get("failure_threshold", 10)
+                print(f" {st_icon} Circuit Breaker [{name.upper()}]: Estado {state}")
+                print(f"    Total llamadas: {total_calls} | Éxitos: {total_successes} | Fallos: {total_failures} | Rechazos: {total_rejections}")
+                print(f"    Fallos consecutivos: {consecutive_failures} (Umbral: {failure_threshold})")
+                if state != "CLOSED":
+                    retry_time = cb.get("recovery_time_remaining", cb.get("time_until_retry", 0))
+                    print(f"    Tiempo restante recuperación: {retry_time}s")
+            
+            rst = input("\n¿Desea reiniciar el circuit breaker? (s/n): ").strip().lower()
+            if rst == "s":
+                cb_target = input("Nombre del circuit breaker a reiniciar (o Enter para inference_router): ").strip()
+                res = client.reset_circuit_breaker(cb_target or None)
+                if isinstance(res, dict) and res.get("success", True):
+                    print(f"✅ Circuit breaker reiniciado a CLOSED.")
+                else:
+                    print(f"❌ Error al reiniciar circuit breaker.")
+
+        elif choice == "19":
+            rules = client.list_alert_rules()
+            history = client.get_alert_history(limit=5)
+            eb_999 = client.get_error_budget_burndown(sla_target=99.9)
+            eb_9999 = client.get_error_budget_burndown(sla_target=99.99)
+            
+            print("\n🚨 OBSERVABILIDAD SRE & GESTIÓN DE ERROR BUDGETS:")
+            print(f" • Reglas Activas ({len(rules)}):")
+            for r in rules:
+                print(f"   - {r['name']}: {r['metric_key']} {r['comparison']} {r['threshold']} (Disparos: {r['trigger_count']})")
+            
+            print(f"\n • Alertas Recientes Disparadas ({len(history)}):")
+            if not history:
+                print("   (Ninguna alerta disparada recientemente. Todos los SLOs en verde)")
+            for h in history:
+                print(f"   ⚠️ [{h.get('alert_name')}] Métrica: {h.get('metric_key')} = {h.get('observed_value')} (Umbral: {h.get('threshold')})")
+
+            print("\n • Presupuesto de Error (Error Budget Burndown):")
+            print(f"   - SLA 99.9%: Consumido {eb_999['budget_burned_percent']}% | Restante: {eb_999['error_budget_remaining_percent']}% | Estado: {eb_999['status']}")
+            print(f"   - SLA 99.99%: Consumido {eb_9999['budget_burned_percent']}% | Restante: {eb_9999['error_budget_remaining_percent']}% | Estado: {eb_9999['status']}")
+
+        elif choice == "20":
+            cache_stats = client.get_cache_stats()
+            print("\n🧹 GESTIÓN DE CACHÉ SEMÁNTICA CON TTL:")
+            print(f" • Entradas Totales: {cache_stats['cached_entries']} / {cache_stats['max_capacity']}")
+            print(f" • Ratio de Aciertos: {cache_stats['hit_ratio_percent']}%")
+            print(f" • Tokens Ahorrados: {cache_stats['total_tokens_saved']:,}")
+            print(f" • Cómputo SMT Ahorrado: {cache_stats['estimated_compute_ms_saved']} ms")
+            
+            prg = input("\n¿Desea purgar entradas expiradas de la caché? (s/n): ").strip().lower()
+            if prg == "s":
+                purged = client.purge_cache()
+                print(f"✅ Se han purgado {purged} entradas expiradas de la memoria.")
+
+        elif choice == "21":
+            ledger_info = client.verify_security_ledger()
+            print("\n🔒 AUDITORÍA CRIPTOGRÁFICA DE SEGURIDAD & TOKENS:")
+            print(f" • Cadena SHA-256 Inmutable: {'✅ ÍNTEGRA Y VERIFICADA' if ledger_info.get('is_valid') else '❌ CADENA COMPROMETIDA'}")
+            print(f" • Total de Bloques Auditados: {ledger_info.get('total_blocks_verified', 0)}")
+            print(f" • Hash del Último Bloque: {ledger_info.get('last_block_hash', 'N/A')}")
+            
+            print("\n [g] Generar nuevo token de sesión firmado")
+            print(" [v] Validar un token de sesión")
+            print(" [Enter] Volver")
+            tok_opt = input("Opción: ").strip().lower()
+            if tok_opt == "g":
+                dur = input("Duración en segundos (por defecto 3600): ").strip()
+                duration = float(dur) if dur.isdigit() else 3600.0
+                token = client.create_session_token(duration_seconds=duration)
+                print(f"\n🔑 Token de Sesión Criptográfico:\n{token}")
+            elif tok_opt == "v":
+                token_to_val = input("Pegue el token de sesión a validar: ").strip()
+                val_res = client.validate_session_token(token_to_val)
+                if val_res.get("is_valid"):
+                    print(f"✅ Token VÁLIDO. Usuario: {val_res.get('user_id')}, Tiempo restante: {val_res.get('time_remaining_seconds')}s")
+                else:
+                    print(f"❌ Token INVÁLIDO. Razón: {val_res.get('reason')}")
                     
         elif choice == "0":
             print("\n👋 ¡Gracias por usar TruthGPT Cloud!")

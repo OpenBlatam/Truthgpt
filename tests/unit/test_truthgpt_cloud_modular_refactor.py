@@ -284,6 +284,9 @@ class TestTruthGPTCloudModularRefactor:
         assert optimization_core.proof_cache is not None
         assert optimization_core.subscription_manager is not None
         assert optimization_core.cloud_security is not None
+        assert optimization_core.CircuitBreaker is not None
+        assert optimization_core.AlertRule is not None
+        assert optimization_core.RateLimitExceededError is not None
 
         # Verify __dir__ includes truthgpt_cloud symbols
         attrs = dir(optimization_core)
@@ -291,4 +294,7 @@ class TestTruthGPTCloudModularRefactor:
         assert "CloudTier" in attrs
         assert "cloud_verifier" in attrs
         assert "cloud_swarm" in attrs
+        assert "CircuitBreaker" in attrs
+        assert "AlertRule" in attrs
+
 

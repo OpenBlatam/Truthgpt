@@ -274,4 +274,202 @@ def register_cloud_commands(cloud_app: typer.Typer):
         console.print(Panel(f"Iniciando TruthGPT Cloud Server en http://{host}:{port}", title="🚀 TruthGPT Cloud Server", border_style="green"))
         start_server(host=host, port=port)
 
+    @cloud_app.command("resilience-status")
+    def resilience_status():
+        """Inspect Circuit Breaker state, error thresholds and recovery status."""
+        from truthgpt_cloud import TruthGPTCloudClient
+        client = TruthGPTCloudClient()
+        cb = client.get_circuit_breaker_status()
+        state = cb.get("state", "UNKNOWN")
+        color = "green" if state == "CLOSED" else ("yellow" if state == "HALF_OPEN" else "red")
+        
+        info = (
+            f"[bold {color}]Estado Disyuntor (Circuit Breaker): {state}[/bold {color}]\n"
+            f"[cyan]Nombre:[/cyan] {cb.get('name', 'inference_router')}\n"
+            f"[yellow]Fallos Consecutivos:[/yellow] {cb.get('failure_count', 0)} / {cb.get('failure_threshold', 5)}\n"
+            f"[blue]Umbral de Recuperación (Éxitos):[/blue] {cb.get('success_count', 0)} / {cb.get('success_threshold', 2)}\n"
+            f"[magenta]Total Disparos a OPEN:[/magenta] {cb.get('total_trips', 0)}\n"
+            f"[white]Tiempo de Enfriamiento:[/white] {cb.get('recovery_timeout_seconds', 30.0)}s"
+        )
+        if cb.get("time_until_retry"):
+            info += f"\n[bold red]Tiempo restante para reintento:[/bold red] {cb.get('time_until_retry'):.1f}s"
+        console.print(Panel(info, title="🛡️ Estado de Resiliencia & Circuit Breaker", border_style=color))
+
+    @cloud_app.command("resilience-reset")
+    def resilience_reset():
+        """Force reset the Circuit Breaker to CLOSED operational state."""
+        from truthgpt_cloud import TruthGPTCloudClient
+        client = TruthGPTCloudClient()
+        res = client.reset_circuit_breaker()
+        console.print(Panel(
+            f"[bold green]✅ {res.get('message', 'Circuit breaker reset to CLOSED state')}[/bold green]",
+            title="🔄 Circuit Breaker Reiniciado",
+            border_style="green"
+        ))
+
+    @cloud_app.command("cache-stats")
+    def cache_stats():
+        """View semantic proof cache hit ratio, entry counts, and memory metrics."""
+        from truthgpt_cloud import proof_cache
+        stats = proof_cache.get_stats()
+        hit_ratio = stats.get("hit_ratio_percent", 0.0)
+        color = "green" if hit_ratio >= 50.0 else "yellow"
+        
+        info = (
+            f"[bold cyan]Entradas en Caché:[/bold cyan] {stats.get('total_entries', 0)} / {stats.get('max_size', 5000)}\n"
+            f"[bold green]Aciertos (Hits):[/bold green] {stats.get('hits', 0):,}\n"
+            f"[bold yellow]Fallos (Misses):[/bold yellow] {stats.get('misses', 0):,}\n"
+            f"[bold {color}]Ratio de Acierto (Hit Ratio):[/bold {color}] {hit_ratio:.1f}%\n"
+            f"[bold magenta]Entradas Expiradas detectadas:[/bold magenta] {stats.get('expired_entries', 0)}\n"
+            f"[bold blue]TTL por Defecto:[/bold blue] {stats.get('default_ttl_seconds', 3600)}s"
+        )
+        console.print(Panel(info, title="⚡ Estadísticas de Caché Semántica de Pruebas Z3", border_style="cyan"))
+
+    @cloud_app.command("cache-purge")
+    def cache_purge():
+        """Purge expired TTL entries from semantic proof cache."""
+        from truthgpt_cloud import proof_cache
+        purged = proof_cache.purge_expired()
+        console.print(Panel(
+            f"[bold green]✅ Purga completada exitosamente.[/bold green]\n"
+            f"[cyan]Entradas expiradas eliminadas:[/cyan] {purged}\n"
+            f"[yellow]Entradas activas remanentes:[/yellow] {len(proof_cache)}",
+            title="🧹 Limpieza de Caché de Pruebas",
+            border_style="green"
+        ))
+
+    @cloud_app.command("alerts")
+    def list_alerts():
+        """List active SRE alert rules and trigger history."""
+        from truthgpt_cloud import cloud_telemetry
+        rules = cloud_telemetry.list_alert_rules()
+        history = cloud_telemetry.get_alert_history()
+        
+        table = Table(title=f"🚨 Reglas de Alerta Activas ({len(rules)} reglas)")
+        table.add_column("Nombre", style="bold cyan")
+        table.add_column("Métrica Clave", style="yellow")
+        table.add_column("Condición", style="magenta")
+        table.add_column("Umbral", style="blue")
+        table.add_column("Cooldown", style="white")
+        
+        for r in rules:
+            table.add_row(
+                r.get("name", ""),
+                r.get("metric_key", ""),
+                r.get("comparison", "gte"),
+                str(r.get("threshold", 0)),
+                f"{r.get('cooldown_seconds', 60.0)}s"
+            )
+        console.print(table)
+        
+        if history:
+            h_table = Table(title=f"📜 Historial Reciente de Disparos de Alerta ({len(history)} eventos)")
+            h_table.add_column("Alerta", style="bold red")
+            h_table.add_column("Valor Actual", style="yellow")
+            h_table.add_column("Umbral", style="cyan")
+            h_table.add_column("Timestamp", style="dim white")
+            for h in history[-5:]:
+                h_table.add_row(
+                    h.get("rule_name", ""),
+                    str(h.get("metric_value", "")),
+                    str(h.get("threshold", "")),
+                    str(h.get("triggered_at", ""))
+                )
+            console.print(h_table)
+
+    @cloud_app.command("add-alert")
+    def add_alert(
+        name: str = typer.Argument(..., help="Nombre identificador de la alerta"),
+        metric: str = typer.Option(..., "--metric", "-m", help="Clave de métrica (ej. inference_latency_p95, error_rate)"),
+        threshold: float = typer.Option(..., "--threshold", "-t", help="Valor umbral"),
+        op: str = typer.Option("gte", "--op", help="Operador: gte, lte, gt, lt, eq"),
+        cooldown: float = typer.Option(60.0, "--cooldown", "-c", help="Segundos de enfriamiento entre disparos")
+    ):
+        """Register a new automated SRE alerting rule."""
+        from truthgpt_cloud import cloud_telemetry
+        rule = cloud_telemetry.register_alert_rule(
+            name=name,
+            metric_key=metric,
+            threshold=threshold,
+            comparison=op,
+            cooldown_seconds=cooldown
+        )
+        console.print(Panel(
+            f"[bold green]✅ Regla de alerta registrada correctamente[/bold green]\n"
+            f"[cyan]Nombre:[/cyan] {rule.name}\n"
+            f"[yellow]Métrica:[/yellow] {rule.metric_key}\n"
+            f"[blue]Condición:[/blue] {rule.comparison} {rule.threshold}\n"
+            f"[white]Cooldown:[/white] {rule.cooldown_seconds}s",
+            title="🔔 Alerta Creada",
+            border_style="green"
+        ))
+
+    @cloud_app.command("error-budget")
+    def error_budget(
+        sla: float = typer.Option(99.9, "--sla", "-s", help="Objetivo SLA porcentual (ej. 99.9)")
+    ):
+        """Calculate SRE Error Budget burndown, consumption percentage and projection."""
+        from truthgpt_cloud import cloud_telemetry
+        eb = cloud_telemetry.get_error_budget_burndown(sla_target=sla)
+        
+        status = eb.get("status", "HEALTHY")
+        color = "green" if status == "HEALTHY" else ("yellow" if status == "DEGRADED" else "red")
+        
+        info = (
+            f"[bold {color}]Estado del Presupuesto: {status}[/bold {color}]\n"
+            f"[cyan]Objetivo SLA:[/cyan] {eb.get('sla_target_percent', sla)}%\n"
+            f"[yellow]Peticiones Totales Evaluadas:[/yellow] {eb.get('total_requests', 0):,}\n"
+            f"[blue]Peticiones Fallidas:[/blue] {eb.get('failed_requests', 0):,}\n"
+            f"[magenta]Errores Permitidos:[/magenta] {eb.get('allowed_failures', 0):.1f}\n"
+            f"[bold {color}]Presupuesto de Error Consumido:[/bold {color}] {eb.get('consumed_percent', 0.0):.2f}%\n"
+            f"[green]Presupuesto Restante:[/green] {eb.get('remaining_percent', 100.0):.2f}%\n"
+            f"[white]Proyección de Agotamiento:[/white] {eb.get('exhaustion_estimate', 'N/A')}"
+        )
+        console.print(Panel(info, title="📉 Quemado de Presupuesto de Error SRE (Error Budget)", border_style=color))
+
+    @cloud_app.command("verify-code")
+    def verify_python_code_cmd(
+        file_path: Optional[str] = typer.Option(None, "--file", "-f", help="Ruta al archivo Python con contratos :pre/:post"),
+        code: Optional[str] = typer.Option(None, "--code", "-c", help="Fragmento de código Python directo")
+    ):
+        """Formally verify Hoare logic contracts and invariants in Python AST."""
+        from truthgpt_cloud import TruthGPTCloudClient
+        client = TruthGPTCloudClient()
+        
+        if file_path:
+            with open(file_path, "r", encoding="utf-8") as f:
+                code_content = f.read()
+        elif code:
+            code_content = code
+        else:
+            code_content = (
+                "def clamp_range(x: int) -> int:\n"
+                "    '''\n"
+                "    :pre: True\n"
+                "    :post: return_val >= 0\n"
+                "    '''\n"
+                "    if x < 0:\n"
+                "        return 0\n"
+                "    return x\n"
+            )
+            console.print("[dim]No se especificó código; evaluando contrato de muestra clamp_range...[/dim]")
+        
+        console.print("[yellow]⏳ Verificando contratos Hoare y pre/postcondiciones en AST Python...[/yellow]")
+        res = client.verify_python_code(code_content)
+        color = "green" if res.overall_status in ("PROVED_FORMALLY", "SATISFIED") else "yellow"
+        
+        output = (
+            f"[bold {color}]Estado General: {res.overall_status}[/bold {color}]\n"
+            f"[cyan]Función Analizada:[/cyan] {res.function_name}\n"
+            f"[magenta]Merkle Root:[/magenta] {res.certificate.proof_tree_hash}\n"
+            f"[blue]Tiempo de Verificación:[/blue] {res.certificate.verification_time_ms} ms\n"
+        )
+        if res.certificate.mathematical_invariants:
+            output += "\n[bold]Invariantes Formalmente Demostrados:[/bold]\n"
+            for inv in res.certificate.mathematical_invariants:
+                output += f" • {inv}\n"
+        
+        console.print(Panel(output, title="🐍 Verificación Formal de Contratos Python DbC", border_style=color))
+
+
 

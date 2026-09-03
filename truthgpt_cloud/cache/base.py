@@ -36,5 +36,9 @@ class BaseProofCache(ABC):
         """Return cache hit/miss and efficiency metrics."""
         pass
 
+    def __len__(self) -> int:
+        """Return the number of entries currently in the cache."""
+        return 0
+
 
 __all__ = ["BaseProofCache"]

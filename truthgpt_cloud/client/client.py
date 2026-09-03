@@ -20,6 +20,7 @@ from ..papers.compiler import cloud_paper_compiler
 from ..papers.registry import get_all_papers, get_paper_by_id
 from ..telemetry import cloud_telemetry
 from ..cache import proof_cache
+from ..security.manager import cloud_security
 
 
 def _run_sync(coro):
@@ -60,6 +61,7 @@ class TruthGPTCloudClient:
         self.webhooks = webhook_manager
         self.telemetry = cloud_telemetry
         self.cache = proof_cache
+        self.security = cloud_security
         
         # Resolve user
         self.user: Optional[UserSubscription] = None
@@ -685,10 +687,11 @@ class TruthGPTCloudClient:
             return self.router._circuit_breaker.get_status()
         return {"state": "CLOSED", "status": "unavailable"}
 
-    def reset_circuit_breaker(self) -> None:
+    def reset_circuit_breaker(self, name: Optional[str] = None) -> Dict[str, Any]:
         """Reset the inference circuit breaker to CLOSED state."""
         if hasattr(self.router, "_circuit_breaker"):
             self.router._circuit_breaker.reset()
+        return {"success": True, "message": "Circuit breaker reset to CLOSED state"}
 
     # ---------------------------------------------------------------------------
     # 🚨 SRE Alerting & Error Budget APIs
@@ -730,6 +733,30 @@ class TruthGPTCloudClient:
         return self.cache.purge_expired()
 
     # ---------------------------------------------------------------------------
+    # 🔒 Cryptographic Security & Session Management
+    # ---------------------------------------------------------------------------
+
+    def create_session_token(
+        self,
+        duration_seconds: float = 3600.0,
+        scopes: Optional[List[str]] = None
+    ) -> str:
+        """Generate a cryptographically signed temporary session token for the current user."""
+        return self.security.generate_session_token(
+            self.user_id,
+            duration_seconds=duration_seconds,
+            scopes=scopes
+        )
+
+    def validate_session_token(self, token: str) -> Dict[str, Any]:
+        """Validate signature and expiration of a cryptographic session token."""
+        return self.security.validate_session_token(token)
+
+    def verify_security_ledger(self) -> Dict[str, Any]:
+        """Verify the unbroken cryptographic SHA-256 chain of the security audit ledger."""
+        return self.security.verify_ledger_integrity()
+
+    # ---------------------------------------------------------------------------
     # 🐝 Swarm Debate & Papers Hub Helpers
     # ---------------------------------------------------------------------------
 
@@ -763,6 +790,7 @@ class TruthGPTCloudClient:
     verify_lyapunov = verify_ode
     verify_attention = verify_attention_invariants
     export_isabelle = export_proof_to_isabelle
+    purge_cache = purge_expired_cache
 
 
 __all__ = ["TruthGPTCloudClient"]

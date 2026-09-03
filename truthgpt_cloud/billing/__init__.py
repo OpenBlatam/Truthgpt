@@ -14,6 +14,7 @@ from .models import (
 from .subscription import (
     SubscriptionManager,
     subscription_manager,
+    TOKEN_PACK_CATALOG,
 )
 
 from .storage import AtomicJsonStorage
@@ -53,6 +54,7 @@ __all__ = [
     # Managers & Services
     "SubscriptionManager",
     "subscription_manager",
+    "TOKEN_PACK_CATALOG",
     "PaymentGatewayService",
     "WebhookManager",
     "webhook_manager",

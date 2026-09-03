@@ -17,6 +17,8 @@ class UsageRecord:
     swarm_sessions_count: int = 0
     last_reset_timestamp: float = field(default_factory=time.time)
     daily_request_count: int = 0
+    purchased_tokens_balance: int = 0
+    total_purchased_tokens: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

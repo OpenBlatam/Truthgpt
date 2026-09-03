@@ -24,6 +24,37 @@ from .gateways import PaymentGatewayService
 
 logger = logging.getLogger("TruthGPT.CloudBilling")
 
+TOKEN_PACK_CATALOG: List[Dict[str, Any]] = [
+    {
+        "pack_id": "pack_starter",
+        "name": "Starter Boost Pack",
+        "tokens": 500_000,
+        "price_usd": 5.00,
+        "description": "500,000 tokens adicionales para picos de inferencia y verificación SMT."
+    },
+    {
+        "pack_id": "pack_pro",
+        "name": "Pro Research Pack",
+        "tokens": 2_500_000,
+        "price_usd": 19.00,
+        "description": "2,500,000 tokens adicionales con prioridad de cómputo."
+    },
+    {
+        "pack_id": "pack_scale",
+        "name": "Scale Enterprise Pack",
+        "tokens": 10_000_000,
+        "price_usd": 65.00,
+        "description": "10,000,000 tokens para despliegues a gran escala y swarms paralelos."
+    },
+    {
+        "pack_id": "pack_enterprise",
+        "name": "Frontier Ultra Pack",
+        "tokens": 50_000_000,
+        "price_usd": 250.00,
+        "description": "50,000,000 tokens para cargas masivas con SLA dedicado."
+    }
+]
+
 
 class SubscriptionManager:
     """
@@ -347,6 +378,111 @@ class SubscriptionManager:
             }
         }
 
+    def get_token_pack_catalog(self) -> List[Dict[str, Any]]:
+        """Return the official catalog of top-up token packs."""
+        return [dict(p) for p in TOKEN_PACK_CATALOG]
+
+    def purchase_token_pack(
+        self,
+        user_id: str,
+        pack_id: str,
+        payment_method: str = "stripe_card",
+        promo_code: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Purchase on-demand top-up tokens for bursts of inference and formal proofs without tier modification.
+        """
+        user = self.get_user(user_id)
+        if not user:
+            user = self.get_user_by_api_key(user_id)
+        if not user:
+            raise AuthenticationError(f"Usuario {user_id} no encontrado.")
+
+        pack = next((p for p in TOKEN_PACK_CATALOG if p["pack_id"] == pack_id), None)
+        if not pack:
+            valid_ids = [p["pack_id"] for p in TOKEN_PACK_CATALOG]
+            raise TruthGPTCloudError(
+                f"Paquete de tokens '{pack_id}' no válido. Opciones: {', '.join(valid_ids)}",
+                code="INVALID_PACK",
+                status_code=400
+            )
+
+        base_amount = pack["price_usd"]
+        discount_usd = 0.0
+        applied_promo = None
+        if promo_code:
+            code_clean = promo_code.strip().upper()
+            if code_clean == "TRUTH2026":
+                discount_usd = round(base_amount * 0.20, 2)
+                applied_promo = code_clean
+            elif code_clean == "DEV50":
+                discount_usd = round(base_amount * 0.50, 2)
+                applied_promo = code_clean
+            elif code_clean in ["SINGULARITY100", "FREE100"]:
+                discount_usd = base_amount
+                applied_promo = code_clean
+
+        final_amount = max(0.0, round(base_amount - discount_usd, 2))
+
+        # Process payment gateway
+        payment_res = PaymentGatewayService.process_payment(
+            user_id=user.user_id,
+            amount_usd=final_amount,
+            tier_id=f"topup_{pack_id}",
+            billing_cycle="one_time",
+            payment_method=payment_method
+        )
+
+        # Create invoice record
+        invoice = Invoice(
+            invoice_id=payment_res["invoice_id"],
+            user_id=user.user_id,
+            tier_id=f"topup_{pack_id}",
+            amount_usd=final_amount,
+            billing_cycle="one_time",
+            payment_method=payment_method,
+            status="paid",
+            discount_applied_usd=discount_usd,
+            promo_code=applied_promo,
+            created_at=datetime.now(timezone.utc).isoformat()
+        )
+
+        # Increment purchased tokens balances
+        current_purchased = getattr(user.usage, "purchased_tokens_balance", 0)
+        total_purchased = getattr(user.usage, "total_purchased_tokens", 0)
+        user.usage.purchased_tokens_balance = current_purchased + pack["tokens"]
+        user.usage.total_purchased_tokens = total_purchased + pack["tokens"]
+        user.invoices.insert(0, invoice)
+        self._save_storage()
+
+        try:
+            from ..telemetry import cloud_telemetry
+            cloud_telemetry.record_audit_event(
+                "token_pack_purchased",
+                user.user_id,
+                {"pack_id": pack_id, "tokens_added": pack["tokens"], "amount_usd": final_amount, "new_balance": user.usage.purchased_tokens_balance}
+            )
+            from .webhooks import webhook_manager
+            webhook_manager.emit_event(
+                "subscription.top_up",
+                user.user_id,
+                {"pack_id": pack_id, "tokens_added": pack["tokens"], "new_balance": user.usage.purchased_tokens_balance, "invoice_id": invoice.invoice_id}
+            )
+        except Exception:
+            pass
+
+        return {
+            "success": True,
+            "message": f"¡Paquete {pack['name']} adquirido con éxito! Se han sumado {pack['tokens']:,} tokens a tu saldo.",
+            "user_id": user.user_id,
+            "pack_id": pack_id,
+            "pack_name": pack["name"],
+            "tokens_added": pack["tokens"],
+            "new_purchased_balance": user.usage.purchased_tokens_balance,
+            "invoice": asdict(invoice),
+            "payment_details": payment_res
+        }
+
     def check_and_record_quota(
         self,
         user_id: str,
@@ -354,7 +490,7 @@ class SubscriptionManager:
         is_verification: bool = False,
         is_swarm: bool = False
     ) -> bool:
-        """Verify that user has enough daily quota and record token usage, triggering warning events if thresholds crossed."""
+        """Verify that user has enough quota (daily or purchased top-up balance) and record token usage."""
         user = self.get_user(user_id)
         if not user:
             user = self.get_user_by_api_key(user_id)
@@ -373,30 +509,49 @@ class SubscriptionManager:
             user.usage.daily_request_count = 0
             user.usage.last_reset_timestamp = now
             
-        # Check token quota
-        if user and (user.usage.tokens_consumed_today + estimated_tokens > tier_cfg.daily_token_limit):
-            try:
-                from .webhooks import webhook_manager
-                webhook_manager.emit_event("quota.exceeded", user.user_id, {
-                    "consumed": user.usage.tokens_consumed_today,
-                    "limit": tier_cfg.daily_token_limit
-                })
-            except Exception:
-                pass
-            raise QuotaExceededError(
-                message=(
-                    f"Límite diario de tokens alcanzado ({user.usage.tokens_consumed_today}/{tier_cfg.daily_token_limit}). "
-                    f"Actualiza tu suscripción a TruthGPT Pro o Ultra para continuar sin interrupciones."
-                ),
-                limit=tier_cfg.daily_token_limit,
-                consumed=user.usage.tokens_consumed_today
-            )
+        # Check token quota: daily quota + purchased top-up balance
+        if user:
+            daily_remaining = max(0, tier_cfg.daily_token_limit - user.usage.tokens_consumed_today)
+            purchased_balance = getattr(user.usage, "purchased_tokens_balance", 0)
+            total_available = daily_remaining + purchased_balance
+
+            if estimated_tokens > total_available:
+                try:
+                    from .webhooks import webhook_manager
+                    webhook_manager.emit_event("quota.exceeded", user.user_id, {
+                        "consumed": user.usage.tokens_consumed_today,
+                        "limit": tier_cfg.daily_token_limit,
+                        "purchased_balance": purchased_balance,
+                        "requested_tokens": estimated_tokens
+                    })
+                except Exception:
+                    pass
+                raise QuotaExceededError(
+                    message=(
+                        f"Límite de tokens superado ({user.usage.tokens_consumed_today}/{tier_cfg.daily_token_limit}, saldo adicional: {purchased_balance:,}). "
+                        f"Adquiere un paquete de tokens adicional (top-up) o actualiza tu suscripción a TruthGPT Pro o Ultra."
+                    ),
+                    limit=tier_cfg.daily_token_limit,
+                    consumed=user.usage.tokens_consumed_today
+                )
         
         # Record consumption
         if user:
             prev_pct = (user.usage.tokens_consumed_today / max(1, tier_cfg.daily_token_limit))
+            
+            # Consume from daily limit first, then from purchased balance
+            if user.usage.tokens_consumed_today < tier_cfg.daily_token_limit:
+                daily_fill = min(estimated_tokens, tier_cfg.daily_token_limit - user.usage.tokens_consumed_today)
+                user.usage.tokens_consumed_today += daily_fill
+                excess = estimated_tokens - daily_fill
+            else:
+                excess = estimated_tokens
+            
+            if excess > 0:
+                current_purchased = getattr(user.usage, "purchased_tokens_balance", 0)
+                user.usage.purchased_tokens_balance = max(0, current_purchased - excess)
+
             user.usage.total_tokens_consumed += estimated_tokens
-            user.usage.tokens_consumed_today += estimated_tokens
             user.usage.daily_request_count += 1
             new_pct = (user.usage.tokens_consumed_today / max(1, tier_cfg.daily_token_limit))
 
@@ -422,7 +577,7 @@ class SubscriptionManager:
 
 
     def get_user_status_summary(self, user_id: str) -> Dict[str, Any]:
-        """Get comprehensive usage, tier, and remaining quota metrics for user."""
+        """Get comprehensive usage, tier, purchased balance, and remaining quota metrics for user."""
         user = self.get_user(user_id)
         if not user:
             user = self.get_user_by_api_key(user_id)
@@ -442,7 +597,9 @@ class SubscriptionManager:
                 )
             
         tier_cfg = get_tier_config(user.tier)
-        remaining_tokens = max(0, tier_cfg.daily_token_limit - user.usage.tokens_consumed_today)
+        remaining_daily = max(0, tier_cfg.daily_token_limit - user.usage.tokens_consumed_today)
+        purchased_balance = getattr(user.usage, "purchased_tokens_balance", 0)
+        total_available = remaining_daily + purchased_balance
         pct_used = min(100.0, (user.usage.tokens_consumed_today / max(1, tier_cfg.daily_token_limit)) * 100)
         
         return {
@@ -458,9 +615,13 @@ class SubscriptionManager:
             "metrics": {
                 "tokens_consumed_today": user.usage.tokens_consumed_today,
                 "daily_token_limit": tier_cfg.daily_token_limit,
-                "remaining_tokens": remaining_tokens,
+                "remaining_tokens": remaining_daily,
+                "remaining_daily_tokens": remaining_daily,
+                "purchased_tokens_balance": purchased_balance,
+                "total_available_tokens": total_available,
                 "percent_quota_used": round(pct_used, 1),
                 "total_tokens_all_time": user.usage.total_tokens_consumed,
+                "total_purchased_tokens": getattr(user.usage, "total_purchased_tokens", 0),
                 "verifications_completed": user.usage.verifications_run,
                 "swarm_runs": user.usage.swarm_sessions_count,
                 "requests_today": user.usage.daily_request_count

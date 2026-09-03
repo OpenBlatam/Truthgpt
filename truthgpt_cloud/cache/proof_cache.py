@@ -1,5 +1,6 @@
 """
 ⚡ TruthGPT Cloud - Semantic Proof & Inference Cache
+Powered by Cachetools (O(1) LRU/TTL) and optional Diskcache persistent backend.
 Provides sub-millisecond retrieval for verified theorems, SMT proofs,
 and frequent reasoning paths, reducing compute latency and token consumption.
 """
@@ -10,6 +11,18 @@ import threading
 import logging
 from dataclasses import dataclass, field, asdict
 from typing import Dict, Optional, Any, List, Tuple
+
+try:
+    import cachetools
+    _HAS_CACHETOOLS = True
+except ImportError:
+    _HAS_CACHETOOLS = False
+
+try:
+    import diskcache
+    _HAS_DISKCACHE = True
+except ImportError:
+    _HAS_DISKCACHE = False
 
 from .base import BaseProofCache
 from ..core.constants import (
@@ -49,8 +62,9 @@ class CachedProofEntry:
 class CloudProofCache(BaseProofCache):
     """
     High-Performance Semantic Proof and KV Cache for TruthGPT Cloud.
+    Powered by Cachetools with O(1) eviction and optional Diskcache persistence.
     Caches Z3 SMT solver outputs, Merkle trees, and proof certificates.
-    Thread-safe with LRU eviction policy.
+    Thread-safe with LRU and TTL eviction policies.
     """
 
     def __init__(
@@ -64,7 +78,22 @@ class CloudProofCache(BaseProofCache):
         self.default_ttl_seconds = default_ttl_seconds
         self.storage_path = storage_path
         self._lock = threading.RLock()
-        self._proof_cache: Dict[str, CachedProofEntry] = {}
+        
+        # Primary in-memory cache
+        if _HAS_CACHETOOLS:
+            self._proof_cache: Any = cachetools.LRUCache(maxsize=max_entries)
+        else:
+            self._proof_cache: Any = {}
+
+        # Optional persistent disk cache
+        self._disk_cache: Optional[Any] = None
+        if storage_path and _HAS_DISKCACHE:
+            try:
+                self._disk_cache = diskcache.Cache(storage_path)
+                logger.info(f"Initialized persistent Diskcache at: {storage_path}")
+            except Exception as e:
+                logger.warning(f"Could not initialize Diskcache at {storage_path}: {e}")
+
         self._total_hits: int = 0
         self._total_misses: int = 0
         self._total_tokens_saved: int = 0
@@ -75,11 +104,15 @@ class CloudProofCache(BaseProofCache):
 
     def _normalize_claim(self, claim: str, constraints: Optional[List[str]] = None) -> str:
         """Normalize mathematical claim string for deterministic hashing, handling commutativity and variable alpha-equivalence."""
-        import re
         clean_claim = " ".join(claim.strip().lower().split())
-        # Replace unicode operators with ascii
-        clean_claim = clean_claim.replace('≥', '>=').replace('≤', '<=').replace('≠', '!=').replace('≡', '==').replace('^', '**')
-        
+        clean_claim = (
+            clean_claim.replace('≥', '>=')
+            .replace('≤', '<=')
+            .replace('≠', '!=')
+            .replace('≡', '==')
+            .replace('^', '**')
+        )
+
         # If claim is an equality (==), sort the two sides for commutative invariance
         if "==" in clean_claim:
             parts = [p.strip() for p in clean_claim.split("==", 1)]
@@ -98,9 +131,13 @@ class CloudProofCache(BaseProofCache):
 
     def _evict_expired(self) -> int:
         """Remove all TTL-expired entries. Must be called with lock held."""
-        expired_keys = [k for k, v in self._proof_cache.items() if v.is_expired]
+        keys = list(self._proof_cache.keys())
+        expired_keys = [k for k in keys if self._proof_cache[k].is_expired]
         for k in expired_keys:
-            del self._proof_cache[k]
+            try:
+                del self._proof_cache[k]
+            except KeyError:
+                pass
         self._total_ttl_evictions += len(expired_keys)
         return len(expired_keys)
 
@@ -108,13 +145,19 @@ class CloudProofCache(BaseProofCache):
         """Retrieve cached proof certificate if available. Evicts expired entries on read."""
         h = self.compute_hash(claim, constraints)
         with self._lock:
-            # Periodic TTL eviction on reads
-            self._evict_expired()
-
+            # Check in-memory cache
             if h in self._proof_cache:
                 entry = self._proof_cache[h]
                 if entry.is_expired:
-                    del self._proof_cache[h]
+                    try:
+                        del self._proof_cache[h]
+                    except KeyError:
+                        pass
+                    if self._disk_cache is not None:
+                        try:
+                            self._disk_cache.delete(h)
+                        except Exception:
+                            pass
                     self._total_ttl_evictions += 1
                     self._total_misses += 1
                     return None
@@ -125,6 +168,24 @@ class CloudProofCache(BaseProofCache):
                 logger.debug(f"Proof cache HIT for hash {h[:12]} (total hits: {self._total_hits})")
                 return dict(entry.certificate_data)
 
+            # Check persistent disk cache if available
+            if self._disk_cache is not None:
+                try:
+                    entry_dict = self._disk_cache.get(h)
+                    if entry_dict:
+                        entry = CachedProofEntry(**entry_dict)
+                        if not entry.is_expired:
+                            entry.hit_count += 1
+                            entry.last_accessed = time.time()
+                            self._proof_cache[h] = entry
+                            self._total_hits += 1
+                            self._total_tokens_saved += entry.tokens_saved
+                            return dict(entry.certificate_data)
+                        else:
+                            self._disk_cache.delete(h)
+                except Exception as e:
+                    logger.debug(f"Diskcache read error: {e}")
+
             self._total_misses += 1
             return None
 
@@ -134,16 +195,17 @@ class CloudProofCache(BaseProofCache):
         certificate_data: Dict[str, Any],
         constraints: Optional[List[str]] = None,
         estimated_tokens: int = DEFAULT_PROOF_CERT_ESTIMATED_SAVED_TOKENS,
-        ttl_seconds: Optional[float] = None
+        ttl_seconds: Optional[float] = None,
     ) -> None:
         """Store a verified proof certificate in the semantic cache with configurable TTL."""
         h = self.compute_hash(claim, constraints)
         ttl = ttl_seconds if ttl_seconds is not None else self.default_ttl_seconds
 
         with self._lock:
-            # Evict expired first, then LRU if still over capacity
             self._evict_expired()
-            if len(self._proof_cache) >= self.max_entries and h not in self._proof_cache:
+
+            # Evict LRU if at capacity and not using cachetools
+            if not _HAS_CACHETOOLS and len(self._proof_cache) >= self.max_entries and h not in self._proof_cache:
                 oldest_key = min(
                     self._proof_cache.keys(),
                     key=lambda k: self._proof_cache[k].last_accessed
@@ -155,14 +217,22 @@ class CloudProofCache(BaseProofCache):
                 claim_text=claim,
                 certificate_data=certificate_data,
                 tokens_saved=estimated_tokens,
-                ttl_seconds=ttl
+                ttl_seconds=ttl,
             )
             self._proof_cache[h] = entry
+
+            # Persist to disk cache if configured
+            if self._disk_cache is not None:
+                try:
+                    self._disk_cache.set(h, entry.to_dict(), expire=int(ttl) if ttl > 0 else None)
+                except Exception as e:
+                    logger.debug(f"Diskcache write error: {e}")
+
             logger.debug(f"Stored proof in cache for hash {h[:12]} (TTL: {ttl}s)")
 
     def warm_up(
         self,
-        standard_theorems: Optional[List[Tuple[str, Dict[str, Any]]]] = None
+        standard_theorems: Optional[List[Tuple[str, Dict[str, Any]]]] = None,
     ) -> int:
         """Pre-populate cache with foundational algebraic and geometric theorems."""
         theorems = standard_theorems or STANDARD_WARMUP_THEOREMS
@@ -175,7 +245,11 @@ class CloudProofCache(BaseProofCache):
     def list_cached_claims(self, limit: int = 50) -> List[Dict[str, Any]]:
         """List recently accessed or stored proof claims in the cache."""
         with self._lock:
-            sorted_entries = sorted(self._proof_cache.values(), key=lambda e: e.last_accessed, reverse=True)
+            sorted_entries = sorted(
+                self._proof_cache.values(),
+                key=lambda e: e.last_accessed,
+                reverse=True,
+            )
             return [
                 {
                     "claim_hash": e.claim_hash,
@@ -216,6 +290,11 @@ class CloudProofCache(BaseProofCache):
         """Flush the cache."""
         with self._lock:
             self._proof_cache.clear()
+            if self._disk_cache is not None:
+                try:
+                    self._disk_cache.clear()
+                except Exception:
+                    pass
             self._total_hits = 0
             self._total_misses = 0
             self._total_tokens_saved = 0
@@ -235,9 +314,15 @@ class CloudProofCache(BaseProofCache):
                 "hit_ratio_percent": round(hit_ratio, 2),
                 "total_tokens_saved": self._total_tokens_saved,
                 "total_ttl_evictions": self._total_ttl_evictions,
-                "estimated_compute_ms_saved": round(self._total_hits * 14.5, 2)
+                "estimated_compute_ms_saved": round(self._total_hits * 14.5, 2),
+                "backend": "cachetools_lru" if _HAS_CACHETOOLS else "in_memory_dict",
+                "has_persistent_diskcache": self._disk_cache is not None,
             }
 
+    def __len__(self) -> int:
+        """Return the number of entries currently in the cache."""
+        with self._lock:
+            return len(self._proof_cache)
 
 
 # Global Singleton Proof Cache
@@ -247,4 +332,6 @@ __all__ = [
     "CachedProofEntry",
     "CloudProofCache",
     "proof_cache",
+    "_HAS_CACHETOOLS",
+    "_HAS_DISKCACHE",
 ]

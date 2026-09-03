@@ -104,7 +104,9 @@ class CloudSecurityManager:
         return {
             "is_valid": True,
             "total_blocks": len(self._audit_ledger),
+            "total_blocks_verified": len(self._audit_ledger),
             "latest_block_hash": self._audit_ledger[-1].block_hash,
+            "last_block_hash": self._audit_ledger[-1].block_hash,
             "genesis_block_hash": self._audit_ledger[0].block_hash
         }
 
