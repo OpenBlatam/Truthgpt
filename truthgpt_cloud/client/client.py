@@ -71,15 +71,31 @@ class TruthGPTCloudClient:
             self.user = self.sub_manager.get_user(user_id)
             
         if not self.user:
-            # Fallback to default demo user or create with specified tier
-            tier_enum = CloudTier(tier.lower()) if (isinstance(tier, str) and tier) else (tier if isinstance(tier, CloudTier) else CloudTier.FREE)
-            self.user = self.sub_manager.get_user("usr_default_demo")
-            if not self.user:
-                self.user = self.sub_manager.register_user(
-                    email="developer@truthgpt.ai",
-                    name="TruthGPT Developer",
-                    tier=tier_enum
-                )
+            # Fallback to demo user matching requested tier or default demo user
+            tier_enum = (
+                CloudTier(tier.lower())
+                if (isinstance(tier, str) and tier)
+                else (tier if isinstance(tier, CloudTier) else None)
+            )
+            if tier_enum:
+                for u in self.sub_manager._users.values():
+                    if u.tier == tier_enum:
+                        self.user = u
+                        break
+                if not self.user:
+                    self.user = self.sub_manager.register_user(
+                        email=f"{tier_enum.value}_developer@truthgpt.ai",
+                        name=f"TruthGPT {tier_enum.value.capitalize()} Developer",
+                        tier=tier_enum
+                    )
+            else:
+                self.user = self.sub_manager.get_user("usr_default_demo")
+                if not self.user:
+                    self.user = self.sub_manager.register_user(
+                        email="developer@truthgpt.ai",
+                        name="TruthGPT Developer",
+                        tier=CloudTier.FREE
+                    )
 
         self.api_key = self.user.api_keys[0] if self.user.api_keys else "tgpt_cloud_live_demo"
         self.user_id = self.user.user_id

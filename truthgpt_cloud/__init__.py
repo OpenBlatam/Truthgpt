@@ -30,6 +30,14 @@ from .core import (
     ModelUnavailableError,
     PaymentError,
     PaymentRequiredError,
+    CloudFeature,
+    VerificationEngineType,
+    ProofStatus,
+    SwarmTopologyType,
+    PaymentMethodType,
+    AlertComparisonOp,
+    CloudModuleInfo,
+    CloudPlatformStatus,
 )
 
 from .security import (
@@ -226,5 +234,14 @@ __all__ = [
     "ModelUnavailableError",
     "PaymentError",
     "PaymentRequiredError",
+    # Foundational Types & Enums
+    "CloudFeature",
+    "VerificationEngineType",
+    "ProofStatus",
+    "SwarmTopologyType",
+    "PaymentMethodType",
+    "AlertComparisonOp",
+    "CloudModuleInfo",
+    "CloudPlatformStatus",
 ]
 

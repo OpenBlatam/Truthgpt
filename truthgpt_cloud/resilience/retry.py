@@ -24,6 +24,7 @@ try:
         wait_exponential,
         wait_random_exponential,
         retry_if_exception_type,
+        retry_if_not_exception_type,
         before_sleep_log,
         RetryError,
     )
@@ -89,7 +90,7 @@ def retry_with_backoff(
             def _build_retry_condition():
                 condition = retry_if_exception_type(config.retryable_exceptions)
                 if config.non_retryable_exceptions:
-                    condition = condition & (~retry_if_exception_type(config.non_retryable_exceptions))
+                    condition = condition & retry_if_not_exception_type(config.non_retryable_exceptions)
                 return condition
 
             wait_strategy = (

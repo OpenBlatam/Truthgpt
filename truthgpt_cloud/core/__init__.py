@@ -44,6 +44,17 @@ from .exceptions import (
     PaymentRequiredError,
 )
 
+from .types import (
+    CloudFeature,
+    VerificationEngineType,
+    ProofStatus,
+    SwarmTopologyType,
+    PaymentMethodType,
+    AlertComparisonOp,
+    CloudModuleInfo,
+    CloudPlatformStatus,
+)
+
 __all__ = [
     # Constants
     "CLOUD_PLATFORM_VERSION",
@@ -80,4 +91,13 @@ __all__ = [
     "ModelUnavailableError",
     "PaymentError",
     "PaymentRequiredError",
+    # Foundational Types & Enums
+    "CloudFeature",
+    "VerificationEngineType",
+    "ProofStatus",
+    "SwarmTopologyType",
+    "PaymentMethodType",
+    "AlertComparisonOp",
+    "CloudModuleInfo",
+    "CloudPlatformStatus",
 ]

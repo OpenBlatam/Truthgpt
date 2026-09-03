@@ -4,8 +4,7 @@ Provides hierarchical hash trees and inclusion proof verification for formal cer
 """
 
 import hashlib
-import json
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any
 
 
 class MerkleTree:

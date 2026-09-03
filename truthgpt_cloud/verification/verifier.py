@@ -949,7 +949,7 @@ class CloudFormalVerifier:
         elif opt_upper == "LION":
             spectral_bound = "Sign Momentum Fixed-Step Energy Dissipation"
         else:
-            spectral_bound = f"AdamW Asymptotic Convergence Bound: ||theta_t - theta*|| <= C / sqrt(t)"
+            spectral_bound = "AdamW Asymptotic Convergence Bound: ||theta_t - theta*|| <= C / sqrt(t)"
 
         invariants = [
             f"Optimizer: {optimizer_name} (LR: {learning_rate}, Beta1: {beta1}, Beta2: {beta2})",
@@ -1039,7 +1039,7 @@ class CloudFormalVerifier:
         num_rows = len(matrix)
         num_cols = len(matrix[0])
         is_square = (num_rows == num_cols)
-        
+
         is_symmetric = True
         trace_val = 0.0
         is_diagonally_dominant = True

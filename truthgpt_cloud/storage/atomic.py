@@ -8,6 +8,7 @@ import os
 import shutil
 import tempfile
 import threading
+import time
 import logging
 from typing import Dict, Any
 
@@ -46,7 +47,7 @@ class AtomicJsonStorage:
                 return {}
 
     def save(self, data: Dict[str, Any]) -> bool:
-        """Write JSON data atomically using a temporary file."""
+        """Write JSON data atomically using a temporary file with Windows file lock tolerance."""
         with self._lock:
             self._ensure_parent_dir()
             parent_dir = os.path.dirname(os.path.abspath(self.file_path))
@@ -59,8 +60,18 @@ class AtomicJsonStorage:
                 with open(temp_fd, "w", encoding="utf-8") as f:
                     json.dump(data, f, indent=2, ensure_ascii=False)
                 
-                # Atomic replace
-                shutil.move(temp_path, self.file_path)
+                # Atomic replace with retries for Windows file lock tolerance
+                replaced = False
+                for attempt in range(5):
+                    try:
+                        os.replace(temp_path, self.file_path)
+                        replaced = True
+                        break
+                    except (PermissionError, OSError):
+                        time.sleep(0.02 * (attempt + 1))
+
+                if not replaced:
+                    shutil.move(temp_path, self.file_path)
                 return True
             except Exception as e:
                 logger.error(f"Failed to atomically write storage to '{self.file_path}': {e}")
