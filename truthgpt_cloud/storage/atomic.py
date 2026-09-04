@@ -30,6 +30,15 @@ class AtomicJsonStorage:
         self._lock = threading.RLock()
         self._ensure_parent_dir()
 
+    @property
+    def filepath(self) -> str:
+        return self.file_path
+
+    @filepath.setter
+    def filepath(self, val: str) -> None:
+        self.file_path = os.path.abspath(val)
+        self._ensure_parent_dir()
+
     def _ensure_parent_dir(self) -> None:
         parent = os.path.dirname(os.path.abspath(self.file_path))
         if parent and not os.path.exists(parent):

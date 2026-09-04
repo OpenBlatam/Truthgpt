@@ -218,7 +218,9 @@ def isolate_truthgpt_cloud_storage(tmp_path_factory):
         import truthgpt_cloud.billing.subscription as sub_mod
         if hasattr(sub_mod, "subscription_manager"):
             sub_mod.subscription_manager.storage_path = str(isolated_db)
+            sub_mod.subscription_manager._storage.file_path = str(isolated_db)
             sub_mod.subscription_manager._storage.filepath = str(isolated_db)
+            sub_mod.subscription_manager._load_storage()
     except Exception:
         pass
 
@@ -228,6 +230,16 @@ def isolate_truthgpt_cloud_storage(tmp_path_factory):
         os.environ["TRUTHGPT_STORAGE_PATH"] = old_env
     else:
         os.environ.pop("TRUTHGPT_STORAGE_PATH", None)
+
+    try:
+        import truthgpt_cloud.billing.subscription as sub_mod
+        if hasattr(sub_mod, "subscription_manager"):
+            sub_mod.subscription_manager.storage_path = str(orig_db)
+            sub_mod.subscription_manager._storage.file_path = str(orig_db)
+            sub_mod.subscription_manager._storage.filepath = str(orig_db)
+            sub_mod.subscription_manager._load_storage()
+    except Exception:
+        pass
 
 
 
