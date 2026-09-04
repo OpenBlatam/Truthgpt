@@ -73,8 +73,11 @@ class TestOrjsonStorageAcceleration:
         assert backend.get("users", "usr_200") == {"name": "Bob", "tokens": 1200}
         assert backend.get("users", "usr_nonexistent") is None
 
-        # Wait for debounce flush
-        time.sleep(0.1)
+        # Wait for debounce flush (poll up to 500ms)
+        for _ in range(20):
+            if target_file.exists():
+                break
+            time.sleep(0.025)
         assert target_file.exists()
 
         # Check deletion
