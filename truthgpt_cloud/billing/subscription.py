@@ -69,7 +69,14 @@ class SubscriptionManager:
         if storage_path is None:
             storage_path = os.environ.get("TRUTHGPT_STORAGE_PATH")
             if not storage_path:
-                if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
+                main_file = sys.argv[0] if sys.argv else ""
+                is_testing = (
+                    "PYTEST_CURRENT_TEST" in os.environ
+                    or "pytest" in sys.modules
+                    or "test_" in os.path.basename(main_file).lower()
+                    or os.path.basename(main_file).lower().startswith("test")
+                )
+                if is_testing:
                     test_dir = os.path.join(tempfile.gettempdir(), "truthgpt_test_storage")
                     os.makedirs(test_dir, exist_ok=True)
                     storage_path = os.path.join(test_dir, "cloud_subscriptions_test.json")
