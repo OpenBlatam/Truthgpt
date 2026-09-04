@@ -5,13 +5,33 @@ and theorem validity with cryptographic SHA-256 signatures, Merkle trees, SMT-LI
 """
 
 import time
-import json
 import hmac
 import hashlib
 from dataclasses import dataclass, asdict, field
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple, Union
+
+try:
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+    from cryptography.hazmat.primitives.constant_time import bytes_eq
+    _HAS_CRYPTOGRAPHY = True
+except ImportError:
+    _HAS_CRYPTOGRAPHY = False
 
 _CERT_SECRET = b"truthgpt-cloud-sovereign-merkle-key-2026"
+
+
+def generate_ed25519_keypair() -> Tuple[str, str]:
+    """
+    Generate an Ed25519 sovereign keypair for asymmetric certificate signing.
+    Returns (private_key_hex, public_key_hex).
+    """
+    if not _HAS_CRYPTOGRAPHY:
+        raise RuntimeError("The 'cryptography' library is required to generate Ed25519 keypairs.")
+    priv = ed25519.Ed25519PrivateKey.generate()
+    pub = priv.public_key()
+    priv_bytes = priv.private_bytes_raw()
+    pub_bytes = pub.public_bytes_raw()
+    return priv_bytes.hex(), pub_bytes.hex()
 
 
 @dataclass
@@ -46,6 +66,8 @@ class ProofCertificate:
     coq_proof: Optional[str] = None
     isabelle_proof: Optional[str] = None
     signature_hmac: Optional[str] = None
+    asymmetric_signature: Optional[str] = None
+    public_key_hex: Optional[str] = None
 
     def __post_init__(self):
         if not self.signature_hmac:
@@ -63,6 +85,8 @@ class ProofCertificate:
         if not self.signature_hmac:
             return False
         expected_sig = self._generate_signature()
+        if _HAS_CRYPTOGRAPHY:
+            return bytes_eq(self.signature_hmac.encode("utf-8"), expected_sig.encode("utf-8"))
         return hmac.compare_digest(self.signature_hmac, expected_sig)
 
     def sign_certificate(self, custom_secret_key: Optional[bytes] = None) -> str:
@@ -79,7 +103,58 @@ class ProofCertificate:
         key = custom_secret_key or _CERT_SECRET
         payload = f"{self.certificate_id}|{self.theorem_or_claim}|{self.status}|{self.proof_tree_hash}|{self.timestamp}"
         expected_sig = hmac.new(key, payload.encode("utf-8"), hashlib.sha256).hexdigest()
+        if _HAS_CRYPTOGRAPHY:
+            return bytes_eq(self.signature_hmac.encode("utf-8"), expected_sig.encode("utf-8"))
         return hmac.compare_digest(self.signature_hmac, expected_sig)
+
+    def sign_asymmetric(self, private_key: Union[str, bytes]) -> str:
+        """
+        Sign certificate with an Ed25519 private key (hex string or raw 32-byte bytes).
+        Sets and returns self.asymmetric_signature (hex string) and stores self.public_key_hex.
+        """
+        if not _HAS_CRYPTOGRAPHY:
+            raise RuntimeError("The 'cryptography' library is required for asymmetric signing.")
+
+        if isinstance(private_key, str):
+            priv_bytes = bytes.fromhex(private_key)
+        else:
+            priv_bytes = private_key
+
+        priv_obj = ed25519.Ed25519PrivateKey.from_private_bytes(priv_bytes)
+        pub_obj = priv_obj.public_key()
+        self.public_key_hex = pub_obj.public_bytes_raw().hex()
+
+        payload = f"{self.certificate_id}|{self.theorem_or_claim}|{self.status}|{self.proof_tree_hash}|{self.timestamp}".encode("utf-8")
+        sig = priv_obj.sign(payload)
+        self.asymmetric_signature = sig.hex()
+        return self.asymmetric_signature
+
+    def verify_asymmetric_signature(self, public_key: Optional[Union[str, bytes]] = None) -> bool:
+        """
+        Verify the Ed25519 digital signature using the provided or embedded public key.
+        """
+        if not _HAS_CRYPTOGRAPHY:
+            return False
+        if not self.asymmetric_signature:
+            return False
+
+        target_pub = public_key or self.public_key_hex
+        if not target_pub:
+            return False
+
+        try:
+            if isinstance(target_pub, str):
+                pub_bytes = bytes.fromhex(target_pub)
+            else:
+                pub_bytes = target_pub
+
+            pub_obj = ed25519.Ed25519PublicKey.from_public_bytes(pub_bytes)
+            payload = f"{self.certificate_id}|{self.theorem_or_claim}|{self.status}|{self.proof_tree_hash}|{self.timestamp}".encode("utf-8")
+            sig_bytes = bytes.fromhex(self.asymmetric_signature)
+            pub_obj.verify(sig_bytes, payload)
+            return True
+        except Exception:
+            return False
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize certificate to Python dictionary."""
@@ -89,7 +164,7 @@ class ProofCertificate:
         """Generate standard SMT-LIB2 format representation of the proved formula for independent third-party solvers."""
         lines = [
             ";; ========================================================",
-            f";; TruthGPT Cloud - Formal SMT-LIB2 Proof Script",
+            ";; TruthGPT Cloud - Formal SMT-LIB2 Proof Script",
             f";; Certificate ID: {self.certificate_id}",
             f";; Solver Engine: {self.solver_engine}",
             f";; Merkle Proof Hash: {self.proof_tree_hash}",
@@ -105,8 +180,8 @@ class ProofCertificate:
         for idx, inv in enumerate(self.mathematical_invariants):
             clean_inv = inv.replace('"', "'")
             lines.append(f";; Invariant #{idx + 1}: {clean_inv}")
-            lines.append(f"(assert (>= x 0.0))")
-        
+            lines.append("(assert (>= x 0.0))")
+
         lines.append(";; Negation of theorem claim for proof by refutation")
         lines.append(f";; Claim: {self.theorem_or_claim}")
         lines.append("(check-sat)")
@@ -119,7 +194,7 @@ class ProofCertificate:
         sanitized_title = theorem_name or "".join(c if c.isalnum() else "_" for c in self.theorem_or_claim[:30]).strip("_") or "truth_theorem"
         lines = [
             "/--",
-            f" 🌌 TruthGPT Cloud - Lean 4 Interactive Theorem Export",
+            " 🌌 TruthGPT Cloud - Lean 4 Interactive Theorem Export",
             f" Certificate ID: {self.certificate_id}",
             f" Merkle Root: {self.proof_tree_hash}",
             f" Status: {self.status} (Confidence: {self.confidence_score * 100:.2f}%)",
@@ -128,7 +203,7 @@ class ProofCertificate:
             "import Mathlib.Tactic",
             "",
             f"theorem {sanitized_title} (x y : ℝ) (hx : x ≥ 0) (hy : y ≥ 0) :",
-            f"  (x + y)^2 ≥ 4 * x * y := by",
+            "  (x + y)^2 ≥ 4 * x * y := by",
             "  have h : (x - y)^2 ≥ 0 := sq_nonneg (x - y)",
             "  linarith",
         ]
@@ -171,9 +246,9 @@ class ProofCertificate:
             'begin',
             '',
             f'lemma {sanitized_title}:',
-            f'  fixes x y z :: real',
-            f'  assumes hx: "x >= 0" and hy: "y >= 0"',
-            f'  shows "True"',
+            '  fixes x y z :: real',
+            '  assumes hx: "x >= 0" and hy: "y >= 0"',
+            '  shows "True"',
             'proof -',
             '  show ?thesis by simp',
             'qed',
@@ -281,9 +356,22 @@ class ContractVerificationResult:
         return d
 
 
+def generate_lean4_theorem(certificate: ProofCertificate, theorem_name: Optional[str] = None) -> str:
+    """Helper function to synthesize Lean 4 theorem code from a ProofCertificate."""
+    return certificate.to_lean4(theorem_name=theorem_name)
+
+
+def generate_coq_theorem(certificate: ProofCertificate, theorem_name: Optional[str] = None) -> str:
+    """Helper function to synthesize Coq theorem code from a ProofCertificate."""
+    return certificate.to_coq(theorem_name=theorem_name)
+
+
 __all__ = [
     "ProofStep",
     "ProofCertificate",
     "ContractVerificationResult",
     "verify_proof_certificate",
+    "generate_ed25519_keypair",
+    "generate_lean4_theorem",
+    "generate_coq_theorem",
 ]

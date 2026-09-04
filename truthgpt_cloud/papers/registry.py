@@ -3,21 +3,9 @@
 Maintains index of arXiv frontier research papers, architectures, and formal verification methods.
 """
 
-from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 
-
-@dataclass
-class PaperItem:
-    paper_id: str
-    title: str
-    authors: List[str]
-    published: str
-    impact_factor: float
-    category: str
-    abstract: str
-    cloud_status: str
-    supported_tiers: List[str]
+from .models import PaperItem
 
 
 SOTA_PAPERS_CATALOG: List[PaperItem] = [
@@ -141,7 +129,7 @@ def export_bibtex(paper_id: str) -> str:
     p = get_paper_by_id(paper_id)
     if not p:
         return f"@misc{{{paper_id},\n  title = {{{paper_id}}},\n  note = {{TruthGPT Research Hub}}\n}}"
-    
+
     author_str = " and ".join(p.authors)
     year = p.published[:4] if len(p.published) >= 4 else "2026"
     cite_key = p.paper_id.replace("arxiv_", "truthgpt_")

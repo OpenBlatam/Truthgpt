@@ -4,7 +4,6 @@ Verifies that all command-line operations, including resilience, cache purging,
 SRE alerting, error budget calculations, and formal verification execute properly.
 """
 
-import pytest
 from typer.testing import CliRunner
 from truth_cli import app
 

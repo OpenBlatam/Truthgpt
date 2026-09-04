@@ -7,7 +7,6 @@ verification, swarm, routing, papers, and client SDK.
 import sys
 import os
 import pytest
-import asyncio
 from pathlib import Path
 
 # Ensure paths
@@ -24,12 +23,10 @@ class TestTruthGPTCloudModularRefactor:
         from truthgpt_cloud.core import (
             CLOUD_PLATFORM_VERSION,
             CloudTier,
-            TierConfig,
             get_tier_config,
             get_all_tiers,
             TruthGPTCloudError,
             QuotaExceededError,
-            TierUnauthorizedError,
         )
         assert CLOUD_PLATFORM_VERSION == "2.2.0-cloud"
         assert len(get_all_tiers()) == 4
@@ -51,8 +48,6 @@ class TestTruthGPTCloudModularRefactor:
             ApiKeyScope,
             TokenBucketRateLimiter,
             SlidingWindowRateLimiter,
-            cloud_security,
-            cloud_rate_limiter,
         )
 
         sm = CloudSecurityManager()
@@ -84,9 +79,6 @@ class TestTruthGPTCloudModularRefactor:
         """Test truthgpt_cloud.cache semantic proof caching and warmups."""
         from truthgpt_cloud.cache import (
             CloudProofCache,
-            CachedProofEntry,
-            BaseProofCache,
-            proof_cache,
         )
 
         cache = CloudProofCache(max_entries=50)
@@ -106,9 +98,6 @@ class TestTruthGPTCloudModularRefactor:
         """Test truthgpt_cloud.telemetry collector and Prometheus exporter."""
         from truthgpt_cloud.telemetry import (
             CloudTelemetryCollector,
-            AuditLogEntry,
-            format_prometheus_metrics,
-            cloud_telemetry,
         )
 
         tel = CloudTelemetryCollector()
@@ -131,7 +120,6 @@ class TestTruthGPTCloudModularRefactor:
     def test_05_storage_subpackage(self, tmp_path):
         """Test truthgpt_cloud.storage atomic JSON file storage backend."""
         from truthgpt_cloud.storage import (
-            StorageBackend,
             JsonFileStorageBackend,
         )
 
@@ -150,11 +138,8 @@ class TestTruthGPTCloudModularRefactor:
     def test_06_billing_subpackage(self):
         """Test truthgpt_cloud.billing manager, payment gateway, and webhooks."""
         from truthgpt_cloud.billing import (
-            SubscriptionManager,
             PaymentGatewayService,
             WebhookManager,
-            UserSubscription,
-            Invoice,
         )
 
         # Gateway
@@ -178,9 +163,6 @@ class TestTruthGPTCloudModularRefactor:
         """Test truthgpt_cloud.verification formal solver and certificate exports."""
         from truthgpt_cloud.verification import (
             CloudFormalVerifier,
-            ProofCertificate,
-            MerkleTree,
-            compute_merkle_root,
             verify_proof_certificate,
         )
 
@@ -228,7 +210,6 @@ class TestTruthGPTCloudModularRefactor:
         """Test truthgpt_cloud.papers and truthgpt_cloud.client."""
         from truthgpt_cloud.papers import (
             get_all_papers,
-            get_paper_by_id,
             CloudPaperCompiler,
         )
         from truthgpt_cloud.client import TruthGPTCloudClient
@@ -270,6 +251,18 @@ class TestTruthGPTCloudModularRefactor:
         assert hasattr(t_bridge, "CloudTier")
         assert hasattr(v_bridge, "CloudFormalVerifier")
 
+        # Deep parity checks for harmonized bridge exports
+        assert hasattr(sec_bridge, "LedgerBlock")
+        assert hasattr(sec_bridge, "cloud_rate_limiter")
+        assert hasattr(sec_bridge, "token_bucket_limiter")
+        assert hasattr(sec_bridge, "rate_limiter")
+        assert hasattr(b_bridge, "TOKEN_PACK_CATALOG")
+        assert hasattr(b_bridge, "SlidingWindowRateLimiter")
+        assert hasattr(b_bridge, "ConcurrencyLimitExceededError")
+        assert hasattr(tel_bridge, "AlertRule")
+        assert hasattr(v_bridge, "verify_merkle_inclusion")
+        assert hasattr(sc_bridge, "get_adversarial_team_nodes")
+
     def test_11_optimization_core_lazy_imports(self):
         """Test lazy loading of TruthGPT Cloud components directly from optimization_core."""
         import optimization_core
@@ -296,5 +289,71 @@ class TestTruthGPTCloudModularRefactor:
         assert "cloud_swarm" in attrs
         assert "CircuitBreaker" in attrs
         assert "AlertRule" in attrs
+
+    def test_12_core_types_and_exports(self):
+        """Test unified core types exported from truthgpt_cloud, .core, and lazy loader."""
+        from truthgpt_cloud import (
+            CloudFeature,
+            VerificationEngineType,
+            ProofStatus,
+            SwarmTopologyType,
+            PaymentMethodType,
+            AlertComparisonOp,
+        )
+        from truthgpt_cloud.core import (
+            CloudFeature as CoreFeature,
+            VerificationEngineType as CoreEngine,
+            ProofStatus as CoreStatus,
+            SwarmTopologyType as CoreTopology,
+        )
+        import optimization_core
+
+        assert CloudFeature.FORMAL_VERIFICATION == "formal_verification"
+        assert CoreFeature.SWARM_ORCHESTRATION == "swarm_orchestration"
+        assert VerificationEngineType.Z3_SMT == "z3_smt"
+        assert CoreEngine.LEAN4 == "lean4"
+        assert ProofStatus.PROVEN_VALID == "PROVEN_VALID"
+        assert CoreStatus.SAT == "SAT"
+        assert SwarmTopologyType.HIERARCHICAL == "hierarchical"
+        assert CoreTopology.MESH == "mesh"
+        assert PaymentMethodType.STRIPE_CARD == "stripe_card"
+        assert AlertComparisonOp.GTE == "gte"
+
+        # Lazy imports through optimization_core
+        assert optimization_core.CloudFeature is not None
+        assert optimization_core.VerificationEngineType is not None
+        assert optimization_core.ProofStatus is not None
+
+    def test_13_storage_path_env_override(self, tmp_path):
+        """Test TRUTHGPT_STORAGE_PATH environment variable override."""
+        import os
+        from truthgpt_cloud.billing.subscription import SubscriptionManager
+
+        custom_db = str(tmp_path / "custom_test_subscriptions.json")
+        old_val = os.environ.get("TRUTHGPT_STORAGE_PATH")
+        try:
+            os.environ["TRUTHGPT_STORAGE_PATH"] = custom_db
+            mgr = SubscriptionManager()
+            assert os.path.abspath(mgr.storage_path) == os.path.abspath(custom_db)
+            assert os.path.exists(custom_db)
+        finally:
+            if old_val is None:
+                os.environ.pop("TRUTHGPT_STORAGE_PATH", None)
+            else:
+                os.environ["TRUTHGPT_STORAGE_PATH"] = old_val
+
+    def test_14_client_sdk_tier_resolution(self):
+        """Test TruthGPTCloudClient resolves correct starter user when tier is specified."""
+        from truthgpt_cloud import TruthGPTCloudClient, CloudTier
+
+        pro_client = TruthGPTCloudClient(tier=CloudTier.PRO)
+        assert pro_client.tier == CloudTier.PRO
+
+        ultra_client = TruthGPTCloudClient(tier=CloudTier.ULTRA)
+        assert ultra_client.tier == CloudTier.ULTRA
+
+        free_client = TruthGPTCloudClient(tier=CloudTier.FREE)
+        assert free_client.tier == CloudTier.FREE
+
 
 

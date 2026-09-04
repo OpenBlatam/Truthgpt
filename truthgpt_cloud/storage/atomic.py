@@ -1,6 +1,7 @@
 """
 💾 TruthGPT Cloud - Atomic Persistent Storage
-Provides crash-safe JSON serialization with atomic tempfile replacement and automatic recovery.
+Provides crash-safe JSON serialization with atomic tempfile replacement,
+optional high-speed orjson acceleration, and automatic recovery.
 """
 
 import json
@@ -12,11 +13,17 @@ import time
 import logging
 from typing import Dict, Any
 
+try:
+    import orjson
+    _HAS_ORJSON = True
+except ImportError:
+    _HAS_ORJSON = False
+
 logger = logging.getLogger("TruthGPT.CloudStorage")
 
 
 class AtomicJsonStorage:
-    """Thread-safe and process-safe atomic JSON file persistence."""
+    """Thread-safe and process-safe atomic JSON file persistence with orjson acceleration."""
 
     def __init__(self, file_path: str):
         self.file_path = os.path.abspath(file_path)
@@ -34,9 +41,17 @@ class AtomicJsonStorage:
             if not os.path.exists(self.file_path):
                 return {}
             try:
-                with open(self.file_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    return data if isinstance(data, dict) else {}
+                if _HAS_ORJSON:
+                    with open(self.file_path, "rb") as f:
+                        raw = f.read()
+                        if not raw.strip():
+                            return {}
+                        data = orjson.loads(raw)
+                        return data if isinstance(data, dict) else {}
+                else:
+                    with open(self.file_path, encoding="utf-8") as f:
+                        data = json.load(f)
+                        return data if isinstance(data, dict) else {}
             except Exception as e:
                 logger.error(f"Failed to read storage file '{self.file_path}': {e}. Creating backup.")
                 backup_path = f"{self.file_path}.corrupted_{os.getpid()}"
@@ -57,9 +72,14 @@ class AtomicJsonStorage:
                 dir=parent_dir
             )
             try:
-                with open(temp_fd, "w", encoding="utf-8") as f:
-                    json.dump(data, f, indent=2, ensure_ascii=False)
-                
+                if _HAS_ORJSON:
+                    encoded = orjson.dumps(data, option=orjson.OPT_INDENT_2)
+                    with open(temp_fd, "wb") as f:
+                        f.write(encoded)
+                else:
+                    with open(temp_fd, "w", encoding="utf-8") as f:
+                        json.dump(data, f, indent=2, ensure_ascii=False)
+
                 # Atomic replace with retries for Windows file lock tolerance
                 replaced = False
                 for attempt in range(5):
@@ -83,4 +103,7 @@ class AtomicJsonStorage:
                 return False
 
 
-__all__ = ["AtomicJsonStorage"]
+__all__ = [
+    "AtomicJsonStorage",
+    "_HAS_ORJSON",
+]

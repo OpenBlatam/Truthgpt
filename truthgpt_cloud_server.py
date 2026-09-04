@@ -6,10 +6,9 @@ telemetry observability, and semantic proof caching.
 """
 
 import sys
-import os
-import time
-import json
 import asyncio
+import json
+import time
 from pathlib import Path
 
 # Ensure paths
@@ -17,11 +16,13 @@ _current = Path(__file__).resolve().parent
 if str(_current) not in sys.path:
     sys.path.insert(0, str(_current))
 
+__test__ = False
+
 import uvicorn
 from fastapi import FastAPI, HTTPException, Header, Depends, Query, Request, Response
 from fastapi.responses import StreamingResponse, JSONResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Dict, List, Optional, Any
 from dataclasses import asdict
 
@@ -35,20 +36,24 @@ from truthgpt_cloud import (
     cloud_swarm,
     cloud_telemetry,
     proof_cache,
+    token_bucket_limiter,
     get_all_papers,
-    get_paper_by_id,
     cloud_paper_compiler,
     webhook_manager,
     TruthGPTCloudClient,
-    format_prometheus_metrics
+    format_prometheus_metrics,
+    create_session_jwt,
+    verify_session_jwt,
+    get_system_metrics,
+)
+from truthgpt_cloud.telemetry.prometheus import (
+    generate_prometheus_metrics,
+    CONTENT_TYPE_LATEST,
 )
 from truthgpt_cloud.core.exceptions import (
-    TruthGPTCloudError,
     QuotaExceededError,
     TierUnauthorizedError,
     RateLimitExceededError,
-    ConcurrencyLimitExceededError,
-    AuthenticationError
 )
 
 app = FastAPI(
@@ -201,15 +206,36 @@ class ApplyPaperRequest(BaseModel):
     user_id: Optional[str] = "usr_default_demo"
 
 
+class IssueTokenRequest(BaseModel):
+    user_id: str
+    tier: Optional[str] = "pro"
+    expires_in_seconds: Optional[int] = 3600
+    scopes: Optional[List[str]] = None
+
+
 # ---------------------------------------------------------------------------
 # 🔑 Authentication Helper
 # ---------------------------------------------------------------------------
 
 async def resolve_user(
     x_api_key: Optional[str] = Header(None),
-    x_user_id: Optional[str] = Header(None)
+    x_user_id: Optional[str] = Header(None),
+    authorization: Optional[str] = Header(None),
 ) -> str:
-    """Resolve user from API key or user header, fallback to default demo."""
+    """Resolve user from JWT Bearer token, API key, or user header, fallback to default demo."""
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:].strip()
+        if token.startswith("eyJ"):
+            try:
+                payload = verify_session_jwt(token)
+                return payload.get("sub", "usr_default_demo")
+            except Exception:
+                pass
+        elif token.startswith("tgpt_"):
+            user = subscription_manager.get_user_by_api_key(token)
+            if user:
+                return user.user_id
+
     if x_api_key:
         user = subscription_manager.get_user_by_api_key(x_api_key)
         if user:
@@ -258,6 +284,50 @@ async def list_tiers():
             "truthgpt_ultra_vs_gemini_ultra": "TruthGPT Ultra features Quantum Consensus Ensemble across multiple frontier LLMs + 2M context + Zero-Queue inference."
         }
     }
+
+
+@app.post("/api/v1/auth/token")
+async def issue_token(req: IssueTokenRequest):
+    """Mint a stateless JWT session token for user authentication."""
+    try:
+        token = create_session_jwt(
+            user_id=req.user_id,
+            tier=req.tier or "pro",
+            scopes=req.scopes,
+            expires_in_seconds=req.expires_in_seconds or 3600,
+        )
+        return {
+            "success": True,
+            "token_type": "Bearer",
+            "access_token": token,
+            "expires_in": req.expires_in_seconds or 3600,
+            "user_id": req.user_id,
+            "tier": req.tier or "pro",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.get("/api/v1/swarm/graph")
+async def get_swarm_graph(
+    topology: str = Query("hierarchical", description="Swarm topology type: hierarchical, peer_to_peer, star, adversarial"),
+    max_agents: int = Query(5, ge=1, le=20, description="Number of agents in topology"),
+):
+    """Retrieve NetworkX topological graph metrics, DAG properties, and execution dependency ordering."""
+    try:
+        metrics = cloud_swarm.get_topology_metrics(topology=topology, max_agents=max_agents)
+        return {"success": True, "topology": topology, "metrics": metrics}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.get("/api/v1/telemetry/system")
+async def get_system_telemetry():
+    """Retrieve real-time hardware telemetry of host node (CPU, RAM, Disk, Process) via psutil."""
+    try:
+        return {"success": True, "system_metrics": get_system_metrics()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/api/v1/cloud/models")
@@ -343,6 +413,8 @@ async def revoke_api_key(user_id: str = Query("usr_default_demo"), api_key: str 
 
 
 @app.post("/api/v1/cloud/chat/completions")
+@app.post("/api/v1/cloud/chat")
+@app.post("/api/v1/chat")
 async def chat_completions(req: ChatCompletionRequest, auth_user: str = Depends(resolve_user)):
     """
     Tier-aware chat inference with formal Z3 verification and Proof Certificate.
@@ -664,6 +736,8 @@ async def test_trigger_webhook(req: WebhookTestTriggerRequest):
     """Emit a test webhook event."""
     evt = webhook_manager.emit_event(req.event_type, req.user_id, req.data or {"message": "Test webhook event"})
     return {"success": True, "event": asdict(evt)}
+
+test_trigger_webhook.__test__ = False
 
 
 @app.get("/api/v1/cloud/papers/hub")
@@ -1010,6 +1084,14 @@ async def get_health_endpoint():
     return cloud_telemetry.get_health_status()
 
 
+@app.get("/metrics")
+async def prometheus_metrics_endpoint():
+    """Enterprise Prometheus metrics exposition endpoint."""
+    metrics = cloud_telemetry.get_cluster_metrics()
+    raw_payload = generate_prometheus_metrics(metrics)
+    return Response(content=raw_payload, media_type=CONTENT_TYPE_LATEST)
+
+
 class MatrixVerifyRequest(BaseModel):
     matrix: List[List[float]]
     matrix_name: Optional[str] = "A"
@@ -1082,6 +1164,67 @@ async def get_paper_citation_endpoint(
     else:
         cite = export_bibtex(paper_id)
     return PlainTextResponse(cite, media_type="text/plain")
+
+
+class CodePurityVerifyRequest(BaseModel):
+    code: str
+
+
+class SynthesizeTheoremRequest(BaseModel):
+    claim: str
+    target_language: str = "lean4"  # lean4, coq, isabelle
+
+
+@app.post("/api/v1/cloud/formal/verify/code-purity")
+async def verify_code_purity_endpoint(req: CodePurityVerifyRequest):
+    """Formally verify Python code purity, mathematical AST invariants, and absence of hazardous calls."""
+    return cloud_verifier.verify_code_purity_and_invariants(code_str=req.code)
+
+
+@app.post("/api/v1/cloud/formal/synthesize-theorem")
+async def synthesize_theorem_endpoint(req: SynthesizeTheoremRequest):
+    """Synthesize formal interactive theorem prover scripts (Lean 4 / Coq / Isabelle) for a verified mathematical claim."""
+    cert = cloud_verifier.verify_expression(req.claim)
+    lang = req.target_language.lower()
+    if lang == "coq":
+        script = cert.to_coq_script()
+    elif lang == "isabelle":
+        script = cert.to_isabelle_script()
+    else:
+        script = cert.to_lean4_script()
+    return {
+        "success": True,
+        "certificate_id": cert.certificate_id,
+        "status": cert.status,
+        "target_language": lang,
+        "script": script,
+    }
+
+
+@app.get("/api/v1/cloud/cache/cluster-status")
+async def get_cluster_cache_status_endpoint():
+    """Retrieve L1 and L2 Redis distributed proof cache statistics."""
+    return {
+        "success": True,
+        "cache": proof_cache.get_stats(),
+    }
+
+
+@app.get("/api/v1/cloud/rate-limits/{user_id}")
+async def get_rate_limit_status_endpoint(user_id: str):
+    """Retrieve current rate limit status and quota balance for a user."""
+    sub = subscription_manager.get_subscription(user_id)
+    tier = sub.tier if sub is not None else CloudTier.FREE
+    tier_cfg = get_tier_config(tier)
+    tokens = token_bucket_limiter.get_user_tokens(user_id, max_capacity=float(tier_cfg.requests_per_minute))
+    return {
+        "success": True,
+        "user_id": user_id,
+        "tier": tier_cfg.tier_id.value,
+        "requests_per_minute_capacity": tier_cfg.requests_per_minute,
+        "available_tokens": round(tokens, 2),
+        "is_active": getattr(sub, "is_active", True) if sub is not None else True,
+    }
 
 
 def start_server(host: str = "0.0.0.0", port: int = 8000):

@@ -9,14 +9,13 @@ import inspect
 import logging
 import random
 import time
-from dataclasses import dataclass, field
-from typing import Callable, Tuple, Type, Optional, Any, Union
+from dataclasses import dataclass
+from typing import Callable, Tuple, Type, Optional, Any
 
 logger = logging.getLogger("TruthGPT.Retry")
 
 _HAS_TENACITY = False
 try:
-    import tenacity
     from tenacity import (
         Retrying,
         AsyncRetrying,
@@ -25,8 +24,6 @@ try:
         wait_random_exponential,
         retry_if_exception_type,
         retry_if_not_exception_type,
-        before_sleep_log,
-        RetryError,
     )
     _HAS_TENACITY = True
 except ImportError:

@@ -8,10 +8,11 @@ import asyncio
 import time
 import uuid
 import logging
-from dataclasses import dataclass, asdict, field
+from dataclasses import asdict
 from typing import Dict, List, Optional, Any, AsyncGenerator
 
-from ..core.tiers import CloudTier, TierConfig, get_tier_config
+from .models import CloudInferenceResponse, StreamChunk
+from ..core.tiers import CloudTier, get_tier_config
 from ..core.exceptions import TruthGPTCloudError
 from ..billing.subscription import subscription_manager
 from ..verification.verifier import cloud_verifier
@@ -27,41 +28,37 @@ logger = logging.getLogger("TruthGPT.CloudRouter")
 _MIN_PROMPT_LENGTH = 1
 _MAX_PROMPT_LENGTH = 500_000  # Safety cap; actual limit is tier-based
 
-
-@dataclass
-class CloudInferenceResponse:
-    response_id: str
-    content: str
-    tier_used: str
-    model_name: str
-    execution_time_ms: float
-    tokens_consumed: int
-    tokens_remaining_today: int
-    time_to_first_token_ms: float = 0.0
-    model_used: str = ""
-    proof_certificate: Optional[Dict[str, Any]] = None
-    swarm_trace: Optional[Dict[str, Any]] = None
-    verification_passed: bool = True
-    confidence_score: float = 0.99
-    priority_routing: bool = False
-
-    def __post_init__(self):
-        if not self.model_used:
-            self.model_used = self.model_name
-        if self.time_to_first_token_ms == 0.0:
-            self.time_to_first_token_ms = round(max(0.1, self.execution_time_ms * 0.15), 2)
-
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+_HAS_TIKTOKEN = False
+_TIKTOKEN_ENCODER = None
+try:
+    import tiktoken
+    _TIKTOKEN_ENCODER = tiktoken.get_encoding("cl100k_base")
+    _HAS_TIKTOKEN = True
+except Exception:
+    _HAS_TIKTOKEN = False
+    _TIKTOKEN_ENCODER = None
 
 
-@dataclass
-class StreamChunk:
-    chunk_id: str
-    delta_text: str
-    is_final: bool
-    proof_certificate: Optional[Dict[str, Any]] = None
-    tokens_consumed: int = 0
+def count_tokens(text: str, encoding_name: str = "cl100k_base") -> int:
+    """
+    Count tokens accurately using tiktoken BPE tokenizer,
+    falling back to heuristic word estimation if unavailable.
+    """
+    if not text:
+        return 0
+    if _HAS_TIKTOKEN and _TIKTOKEN_ENCODER is not None and encoding_name == "cl100k_base":
+        try:
+            return len(_TIKTOKEN_ENCODER.encode(text))
+        except Exception:
+            pass
+    elif _HAS_TIKTOKEN:
+        try:
+            enc = tiktoken.get_encoding(encoding_name)
+            return len(enc.encode(text))
+        except Exception:
+            pass
+    # Heuristic fallback: ~1.4 tokens per word
+    return max(1, int(len(text.split()) * 1.4))
 
 
 class CloudIntelligenceRouter:
@@ -95,7 +92,7 @@ class CloudIntelligenceRouter:
                 status_code=400
             )
         prompt = prompt.strip()
-        estimated_tokens = int(len(prompt.split()) * 1.4)
+        estimated_tokens = count_tokens(prompt)
         effective_limit = min(_MAX_PROMPT_LENGTH, max_tokens)
         if estimated_tokens > effective_limit:
             raise TruthGPTCloudError(
@@ -120,12 +117,12 @@ class CloudIntelligenceRouter:
         """
         start_time = time.perf_counter()
         response_id = f"resp_tgpt_{uuid.uuid4().hex[:14]}"
-        
+
         # 1. Resolve User and Tier
         user = self.sub_manager.get_user(user_id)
         if not user:
             user = self.sub_manager.get_user_by_api_key(user_id)
-        
+
         current_tier = user.tier if user else CloudTier.FREE
         tier_cfg = get_tier_config(current_tier)
         uid = user.user_id if user else user_id
@@ -145,10 +142,10 @@ class CloudIntelligenceRouter:
             raise
 
         # 4. Check Quotas
-        estimated_input_tokens = max(10, int(len(prompt.split()) * 1.4))
+        estimated_input_tokens = max(10, count_tokens(prompt))
         estimated_output_tokens = min(tier_cfg.max_output_tokens, 600)
         total_estimated = estimated_input_tokens + estimated_output_tokens
-        
+
         self.sub_manager.check_and_record_quota(
             user_id=uid,
             estimated_tokens=total_estimated,
@@ -207,7 +204,7 @@ class CloudIntelligenceRouter:
 
         # 6. Generate Response Content based on Tier Capabilities
         await asyncio.sleep(0.02 if tier_cfg.priority_gpu_routing else 0.05)
-        
+
         if current_tier == CloudTier.ULTRA:
             content = (
                 f"🌌 **[TruthGPT Ultra - Quantum Singularity Engine]**\n\n"
@@ -254,7 +251,7 @@ class CloudIntelligenceRouter:
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
         ttft_ms = round(max(0.1, elapsed_ms * 0.15), 2)
-        
+
         user_status = self.sub_manager.get_user_status_summary(uid)
         remaining = user_status["metrics"]["remaining_tokens"]
 
@@ -285,7 +282,7 @@ class CloudIntelligenceRouter:
         user_id: str = "usr_default_demo",
         model_override: Optional[str] = None,
         enable_formal_verification: Optional[bool] = None
-    ):
+    ) -> AsyncGenerator[Dict[str, Any], None]:
         """Yield streaming reasoning chunks and verification metadata."""
         full_res = await self.route_inference(
             prompt=prompt,
@@ -293,7 +290,7 @@ class CloudIntelligenceRouter:
             model_override=model_override,
             enable_formal_verification=enable_formal_verification if enable_formal_verification is not None else True
         )
-        
+
         yield {
             "type": "start",
             "model": full_res.model_name,
@@ -301,7 +298,7 @@ class CloudIntelligenceRouter:
             "response_id": full_res.response_id,
             "time_to_first_token_ms": full_res.time_to_first_token_ms
         }
-        
+
         words = full_res.content.split(" ")
         chunk_size = 3
         for i in range(0, len(words), chunk_size):
@@ -311,7 +308,7 @@ class CloudIntelligenceRouter:
                 "delta": chunk
             }
             await asyncio.sleep(0.012)
-            
+
         yield {
             "type": "completed",
             "proof_certificate": full_res.proof_certificate,
@@ -329,4 +326,6 @@ __all__ = [
     "StreamChunk",
     "CloudIntelligenceRouter",
     "cloud_router",
+    "count_tokens",
+    "_HAS_TIKTOKEN",
 ]

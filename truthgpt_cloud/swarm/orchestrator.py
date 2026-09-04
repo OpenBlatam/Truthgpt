@@ -8,95 +8,24 @@ import asyncio
 import time
 import uuid
 import logging
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict
 from typing import Dict, List, Any, Optional
 
-from .agents import SwarmAgentNode, DebateRound, get_default_swarm_nodes, get_adversarial_team_nodes
+from .models import SwarmAgentNode, DebateRound, SwarmExecutionTrace
+from .agents import get_default_swarm_nodes, get_adversarial_team_nodes
+from .graph_topology import (
+    build_swarm_topology_graph,
+    get_topological_reasoning_order,
+    detect_deadlocks_and_cycles,
+    calculate_agent_influence,
+    get_graph_metrics,
+    get_topology_metrics,
+    _HAS_NETWORKX,
+)
 from ..telemetry import cloud_telemetry
 
 
 logger = logging.getLogger("TruthGPT.CloudSwarm")
-
-
-@dataclass
-class SwarmExecutionTrace:
-    session_id: str
-    user_id: str
-    prompt: str
-    agents_involved: List[SwarmAgentNode]
-    consensus_summary: str
-    execution_time_ms: float
-    total_tokens: int
-    formal_invariants_checked: int
-    topology: str = "hierarchical"
-    debate_rounds: List[DebateRound] = field(default_factory=list)
-    cove_backtracking_count: int = 0
-    confidence_aggregate: float = 0.998
-    consensus_score: float = 0.998
-
-    def to_mermaid_graph(self) -> str:
-        """Generate a Mermaid diagram representing the multi-agent swarm debate topology."""
-        lines = [
-            "graph TD",
-            f'    Prompt["💬 Query: {self.prompt[:35]}..."]',
-            f'    Consensus["👑 Consensus Score: {self.consensus_score * 100:.1f}%"]',
-        ]
-        for idx, agt in enumerate(self.agents_involved):
-            clean_role = agt.role_name.replace('"', "'")
-            lines.append(f'    Agent_{idx}["🐝 {clean_role}<br/>Conf: {agt.confidence * 100:.1f}%"]')
-            lines.append(f"    Prompt --> Agent_{idx}")
-            lines.append(f"    Agent_{idx} --> Consensus")
-        return "\n".join(lines)
-
-    def to_reasoning_dag(self) -> Dict[str, Any]:
-        """Export the swarm execution structure as a directed acyclic reasoning graph (DAG)."""
-        nodes = [{"id": "prompt", "label": self.prompt, "type": "input"}]
-        edges = []
-        for i, a in enumerate(self.agents_involved):
-            agt_id = f"agent_{i}_{a.agent_id}"
-            nodes.append({
-                "id": agt_id,
-                "label": a.role_name,
-                "contribution": a.contribution,
-                "confidence": a.confidence,
-                "status": a.status,
-                "type": "agent_node"
-            })
-            edges.append({"source": "prompt", "target": agt_id})
-            edges.append({"source": agt_id, "target": "consensus"})
-
-        nodes.append({
-            "id": "consensus",
-            "label": self.consensus_summary,
-            "score": self.consensus_score,
-            "type": "output"
-        })
-
-        return {
-            "session_id": self.session_id,
-            "topology": self.topology,
-            "nodes_count": len(nodes),
-            "edges_count": len(edges),
-            "nodes": nodes,
-            "edges": edges,
-        }
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "session_id": self.session_id,
-            "user_id": self.user_id,
-            "prompt": self.prompt,
-            "topology": self.topology,
-            "agents_involved": [a.to_dict() if hasattr(a, "to_dict") else asdict(a) for a in self.agents_involved],
-            "consensus_summary": self.consensus_summary,
-            "execution_time_ms": self.execution_time_ms,
-            "total_tokens": self.total_tokens,
-            "formal_invariants_checked": self.formal_invariants_checked,
-            "debate_rounds": [d.to_dict() if hasattr(d, "to_dict") else asdict(d) for d in self.debate_rounds],
-            "cove_backtracking_count": self.cove_backtracking_count,
-            "confidence_aggregate": self.confidence_aggregate,
-            "consensus_score": self.consensus_score
-        }
 
 
 
@@ -123,9 +52,14 @@ class CloudSwarmOrchestrator:
         """
         start_time = time.perf_counter()
         session_id = f"swarm_sess_{uuid.uuid4().hex[:12]}"
-        
+
         # 1. Spawn specialized swarm nodes
         agents = get_default_swarm_nodes(max_agents=max_agents)
+
+        # Build formal topology graph via NetworkX
+        swarm_graph = build_swarm_topology_graph(agents, topology_type=topology)
+        graph_metrics = get_graph_metrics(swarm_graph)
+        logger.debug("Swarm topology %s metrics: %s", topology, graph_metrics)
 
         # Simulate fast parallel swarm execution / reasoning steps
         await asyncio.sleep(0.04)
@@ -137,19 +71,19 @@ class CloudSwarmOrchestrator:
             agents[0].contribution = (
                 f"Hipótesis validada para '{prompt_snippet}': Estructura de razonamiento descompuesta en {len(agents)} sub-lemas axiomáticos."
             )
-        
+
         if len(agents) > 1:
             agents[1].status = "done"
             agents[1].contribution = (
                 "Satisfacibilidad SMT garantizada (Z3 status: SAT, Invariantes preservados: 100%, Merkle Proof Tree compilado)."
             )
-        
+
         if len(agents) > 2:
             agents[2].status = "done"
             agents[2].contribution = (
                 "Estructura algorítmica optimizada con complejidad asintótica O(N log N) y reducción de latencia 2.8x."
             )
-        
+
         if len(agents) > 3:
             agents[3].status = "done"
             agents[3].contribution = (
@@ -179,13 +113,13 @@ class CloudSwarmOrchestrator:
         ]
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
-        
+
         consensus_text = (
             f"El Swarm de {len(agents)} Agentes Autónomos de TruthGPT Cloud ({topology.upper()}) ha alcanzado consenso formal total. "
             f"La solución matemática ha sido verificada formalmente con Z3 SMT, auditada contra literatura frontier y "
             f"cumple rigurosamente todas las cotas de precisión y rendimiento sin alucinaciones."
         )
-        
+
         trace = SwarmExecutionTrace(
             session_id=session_id,
             user_id=user_id,
@@ -201,7 +135,7 @@ class CloudSwarmOrchestrator:
             confidence_aggregate=0.9992,
             consensus_score=0.998
         )
-        
+
         self._active_sessions[session_id] = trace
         cloud_telemetry.record_swarm()
         return trace
@@ -324,6 +258,13 @@ class CloudSwarmOrchestrator:
         ]
 
 
+    def get_topology_metrics(self, topology: str = "hierarchical", max_agents: int = 5) -> Dict[str, Any]:
+        """Generate full NetworkX structural topology metrics and dependency ordering for a configuration."""
+        nodes = get_default_swarm_nodes(max_agents=max_agents)
+        graph = build_swarm_topology_graph(nodes, topology_type=topology)
+        return get_graph_metrics(graph)
+
+
 # Global singleton instance
 cloud_swarm = CloudSwarmOrchestrator()
 
@@ -333,5 +274,12 @@ __all__ = [
     "SwarmExecutionTrace",
     "CloudSwarmOrchestrator",
     "cloud_swarm",
+    "build_swarm_topology_graph",
+    "get_topological_reasoning_order",
+    "detect_deadlocks_and_cycles",
+    "calculate_agent_influence",
+    "get_graph_metrics",
+    "get_topology_metrics",
+    "_HAS_NETWORKX",
 ]
 

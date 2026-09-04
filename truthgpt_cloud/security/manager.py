@@ -10,30 +10,27 @@ import base64
 import hashlib
 import uuid
 import logging
-from dataclasses import dataclass, asdict
-from typing import Dict, List, Optional, Set, Tuple, Any
+from typing import Dict, List, Optional, Set, Tuple, Any, Union
 
+try:
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+    from cryptography.hazmat.primitives.constant_time import bytes_eq
+    _HAS_CRYPTOGRAPHY = True
+except ImportError:
+    _HAS_CRYPTOGRAPHY = False
 
 from .scopes import ApiKeyScope
-from .models import ApiKeyMetadata
+from .models import ApiKeyMetadata, LedgerBlock
 from .rate_limiter import TokenBucketRateLimiter
+from .jwt_auth import (
+    create_session_jwt,
+    verify_session_jwt,
+    decode_jwt_unverified,
+    _HAS_PYJWT,
+)
 from ..core.exceptions import AuthenticationError, TierUnauthorizedError
 
 logger = logging.getLogger("TruthGPT.CloudSecurity")
-
-
-@dataclass
-class LedgerBlock:
-    block_index: int
-    timestamp: float
-    event_type: str
-    user_id: str
-    details: Dict[str, Any]
-    prev_hash: str
-    block_hash: str
-
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
 
 
 class CloudSecurityManager:
@@ -110,6 +107,53 @@ class CloudSecurityManager:
             "genesis_block_hash": self._audit_ledger[0].block_hash
         }
 
+    def sign_audit_block(self, block: LedgerBlock, private_key: Union[str, bytes]) -> str:
+        """
+        Cryptographically sign an audit block using an Ed25519 sovereign private key.
+        Sets block.asymmetric_signature and block.public_key_hex.
+        """
+        if not _HAS_CRYPTOGRAPHY:
+            raise RuntimeError("The 'cryptography' library is required for asymmetric block signing.")
+
+        if isinstance(private_key, str):
+            priv_bytes = bytes.fromhex(private_key)
+        else:
+            priv_bytes = private_key
+
+        priv_obj = ed25519.Ed25519PrivateKey.from_private_bytes(priv_bytes)
+        pub_obj = priv_obj.public_key()
+        block.public_key_hex = pub_obj.public_bytes_raw().hex()
+
+        payload = f"{block.block_index}:{block.timestamp}:{block.event_type}:{block.user_id}:{block.prev_hash}:{block.block_hash}".encode("utf-8")
+        sig = priv_obj.sign(payload)
+        block.asymmetric_signature = sig.hex()
+        return block.asymmetric_signature
+
+    def verify_audit_block(self, block: LedgerBlock, public_key: Optional[Union[str, bytes]] = None) -> bool:
+        """
+        Verify the Ed25519 asymmetric signature of an audit block.
+        """
+        if not _HAS_CRYPTOGRAPHY or not block.asymmetric_signature:
+            return False
+
+        target_pub = public_key or block.public_key_hex
+        if not target_pub:
+            return False
+
+        try:
+            if isinstance(target_pub, str):
+                pub_bytes = bytes.fromhex(target_pub)
+            else:
+                pub_bytes = target_pub
+
+            pub_obj = ed25519.Ed25519PublicKey.from_public_bytes(pub_bytes)
+            payload = f"{block.block_index}:{block.timestamp}:{block.event_type}:{block.user_id}:{block.prev_hash}:{block.block_hash}".encode("utf-8")
+            sig_bytes = bytes.fromhex(block.asymmetric_signature)
+            pub_obj.verify(sig_bytes, payload)
+            return True
+        except Exception:
+            return False
+
     def get_audit_ledger(self, limit: int = 50) -> List[Dict[str, Any]]:
         """Retrieve recent ledger blocks."""
         return [b.to_dict() for b in self._audit_ledger[-limit:]]
@@ -149,7 +193,7 @@ class CloudSecurityManager:
         raw_key = f"tgpt_cloud_live_{uuid.uuid4().hex}"
         key_hash = self.hash_key(raw_key)
         prefix = raw_key[:16] + "..."
-        
+
         meta = ApiKeyMetadata(
             key_id=f"key_{uuid.uuid4().hex[:10]}",
             key_hash=key_hash,
@@ -173,10 +217,10 @@ class CloudSecurityManager:
         """
         key_hash = self.hash_key(raw_key)
         meta = self._key_registry.get(key_hash)
-        
+
         if not meta or not meta.is_active:
             raise AuthenticationError("Clave de API no válida o revocada.")
-            
+
         if meta.expires_at and time.time() > meta.expires_at:
             meta.is_active = False
             raise AuthenticationError("La clave de API ha expirado.")
@@ -220,14 +264,18 @@ class CloudSecurityManager:
             token_body = token[len("sess_tgpt."):]
         else:
             return {"is_valid": False, "reason": "Invalid token prefix"}
-        
+
         parts = token_body.split(".")
         if len(parts) != 2:
             return {"is_valid": False, "reason": "Malformed token structure"}
 
         b64_payload, signature = parts
         expected_sig = hmac.new(b"truthgpt_session_secret_2026", b64_payload.encode(), hashlib.sha256).hexdigest()[:32]
-        if not hmac.compare_digest(signature, expected_sig):
+        if _HAS_CRYPTOGRAPHY:
+            is_valid_sig = bytes_eq(signature.encode("utf-8"), expected_sig.encode("utf-8"))
+        else:
+            is_valid_sig = hmac.compare_digest(signature, expected_sig)
+        if not is_valid_sig:
             return {"is_valid": False, "reason": "Invalid token signature"}
 
         try:
@@ -282,6 +330,42 @@ class CloudSecurityManager:
             return True
         return False
 
+    def create_session_jwt(
+        self,
+        user_id: str,
+        tier: str = "pro",
+        scopes: Optional[List[str]] = None,
+        expires_in_seconds: int = 3600,
+        custom_claims: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """
+        Mint a stateless JWT session token for user authentication.
+        Records an audit block in the sovereign ledger.
+        """
+        token = create_session_jwt(
+            user_id=user_id,
+            tier=tier,
+            scopes=scopes,
+            expires_in_seconds=expires_in_seconds,
+            custom_claims=custom_claims,
+        )
+        self.append_audit_block(
+            "JWT_TOKEN_ISSUED",
+            user_id,
+            {"tier": tier, "expires_in_seconds": expires_in_seconds},
+        )
+        return token
+
+    def verify_session_jwt(
+        self,
+        token: str,
+        verify_exp: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Validate and decode a stateless JWT session token.
+        Returns the claims dictionary if valid.
+        """
+        return verify_session_jwt(token, verify_exp=verify_exp)
 
 
 # Global Security Instance
@@ -294,5 +378,9 @@ __all__ = [
     "TokenBucketRateLimiter",
     "CloudSecurityManager",
     "cloud_security",
+    "create_session_jwt",
+    "verify_session_jwt",
+    "decode_jwt_unverified",
+    "_HAS_PYJWT",
 ]
 

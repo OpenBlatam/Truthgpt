@@ -3,8 +3,16 @@
 Exports rate limiting, API key management, and cryptographic access control.
 """
 
-from .models import ApiKeyScope, ApiKeyMetadata
-from .manager import CloudSecurityManager, cloud_security, LedgerBlock
+from .models import ApiKeyScope, ApiKeyMetadata, LedgerBlock
+from .manager import (
+    CloudSecurityManager,
+    cloud_security,
+    _HAS_CRYPTOGRAPHY,
+    create_session_jwt,
+    verify_session_jwt,
+    decode_jwt_unverified,
+    _HAS_PYJWT,
+)
 from .rate_limiter import (
     TokenBucketRateLimiter,
     SlidingWindowRateLimiter,
@@ -15,6 +23,7 @@ from .rate_limiter import (
     cloud_rate_limiter,
     token_bucket_limiter,
 )
+from ..core.exceptions import AuthenticationError
 
 __all__ = [
     "ApiKeyScope",
@@ -30,5 +39,11 @@ __all__ = [
     "cloud_rate_limiter",
     "token_bucket_limiter",
     "rate_limiter",
+    "_HAS_CRYPTOGRAPHY",
+    "create_session_jwt",
+    "verify_session_jwt",
+    "decode_jwt_unverified",
+    "_HAS_PYJWT",
+    "AuthenticationError",
 ]
 

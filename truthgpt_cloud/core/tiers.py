@@ -6,7 +6,7 @@ and compute allocations analogous to frontier AI tiers (Gemini / Claude / ChatGP
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, List, Any, Union
 
 
 class CloudTier(str, Enum):
@@ -24,27 +24,27 @@ class TierConfig:
     price_monthly_usd: float
     price_yearly_usd: float
     badge: str
-    
+
     # Context and Compute Limits
     context_window_tokens: int
     max_output_tokens: int
     daily_token_limit: int
     requests_per_minute: int
     concurrent_requests: int
-    
+
     # Intelligence & Models
     available_models: List[str]
     default_model: str
     ensemble_enabled: bool
     swarm_multi_agent: bool
     max_swarm_agents: int
-    
+
     # Formal Verification & Mathematical Rigor
     smt_z3_verification_depth: int  # 0: None, 1: Basic SymPy, 2: Full Z3 SMT, 3: Quantum/Singularity Hybrid
     hoare_dbc_contracts: bool
     proof_certificate_generation: bool
     auto_backtracking_cove: bool
-    
+
     # Performance & Cloud Infrastructure
     latency_tier: str  # "standard", "priority_tensorrt", "zero_queue_dedicated"
     priority_gpu_routing: bool
@@ -52,6 +52,22 @@ class TierConfig:
     private_lora_hosting: bool
     dedicated_api_keys: int
     features_list: List[str] = field(default_factory=list)
+
+    @property
+    def tokens_per_minute(self) -> int:
+        """Estimated tokens per minute based on daily token limit."""
+        return max(10_000, self.daily_token_limit // (24 * 60))
+
+    @property
+    def features(self) -> Dict[str, Any]:
+        """Feature flags dictionary for easy tier comparison and telemetry."""
+        return {
+            "formal_verification": self.smt_z3_verification_depth >= 2,
+            "multi_agent_swarm": self.swarm_multi_agent,
+            "paper_compiler": self.tier_id in (CloudTier.ULTRA, CloudTier.ENTERPRISE),
+            "cryptographic_audit": self.tier_id in (CloudTier.PRO, CloudTier.ULTRA, CloudTier.ENTERPRISE),
+            "features_list": self.features_list,
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -94,7 +110,7 @@ TIER_CONFIGURATIONS: Dict[CloudTier, TierConfig] = {
             "Soporte estándar de la comunidad"
         ]
     ),
-    
+
     CloudTier.PRO: TierConfig(
         tier_id=CloudTier.PRO,
         name="TruthGPT Pro (Truth-Seeker)",
@@ -138,7 +154,7 @@ TIER_CONFIGURATIONS: Dict[CloudTier, TierConfig] = {
             "5 claves de API dedicadas"
         ]
     ),
-    
+
     CloudTier.ULTRA: TierConfig(
         tier_id=CloudTier.ULTRA,
         name="TruthGPT Ultra (Singularity)",
@@ -183,7 +199,7 @@ TIER_CONFIGURATIONS: Dict[CloudTier, TierConfig] = {
             "20 claves de API y webhook real-time streaming"
         ]
     ),
-    
+
     CloudTier.ENTERPRISE: TierConfig(
         tier_id=CloudTier.ENTERPRISE,
         name="TruthGPT Enterprise (Sovereign)",
@@ -240,7 +256,7 @@ def get_tier_config(tier: Union[str, CloudTier, Any]) -> TierConfig:
 def get_all_tiers() -> List[Dict[str, Any]]:
     """Return serialized tier definitions for API and UI rendering."""
     tiers_data = []
-    for tier_enum, cfg in TIER_CONFIGURATIONS.items():
+    for cfg in TIER_CONFIGURATIONS.values():
         tiers_data.append({
             "tier_id": cfg.tier_id.value,
             "name": cfg.name,

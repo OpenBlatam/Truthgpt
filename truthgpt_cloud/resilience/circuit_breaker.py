@@ -8,7 +8,7 @@ import time
 import threading
 import logging
 from enum import Enum
-from typing import Optional, Callable, Any
+from typing import Callable, Any
 from dataclasses import dataclass
 
 logger = logging.getLogger("TruthGPT.CircuitBreaker")

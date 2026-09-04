@@ -27,24 +27,83 @@ from truthgpt_cloud import (
     subscription_manager
 )
 
+_HAS_RICH = False
+try:
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
+    _HAS_RICH = True
+    _console = Console()
+except ImportError:
+    _HAS_RICH = False
+    _console = None
+
 
 def print_banner():
-    print("=" * 80)
-    print(" 🌌 TruthGPT Cloud CLI v2.2 - Frontier AI & Mathematical Formal Verification")
-    print("    Z3 SMT Solvers • Merkle Proof Trees • Multi-Agent Swarms • SSE Streaming")
-    print("=" * 80)
+    if _HAS_RICH and _console:
+        banner_text = Text()
+        banner_text.append("🌌 TruthGPT Cloud CLI v2.2 - Frontier AI & Mathematical Formal Verification\n", style="bold cyan")
+        banner_text.append("   Z3 SMT Solvers • Merkle Proof Trees • Multi-Agent Swarms • SSE Streaming", style="dim white")
+        _console.print(Panel(banner_text, border_style="bright_blue", expand=False))
+    else:
+        print("=" * 80)
+        print(" 🌌 TruthGPT Cloud CLI v2.2 - Frontier AI & Mathematical Formal Verification")
+        print("    Z3 SMT Solvers • Merkle Proof Trees • Multi-Agent Swarms • SSE Streaming")
+        print("=" * 80)
+
+
+def print_user_status(status: dict):
+    if _HAS_RICH and _console:
+        table = Table(title="💎 Sesión de Usuario & Cuotas TruthGPT Cloud", border_style="cyan")
+        table.add_column("Atributo", style="bold magenta")
+        table.add_column("Valor", style="green")
+        table.add_row("Usuario Activo", f"{status['name']} ({status['email']})")
+        table.add_row("Nivel Actual", f"{status['tier_name']} [{status['tier_badge']}]")
+        table.add_row("Cuota Hoy", f"{status['metrics']['tokens_consumed_today']:,} / {status['metrics']['daily_token_limit']:,} tokens ({status['metrics']['percent_quota_used']}%)")
+        table.add_row("Verificación SMT", f"Nivel {status['features']['smt_verification_depth']} | Latencia: {status['features']['latency_tier']}")
+        _console.print(table)
+    else:
+        print(f"\n👤 Usuario Activo: {status['name']} ({status['email']})")
+        print(f"💎 Nivel Actual: {status['tier_name']} [{status['tier_badge']}]")
+        print(f"📊 Cuota Hoy: {status['metrics']['tokens_consumed_today']:,} / {status['metrics']['daily_token_limit']:,} tokens ({status['metrics']['percent_quota_used']}%)")
+        print(f"⚡ Nivel Verificación SMT: Nivel {status['features']['smt_verification_depth']} | Latencia: {status['features']['latency_tier']}")
+        print("-" * 80)
+
+
+def print_subscription_matrix(tiers: list):
+    if _HAS_RICH and _console:
+        table = Table(title="💎 Matriz de Suscripciones TruthGPT Cloud", border_style="gold1")
+        table.add_column("Nivel", style="bold cyan")
+        table.add_column("Precio", style="bold green")
+        table.add_column("Límite Diario", style="yellow")
+        table.add_column("RPM", style="magenta")
+        table.add_column("Swarm", style="blue")
+        table.add_column("Verificación SMT", style="white")
+        for t in tiers:
+            table.add_row(
+                f"{t['name']} ({t['badge']})",
+                f"${t['price_monthly_usd']}/m",
+                f"{t['daily_token_limit']:,}",
+                str(t['requests_per_minute']),
+                f"{t['max_swarm_agents']} agentes",
+                t['smt_verification_level'],
+            )
+        _console.print(table)
+    else:
+        print("\n💎 MATRIZ DE SUSCRIPCIÓN TRUTHGPT CLOUD:")
+        for t in tiers:
+            print(f"\n• {t['name']} ({t['badge']})")
+            print(f"  Precio: ${t['price_monthly_usd']}/mes (${t['price_yearly_usd']}/año)")
+            print(f"  Límites: {t['daily_token_limit']:,} tokens/día | {t['requests_per_minute']} RPM | Swarm: {t['max_swarm_agents']} agentes")
+            print(f"  Verificación: {t['smt_verification_level']} | Latencia: {t['latency_tier']}")
 
 
 async def main_cli():
     print_banner()
     client = TruthGPTCloudClient()
     status = client.get_subscription_status()
-    
-    print(f"\n👤 Usuario Activo: {status['name']} ({status['email']})")
-    print(f"💎 Nivel Actual: {status['tier_name']} [{status['tier_badge']}]")
-    print(f"📊 Cuota Hoy: {status['metrics']['tokens_consumed_today']:,} / {status['metrics']['daily_token_limit']:,} tokens ({status['metrics']['percent_quota_used']}%)")
-    print(f"⚡ Nivel Verificación SMT: Nivel {status['features']['smt_verification_depth']} | Latencia: {status['features']['latency_tier']}")
-    print("-" * 80)
+    print_user_status(status)
 
     while True:
         print("\nOpciones de TruthGPT Cloud:")
@@ -174,12 +233,7 @@ async def main_cli():
             
         elif choice == "7":
             tiers = get_all_tiers()
-            print("\n💎 MATRIZ DE SUSCRIPCIÓN TRUTHGPT CLOUD:")
-            for t in tiers:
-                print(f"\n• {t['name']} ({t['badge']})")
-                print(f"  Precio: ${t['price_monthly_usd']}/mes (${t['price_yearly_usd']}/año)")
-                print(f"  Límites: {t['daily_token_limit']:,} tokens/día | {t['requests_per_minute']} RPM | Swarm: {t['max_swarm_agents']} agentes")
-                print(f"  Verificación: {t['smt_verification_level']} | Latencia: {t['latency_tier']}")
+            print_subscription_matrix(tiers)
                 
         elif choice == "8":
             print("\nNiveles disponibles: pro, ultra, enterprise")

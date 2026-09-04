@@ -5,48 +5,20 @@ Aggregates inference latencies (p50/p95/p99), proof solve rates, token economics
 
 import time
 import threading
-from typing import Dict, List, Any, Optional, Callable, Tuple
-from dataclasses import dataclass, field, asdict
+from typing import Dict, List, Any, Optional, Callable
 
 from ..core.constants import DEFAULT_TELEMETRY_MAX_HISTORY
-from .prometheus import format_prometheus_metrics
-
-
-@dataclass
-class AuditLogEntry:
-    timestamp: float
-    event_type: str  # "signup", "upgrade", "key_generated", "quota_warning", "verification", etc.
-    user_id: str
-    details: Dict[str, Any]
-
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-
-
-@dataclass
-class AlertRule:
-    """Configurable alert rule evaluated on metric recording."""
-    name: str
-    metric_key: str  # e.g. "p99_latency_ms", "soundness_percent", "error_rate"
-    threshold: float
-    comparison: str = "gte"  # "gte", "lte", "gt", "lt"
-    callback: Optional[Callable[[str, float, float], None]] = None
-    is_active: bool = True
-    triggered_count: int = 0
-    last_triggered_at: float = 0.0
-    cooldown_seconds: float = 60.0  # Don't re-fire within this window
-
-    def evaluate(self, current_value: float) -> bool:
-        """Check if current value violates the threshold."""
-        if self.comparison == "gte":
-            return current_value >= self.threshold
-        elif self.comparison == "lte":
-            return current_value <= self.threshold
-        elif self.comparison == "gt":
-            return current_value > self.threshold
-        elif self.comparison == "lt":
-            return current_value < self.threshold
-        return False
+from .prometheus import (
+    format_prometheus_metrics,
+    update_prometheus_metrics,
+    PROM_INFERENCES_TOTAL,
+    PROM_VERIFICATIONS_TOTAL,
+    PROM_SWARMS_TOTAL,
+    PROM_LATENCY_SECONDS,
+)
+from .models import AuditLogEntry, AlertRule
+from .structured_logging import get_cloud_logger
+from .system_metrics import get_system_metrics
 
 
 class CloudTelemetryCollector:
@@ -58,6 +30,7 @@ class CloudTelemetryCollector:
     def __init__(self, max_history: int = DEFAULT_TELEMETRY_MAX_HISTORY):
         self._lock = threading.RLock()
         self.max_history = max_history
+        self._slog = get_cloud_logger("TruthGPT.Telemetry")
         self._latencies_ms: List[float] = []
         self._smt_latencies_ms: List[float] = []
         self._total_inferences: int = 0
@@ -82,6 +55,20 @@ class CloudTelemetryCollector:
             self._latencies_ms.append(latency_ms)
             if len(self._latencies_ms) > self.max_history:
                 self._latencies_ms.pop(0)
+            if PROM_INFERENCES_TOTAL is not None:
+                try:
+                    PROM_INFERENCES_TOTAL.inc()
+                except Exception:
+                    pass
+            if PROM_LATENCY_SECONDS is not None:
+                try:
+                    PROM_LATENCY_SECONDS.observe(latency_ms / 1000.0)
+                except Exception:
+                    pass
+            try:
+                self._slog.info("inference_completed", latency_ms=latency_ms, tokens=tokens, tier=tier)
+            except Exception:
+                pass
             self._evaluate_alerts()
 
     def record_verification(self, latency_ms: float, status: str = "PROVEN_VALID") -> None:
@@ -91,11 +78,29 @@ class CloudTelemetryCollector:
             if len(self._smt_latencies_ms) > self.max_history:
                 self._smt_latencies_ms.pop(0)
             self._proof_statuses[status] = self._proof_statuses.get(status, 0) + 1
+            if PROM_VERIFICATIONS_TOTAL is not None:
+                try:
+                    PROM_VERIFICATIONS_TOTAL.labels(status=status).inc()
+                except Exception:
+                    pass
+            try:
+                self._slog.info("verification_completed", latency_ms=latency_ms, status=status)
+            except Exception:
+                pass
             self._evaluate_alerts()
 
     def record_swarm(self) -> None:
         with self._lock:
             self._total_swarms += 1
+            if PROM_SWARMS_TOTAL is not None:
+                try:
+                    PROM_SWARMS_TOTAL.inc()
+                except Exception:
+                    pass
+            try:
+                self._slog.info("swarm_orchestrated", total_swarms=self._total_swarms)
+            except Exception:
+                pass
 
     def record_audit_event(self, event_type: str, user_id: str, details: Dict[str, Any]) -> None:
         with self._lock:
@@ -108,6 +113,10 @@ class CloudTelemetryCollector:
             self._audit_logs.append(entry)
             if len(self._audit_logs) > self.max_history:
                 self._audit_logs.pop(0)
+            try:
+                self._slog.info("audit_event_logged", event_type=event_type, user_id=user_id)
+            except Exception:
+                pass
 
     def _calc_percentiles(self, data: List[float]) -> Dict[str, float]:
         if not data:
@@ -139,7 +148,7 @@ class CloudTelemetryCollector:
                 else 100.0
             )
 
-            return {
+            result = {
                 "uptime_seconds": uptime,
                 "total_inferences": self._total_inferences,
                 "total_verifications": self._total_verifications,
@@ -149,7 +158,17 @@ class CloudTelemetryCollector:
                 "inference_latency_ms": self._calc_percentiles(self._latencies_ms),
                 "smt_solver_latency_ms": self._calc_percentiles(self._smt_latencies_ms),
                 "active_audits_count": len(self._audit_logs),
+                "system_metrics": get_system_metrics(),
             }
+            try:
+                update_prometheus_metrics(result)
+            except Exception:
+                pass
+            return result
+
+    def get_metrics(self) -> Dict[str, Any]:
+        """Alias for get_cluster_metrics for standard telemetry interfaces."""
+        return self.get_cluster_metrics()
 
     def get_audit_logs(self, limit: int = 50) -> List[Dict[str, Any]]:
         with self._lock:
@@ -161,20 +180,9 @@ class CloudTelemetryCollector:
 
     def get_health_status(self) -> Dict[str, Any]:
         """Check the operational health and readiness of all cloud components."""
-        has_z3 = False
-        try:
-            import z3
-            has_z3 = True
-        except ImportError:
-            pass
-
-        has_sympy = False
-        try:
-            import sympy
-            has_sympy = True
-        except ImportError:
-            pass
-
+        import importlib.util
+        has_z3 = importlib.util.find_spec("z3") is not None
+        has_sympy = importlib.util.find_spec("sympy") is not None
         metrics = self.get_cluster_metrics()
         is_healthy = metrics["formal_soundness_percent"] >= 90.0
 
@@ -224,7 +232,7 @@ class CloudTelemetryCollector:
             uptime_pct = ((total_ops - failed_ops) / max(1, total_ops)) * 100.0 if total_ops > 0 else 100.0
             sla_target = 99.9
             error_budget_pct = max(0.0, 100.0 - uptime_pct)
-            
+
             return {
                 "sla_target_percent": sla_target,
                 "current_uptime_percent": round(uptime_pct, 4),
@@ -462,6 +470,7 @@ cloud_telemetry = CloudTelemetryCollector()
 
 __all__ = [
     "AuditLogEntry",
+    "AlertRule",
     "CloudTelemetryCollector",
     "cloud_telemetry",
 ]

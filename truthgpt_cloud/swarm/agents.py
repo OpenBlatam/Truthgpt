@@ -3,52 +3,9 @@
 Defines specialized autonomous research agent definitions for distributed reasoning.
 """
 
-from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
+from typing import List
 
-
-@dataclass
-class SwarmAgentNode:
-    agent_id: str
-    role_name: str
-    specialization: str
-    status: str = "idle"  # "idle", "reasoning", "adversarial_audit", "verifying", "done"
-    contribution: Optional[str] = None
-    reasoning_steps: List[str] = field(default_factory=list)
-    confidence: float = 0.98
-    phase: int = 1
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "agent_id": self.agent_id,
-            "role_name": self.role_name,
-            "specialization": self.specialization,
-            "status": self.status,
-            "contribution": self.contribution,
-            "reasoning_steps": self.reasoning_steps,
-            "confidence": self.confidence,
-            "phase": self.phase
-        }
-
-
-@dataclass
-class DebateRound:
-    round_number: int
-    topic: str
-    proponent_claim: str
-    adversary_critique: str
-    resolution: str
-    cove_backtracking_triggered: bool = False
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "round_number": self.round_number,
-            "topic": self.topic,
-            "proponent_claim": self.proponent_claim,
-            "adversary_critique": self.adversary_critique,
-            "resolution": self.resolution,
-            "cove_backtracking_triggered": self.cove_backtracking_triggered
-        }
+from .models import SwarmAgentNode, DebateRound
 
 
 def get_default_swarm_nodes(max_agents: int = 5) -> List[SwarmAgentNode]:
@@ -94,7 +51,7 @@ def get_default_swarm_nodes(max_agents: int = 5) -> List[SwarmAgentNode]:
             phase=1
         )
     ]
-    
+
     if max_agents >= 4:
         nodes.append(
             SwarmAgentNode(

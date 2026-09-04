@@ -5,7 +5,7 @@ Compiles mathematical formulations and kernel optimizations from arXiv papers in
 
 import time
 import hashlib
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from .registry import get_paper_by_id
 from ..core.exceptions import TierUnauthorizedError
@@ -134,4 +134,9 @@ class CloudPaperCompiler:
 
 # Global singleton instance
 cloud_paper_compiler = CloudPaperCompiler()
+
+__all__ = [
+    "CloudPaperCompiler",
+    "cloud_paper_compiler",
+]
 

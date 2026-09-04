@@ -11,6 +11,13 @@ import tempfile
 import threading
 import logging
 from typing import Dict, Any, Optional
+
+try:
+    import orjson
+    _HAS_ORJSON = True
+except ImportError:
+    _HAS_ORJSON = False
+
 from .base import StorageBackend
 
 logger = logging.getLogger("TruthGPT.Storage.Json")
@@ -36,22 +43,41 @@ class JsonFileStorageBackend(StorageBackend):
         with self._lock:
             if os.path.exists(self.file_path):
                 try:
-                    with open(self.file_path, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                        if isinstance(data, dict):
-                            self._memory_cache = data
-                        return
+                    if _HAS_ORJSON:
+                        with open(self.file_path, "rb") as f:
+                            raw = f.read()
+                            if raw.strip():
+                                data = orjson.loads(raw)
+                                if isinstance(data, dict):
+                                    self._memory_cache = data
+                                    return
+                    else:
+                        with open(self.file_path, encoding="utf-8") as f:
+                            data = json.load(f)
+                            if isinstance(data, dict):
+                                self._memory_cache = data
+                                return
                 except Exception as e:
                     logger.warning(f"Error loading main storage file {self.file_path}: {e}. Checking backup...")
                     backup_path = f"{self.file_path}.bak"
                     if os.path.exists(backup_path):
                         try:
-                            with open(backup_path, "r", encoding="utf-8") as bf:
-                                data = json.load(bf)
-                                if isinstance(data, dict):
-                                    self._memory_cache = data
-                                logger.info("Recovered storage state from backup file.")
-                                return
+                            if _HAS_ORJSON:
+                                with open(backup_path, "rb") as bf:
+                                    raw = bf.read()
+                                    if raw.strip():
+                                        data = orjson.loads(raw)
+                                        if isinstance(data, dict):
+                                            self._memory_cache = data
+                                            logger.info("Recovered storage state from backup file.")
+                                            return
+                            else:
+                                with open(backup_path, encoding="utf-8") as bf:
+                                    data = json.load(bf)
+                                    if isinstance(data, dict):
+                                        self._memory_cache = data
+                                        logger.info("Recovered storage state from backup file.")
+                                        return
                         except Exception as be:
                             logger.error(f"Failed to recover from backup file: {be}")
             self._memory_cache = {}
@@ -86,8 +112,13 @@ class JsonFileStorageBackend(StorageBackend):
         backup_path = f"{self.file_path}.bak"
 
         try:
-            with open(temp_fd, "w", encoding="utf-8") as f:
-                json.dump(self._memory_cache, f, indent=2, ensure_ascii=False)
+            if _HAS_ORJSON:
+                encoded = orjson.dumps(self._memory_cache, option=orjson.OPT_INDENT_2)
+                with open(temp_fd, "wb") as f:
+                    f.write(encoded)
+            else:
+                with open(temp_fd, "w", encoding="utf-8") as f:
+                    json.dump(self._memory_cache, f, indent=2, ensure_ascii=False)
 
             # Update backup if main file exists
             if os.path.exists(self.file_path):

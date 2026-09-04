@@ -2,8 +2,8 @@
 SOTA paper registry and compilation package for TruthGPT Cloud.
 """
 
+from .models import PaperItem
 from .registry import (
-    PaperItem,
     SOTA_PAPERS_CATALOG,
     get_all_papers,
     get_paper_by_id,

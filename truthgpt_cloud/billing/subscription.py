@@ -7,11 +7,11 @@ import os
 import time
 import uuid
 import logging
-from dataclasses import dataclass, asdict, field
+from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Union
 
-from ..core.tiers import CloudTier, TierConfig, get_tier_config
+from ..core.tiers import CloudTier, get_tier_config
 from ..core.exceptions import (
     QuotaExceededError,
     TierUnauthorizedError,
@@ -64,14 +64,33 @@ class SubscriptionManager:
 
     def __init__(self, storage_path: Optional[str] = None):
         if storage_path is None:
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-            parent_dir = os.path.dirname(base_dir)
-            storage_path = os.path.join(parent_dir, "cloud_subscriptions_db.json")
+            storage_path = os.environ.get("TRUTHGPT_STORAGE_PATH")
+            if not storage_path:
+                if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
+                    import tempfile
+                    test_dir = os.path.join(tempfile.gettempdir(), "truthgpt_test_storage")
+                    os.makedirs(test_dir, exist_ok=True)
+                    storage_path = os.path.join(test_dir, "cloud_subscriptions_test.json")
+                    base_dir = os.path.dirname(os.path.abspath(__file__))
+                    parent_dir = os.path.dirname(base_dir)
+                    orig = os.path.join(parent_dir, "cloud_subscriptions_db.json")
+                    if os.path.exists(orig) and not os.path.exists(storage_path):
+                        import shutil
+                        shutil.copy2(orig, storage_path)
+                else:
+                    base_dir = os.path.dirname(os.path.abspath(__file__))
+                    parent_dir = os.path.dirname(base_dir)
+                    storage_path = os.path.join(parent_dir, "cloud_subscriptions_db.json")
         self.storage_path = storage_path
         self._storage = AtomicJsonStorage(storage_path)
         self._users: Dict[str, UserSubscription] = {}
         self._api_key_to_user: Dict[str, str] = {}
         self._load_storage()
+
+    @property
+    def storage(self) -> AtomicJsonStorage:
+        """Expose underlying atomic JSON storage backend."""
+        return self._storage
 
     def _load_storage(self) -> None:
         """Load persistent subscription records and initialize demo users if needed."""
@@ -82,12 +101,12 @@ class SubscriptionManager:
                 usage = UsageRecord(**usage_dict) if usage_dict else UsageRecord()
                 invoices = [Invoice(**inv) for inv in udata.get("invoices", [])]
                 tier_val = CloudTier(udata.get("tier", "free"))
-                
+
                 # Load api keys detail if present
                 api_details = [
                     ApiKeyInfo(**d) for d in udata.get("api_key_details", udata.get("api_keys_detail", []))
                 ]
-                
+
                 user = UserSubscription(
                     user_id=udata["user_id"],
                     email=udata.get("email", ""),
@@ -138,6 +157,7 @@ class SubscriptionManager:
             ("usr_default_demo", "demo@truthgpt.ai", "TruthGPT Explorer", CloudTier.FREE),
             ("usr_pro_sample", "researcher@frontier.ai", "Dr. Alexander Truth", CloudTier.PRO),
             ("usr_ultra_enterprise", "singularity@quantum.io", "Enterprise Sovereign", CloudTier.ULTRA),
+            ("usr_enterprise_sample", "enterprise@truthgpt.ai", "TruthGPT Enterprise Corp", CloudTier.ENTERPRISE),
         ]
         modified = False
         for uid, email, name, tier in demo_accounts:
@@ -172,7 +192,7 @@ class SubscriptionManager:
 
         user_id = f"usr_{uuid.uuid4().hex[:10]}"
         api_key = f"tgpt_cloud_live_{uuid.uuid4().hex[:20]}"
-        
+
         user = UserSubscription(
             user_id=user_id,
             email=email,
@@ -184,7 +204,7 @@ class SubscriptionManager:
         self._users[user_id] = user
         self._api_key_to_user[api_key] = user_id
         self._save_storage()
-        
+
         try:
             from ..security import cloud_security
             cloud_security.register_existing_key(
@@ -196,12 +216,14 @@ class SubscriptionManager:
             cloud_telemetry.record_audit_event("signup", user_id, {"email": email, "tier": user.tier.value})
         except Exception:
             pass
-            
+
         return user
 
     def get_user(self, user_id: str) -> Optional[UserSubscription]:
         """Retrieve user by user_id."""
         return self._users.get(user_id)
+
+    get_subscription = get_user
 
     def get_user_by_api_key(self, api_key: str) -> Optional[UserSubscription]:
         """Resolve user subscription from an API key."""
@@ -220,7 +242,7 @@ class SubscriptionManager:
         user = self.get_user(user_id)
         if not user:
             raise AuthenticationError(f"Usuario {user_id} no encontrado.")
-            
+
         tier_cfg = get_tier_config(user.tier)
         if len(user.api_keys) >= tier_cfg.dedicated_api_keys:
             raise TierUnauthorizedError(
@@ -228,10 +250,10 @@ class SubscriptionManager:
                 current_tier=user.tier.value,
                 feature=f"Límite de {tier_cfg.dedicated_api_keys} claves de API alcanzado"
             )
-            
+
         new_key = f"tgpt_cloud_live_{uuid.uuid4().hex[:24]}"
         actual_scopes = scopes or ["inference", "verify", "swarm", "read"]
-        
+
         if hasattr(user, "api_key_details"):
             user.api_key_details.append(
                 ApiKeyInfo(key=new_key, key_id=f"key_{uuid.uuid4().hex[:8]}", label=label, scopes=actual_scopes)
@@ -239,7 +261,7 @@ class SubscriptionManager:
         user.api_keys.append(new_key)
         self._api_key_to_user[new_key] = user_id
         self._save_storage()
-        
+
         try:
             from ..security import cloud_security, ApiKeyScope
             scope_enums = {ApiKeyScope(s) for s in actual_scopes if s in ApiKeyScope._value2member_map_}
@@ -253,7 +275,7 @@ class SubscriptionManager:
             cloud_telemetry.record_audit_event("key_generated", user_id, {"label": label, "scopes": actual_scopes})
         except Exception:
             pass
-            
+
         return new_key
 
     def revoke_api_key(self, user_id: str, api_key: str) -> bool:
@@ -265,7 +287,7 @@ class SubscriptionManager:
         if api_key in self._api_key_to_user:
             del self._api_key_to_user[api_key]
         self._save_storage()
-        
+
         try:
             from ..security import cloud_security
             h = cloud_security.hash_key(api_key)
@@ -274,7 +296,7 @@ class SubscriptionManager:
             cloud_telemetry.record_audit_event("key_revoked", user_id, {"key_prefix": api_key[:16] + "..."})
         except Exception:
             pass
-            
+
         return True
 
     def upgrade_subscription(
@@ -295,7 +317,7 @@ class SubscriptionManager:
 
         target_cfg = get_tier_config(target_tier)
         base_amount = target_cfg.price_yearly_usd if billing_cycle == "yearly" else target_cfg.price_monthly_usd
-        
+
         # Apply promo code discount if provided
         discount_usd = 0.0
         applied_promo = None
@@ -321,7 +343,7 @@ class SubscriptionManager:
             billing_cycle=billing_cycle,
             payment_method=payment_method
         )
-        
+
         # Create invoice record
         invoice = Invoice(
             invoice_id=payment_res["invoice_id"],
@@ -335,7 +357,7 @@ class SubscriptionManager:
             promo_code=applied_promo,
             created_at=datetime.now(timezone.utc).isoformat()
         )
-        
+
         # Update user tier & reset daily limit
         user.tier = target_tier
         user.billing_cycle = billing_cycle
@@ -343,7 +365,7 @@ class SubscriptionManager:
         user.invoices.insert(0, invoice)
         user.usage.tokens_consumed_today = 0
         self._save_storage()
-        
+
         try:
             from ..telemetry import cloud_telemetry
             cloud_telemetry.record_audit_event(
@@ -359,7 +381,7 @@ class SubscriptionManager:
             )
         except Exception:
             pass
-        
+
         return {
             "success": True,
             "message": f"¡Suscripción actualizada exitosamente a {target_cfg.name}!",
@@ -499,16 +521,16 @@ class SubscriptionManager:
         if not user:
             self._ensure_demo_users()
             user = self.get_user("usr_default_demo")
-            
+
         tier_cfg = get_tier_config(user.tier if user else CloudTier.FREE)
-        
+
         # Check daily reset (every 24 hours)
         now = time.time()
         if user and (now - user.usage.last_reset_timestamp > 86400):
             user.usage.tokens_consumed_today = 0
             user.usage.daily_request_count = 0
             user.usage.last_reset_timestamp = now
-            
+
         # Check token quota: daily quota + purchased top-up balance
         if user:
             daily_remaining = max(0, tier_cfg.daily_token_limit - user.usage.tokens_consumed_today)
@@ -534,11 +556,11 @@ class SubscriptionManager:
                     limit=tier_cfg.daily_token_limit,
                     consumed=user.usage.tokens_consumed_today
                 )
-        
+
         # Record consumption
         if user:
             prev_pct = (user.usage.tokens_consumed_today / max(1, tier_cfg.daily_token_limit))
-            
+
             # Consume from daily limit first, then from purchased balance
             if user.usage.tokens_consumed_today < tier_cfg.daily_token_limit:
                 daily_fill = min(estimated_tokens, tier_cfg.daily_token_limit - user.usage.tokens_consumed_today)
@@ -546,7 +568,7 @@ class SubscriptionManager:
                 excess = estimated_tokens - daily_fill
             else:
                 excess = estimated_tokens
-            
+
             if excess > 0:
                 current_purchased = getattr(user.usage, "purchased_tokens_balance", 0)
                 user.usage.purchased_tokens_balance = max(0, current_purchased - excess)
@@ -566,12 +588,12 @@ class SubscriptionManager:
                     })
                 except Exception:
                     pass
-            
+
             if is_verification:
                 user.usage.verifications_run += 1
             if is_swarm:
                 user.usage.swarm_sessions_count += 1
-                
+
             self._save_storage()
         return True
 
@@ -595,13 +617,13 @@ class SubscriptionManager:
                     tier=CloudTier.FREE,
                     api_keys=["tgpt_cloud_demo_key"]
                 )
-            
+
         tier_cfg = get_tier_config(user.tier)
         remaining_daily = max(0, tier_cfg.daily_token_limit - user.usage.tokens_consumed_today)
         purchased_balance = getattr(user.usage, "purchased_tokens_balance", 0)
         total_available = remaining_daily + purchased_balance
         pct_used = min(100.0, (user.usage.tokens_consumed_today / max(1, tier_cfg.daily_token_limit)) * 100)
-        
+
         return {
             "user_id": user.user_id,
             "email": user.email,
@@ -645,12 +667,11 @@ class SubscriptionManager:
         """
         summary = self.get_user_status_summary(user_id)
         m = summary["metrics"]
-        user = self.get_user(user_id) or self.get_user_by_api_key(user_id)
-        
+
         # Breakdown estimations
         prompt_tokens = int(m["total_tokens_all_time"] * 0.4)
         completion_tokens = int(m["total_tokens_all_time"] * 0.6)
-        
+
         return {
             "user_id": user_id,
             "tier": summary["tier"],

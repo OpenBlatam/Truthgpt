@@ -5,19 +5,24 @@ tier management, Z3 formal verification, and multi-agent swarm orchestration.
 """
 
 import asyncio
-import time
 from typing import Dict, List, Optional, Any, Union, AsyncGenerator
+
+try:
+    import httpx
+    _HAS_HTTPX = True
+except ImportError:
+    _HAS_HTTPX = False
 
 from ..core.tiers import CloudTier, TierConfig, get_tier_config, get_all_tiers
 from ..billing.subscription import subscription_manager, UserSubscription
-from ..billing.webhooks import webhook_manager, WebhookSubscription, WebhookEventPayload
+from ..billing.webhooks import webhook_manager
 from ..routing.router import cloud_router, CloudInferenceResponse
-from ..verification.verifier import cloud_verifier, compute_merkle_root, verify_proof_certificate
+from ..verification.verifier import cloud_verifier
 from ..verification.certificate import ProofCertificate, ContractVerificationResult
 from ..verification.merkle import MerkleTree
 from ..swarm.orchestrator import cloud_swarm, SwarmExecutionTrace
 from ..papers.compiler import cloud_paper_compiler
-from ..papers.registry import get_all_papers, get_paper_by_id
+from ..papers.registry import get_all_papers
 from ..telemetry import cloud_telemetry
 from ..cache import proof_cache
 from ..security.manager import cloud_security
@@ -44,14 +49,18 @@ def _run_sync(coro):
 class TruthGPTCloudClient:
     """
     Developer Client SDK for TruthGPT Cloud.
-    Supports both asynchronous and synchronous paradigms across all platform capabilities.
+    Supports both asynchronous and synchronous paradigms across all platform capabilities,
+    with seamless in-process execution and high-performance remote HTTP/REST/SSE client via httpx.
     """
 
     def __init__(
         self,
         api_key: Optional[str] = None,
         user_id: Optional[str] = None,
-        tier: Optional[Union[str, CloudTier]] = None
+        tier: Optional[Union[str, CloudTier]] = None,
+        base_url: Optional[str] = None,
+        timeout: float = 30.0,
+        http_client: Optional[Any] = None,
     ):
         self.sub_manager = subscription_manager
         self.router = cloud_router
@@ -62,14 +71,20 @@ class TruthGPTCloudClient:
         self.telemetry = cloud_telemetry
         self.cache = proof_cache
         self.security = cloud_security
-        
+
+        self.base_url = base_url.rstrip("/") if base_url else None
+        self.timeout = timeout
+        self._is_remote = bool(self.base_url)
+        self._http_client = http_client
+        self._async_http_client = None
+
         # Resolve user
         self.user: Optional[UserSubscription] = None
         if api_key:
             self.user = self.sub_manager.get_user_by_api_key(api_key)
         elif user_id:
             self.user = self.sub_manager.get_user(user_id)
-            
+
         if not self.user:
             # Fallback to demo user matching requested tier or default demo user
             tier_enum = (
@@ -101,6 +116,80 @@ class TruthGPTCloudClient:
         self.user_id = self.user.user_id
 
     # ---------------------------------------------------------------------------
+    # HTTP Client Layer (httpx)
+    # ---------------------------------------------------------------------------
+
+    def get_http_client(self) -> Any:
+        """Get or initialize sync httpx.Client with connection pooling."""
+        if not _HAS_HTTPX:
+            raise RuntimeError("The 'httpx' library is required for HTTP operations.")
+        if self._http_client is None:
+            headers = {"Authorization": f"Bearer {self.api_key}"}
+            limits = httpx.Limits(max_keepalive_connections=20, max_connections=100)
+            self._http_client = httpx.Client(
+                base_url=self.base_url,
+                headers=headers,
+                timeout=self.timeout,
+                limits=limits,
+            )
+        return self._http_client
+
+    async def get_async_http_client(self) -> Any:
+        """Get or initialize async httpx.AsyncClient with connection pooling."""
+        if not _HAS_HTTPX:
+            raise RuntimeError("The 'httpx' library is required for HTTP operations.")
+        if self._async_http_client is None:
+            headers = {"Authorization": f"Bearer {self.api_key}"}
+            limits = httpx.Limits(max_keepalive_connections=20, max_connections=100)
+            self._async_http_client = httpx.AsyncClient(
+                base_url=self.base_url,
+                headers=headers,
+                timeout=self.timeout,
+                limits=limits,
+            )
+        return self._async_http_client
+
+    def http_get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Execute HTTP GET request against remote TruthGPT Cloud server."""
+        client = self.get_http_client()
+        resp = client.get(path, params=params)
+        resp.raise_for_status()
+        return resp.json()
+
+    def http_post(self, path: str, json_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Execute HTTP POST request against remote TruthGPT Cloud server."""
+        client = self.get_http_client()
+        resp = client.post(path, json=json_data)
+        resp.raise_for_status()
+        return resp.json()
+
+    async def http_get_async(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Execute async HTTP GET request against remote TruthGPT Cloud server."""
+        client = await self.get_async_http_client()
+        resp = await client.get(path, params=params)
+        resp.raise_for_status()
+        return resp.json()
+
+    async def http_post_async(self, path: str, json_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Execute async HTTP POST request against remote TruthGPT Cloud server."""
+        client = await self.get_async_http_client()
+        resp = await client.post(path, json=json_data)
+        resp.raise_for_status()
+        return resp.json()
+
+    def close(self):
+        """Close synchronous HTTP connection pool."""
+        if self._http_client is not None:
+            self._http_client.close()
+            self._http_client = None
+
+    async def aclose(self):
+        """Close asynchronous HTTP connection pool."""
+        if self._async_http_client is not None:
+            await self._async_http_client.aclose()
+            self._async_http_client = None
+
+    # ---------------------------------------------------------------------------
     # Context Managers
     # ---------------------------------------------------------------------------
 
@@ -108,17 +197,30 @@ class TruthGPTCloudClient:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
         return False
 
     async def __aenter__(self):
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.aclose()
         return False
 
+    def __repr__(self) -> str:
+        return f"<TruthGPTCloudClient user_id='{self.user_id}' tier={self.tier.value}>"
+
+    def __str__(self) -> str:
+        return f"TruthGPTCloudClient(user_id='{self.user_id}', tier='{self.tier.value}')"
+
     # ---------------------------------------------------------------------------
-    # Properties
+    # Properties & User Profile
     # ---------------------------------------------------------------------------
+
+    @property
+    def is_authenticated(self) -> bool:
+        """Returns True if the client possesses an active user account and valid API key."""
+        return bool(self.user_id and self.api_key and self.user and self.user.status == "active")
 
     @property
     def tier(self) -> CloudTier:
@@ -128,6 +230,10 @@ class TruthGPTCloudClient:
     @property
     def tier_config(self) -> TierConfig:
         return get_tier_config(self.tier)
+
+    def get_user_info(self) -> Dict[str, Any]:
+        """Return structured summary of active user account, subscription tier, and quotas."""
+        return self.sub_manager.get_user_status_summary(self.user_id)
 
     # ---------------------------------------------------------------------------
     # 💬 Async & Sync Cloud Inference
@@ -512,6 +618,15 @@ class TruthGPTCloudClient:
         rounds: int = 2
     ) -> Dict[str, Any]:
         """Execute a formal Red Team vs Blue Team adversarial debate session."""
+        if self._is_remote:
+            payload = {
+                "topic": topic,
+                "proponent_claim": proponent_claim,
+                "adversary_focus": adversary_focus,
+                "rounds": rounds,
+                "user_id": self.user_id,
+            }
+            return self.http_post("/api/v1/cloud/swarm/debate", json_data=payload)
         return _run_sync(
             self.swarm.execute_adversarial_debate(
                 topic=topic,
@@ -527,7 +642,9 @@ class TruthGPTCloudClient:
     # ---------------------------------------------------------------------------
 
     def compile_paper(self, paper_id: str) -> Dict[str, Any]:
-        """Compile SOTA research paper architecture and inject into cloud pipeline."""
+        """Compile SOTA research paper architecture and synthesize kernel."""
+        if self._is_remote:
+            return self.http_post(f"/api/v1/cloud/papers/{paper_id}/compile")
         return self.paper_compiler.compile_paper_technique(paper_id=paper_id, user_tier=self.tier.value)
 
     def list_papers(self) -> List[Dict[str, Any]]:
@@ -773,32 +890,6 @@ class TruthGPTCloudClient:
         return self.security.verify_ledger_integrity()
 
     # ---------------------------------------------------------------------------
-    # 🐝 Swarm Debate & Papers Hub Helpers
-    # ---------------------------------------------------------------------------
-
-    def execute_adversarial_debate(
-        self,
-        topic: str,
-        proponent_claim: str,
-        adversary_focus: str = "Búsqueda de singularidades y contraejemplos",
-        rounds: int = 2
-    ) -> Dict[str, Any]:
-        """Execute a formal Red Team vs Blue Team adversarial debate session."""
-        return _run_sync(
-            self.swarm.execute_adversarial_debate(
-                topic=topic,
-                proponent_claim=proponent_claim,
-                adversary_focus=adversary_focus,
-                rounds=rounds,
-                user_id=self.user_id
-            )
-        )
-
-    def compile_paper(self, paper_id: str) -> Dict[str, Any]:
-        """Compile SOTA research paper architecture and synthesize kernel."""
-        return self.paper_compiler.compile_paper_technique(paper_id=paper_id, user_tier=self.tier.value)
-
-    # ---------------------------------------------------------------------------
     # Ergonomic Aliases
     # ---------------------------------------------------------------------------
     verify = verify_claim
@@ -807,6 +898,8 @@ class TruthGPTCloudClient:
     verify_attention = verify_attention_invariants
     export_isabelle = export_proof_to_isabelle
     purge_cache = purge_expired_cache
+    profile = get_user_info
+    whoami = get_user_info
 
 
 __all__ = ["TruthGPTCloudClient"]

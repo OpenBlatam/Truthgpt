@@ -4,7 +4,7 @@ Defines the contract for persistent state engines (JSON, SQLite, Redis, PostgreS
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 
 
 class StorageBackend(ABC):

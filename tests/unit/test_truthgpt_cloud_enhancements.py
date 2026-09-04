@@ -6,16 +6,13 @@ usage analytics, async context manager in client SDK, and server endpoints.
 """
 
 import pytest
-import asyncio
 from fastapi.testclient import TestClient
 
 from truthgpt_cloud import (
     CloudTier,
     cloud_verifier,
-    cloud_swarm,
     subscription_manager,
     webhook_manager,
-    proof_cache,
     TruthGPTCloudClient,
 )
 from truthgpt_cloud_server import app

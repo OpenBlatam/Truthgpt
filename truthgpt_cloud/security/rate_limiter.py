@@ -5,10 +5,9 @@ concurrency guards, and RPM/TPM quota enforcement.
 """
 
 import time
-import asyncio
 import threading
 from collections import deque, defaultdict
-from typing import Dict, Deque, Tuple, Optional, Any, List, Union
+from typing import Dict, Deque, Tuple, Optional, Any, Union
 
 from ..core.tiers import CloudTier, get_tier_config
 from ..core.exceptions import (
@@ -183,13 +182,26 @@ class SlidingWindowRateLimiter:
             tok_deque.append((now, estimated_tokens))
             return True
 
-    async def check_rate_limit(self, user_id: str, max_rpm: int) -> bool:
+    def check_rate_limit(
+        self,
+        user_id: str,
+        tier_or_rpm: Union[str, CloudTier, int] = 60,
+        window_seconds: Optional[float] = None,
+        **kwargs: Any,
+    ) -> bool:
         """
-        Asynchronous check if user is within RPM limit.
+        Check if user is within RPM limit (synchronous check with tier or explicit rpm).
         Raises RateLimitExceededError if limit is breached.
         """
+        if isinstance(tier_or_rpm, int):
+            max_rpm = tier_or_rpm
+        else:
+            config = get_tier_config(tier_or_rpm)
+            max_rpm = int(config.requests_per_minute)
+
         now = time.time()
-        window_start = now - self.window_size
+        w_size = window_seconds if window_seconds is not None else self.window_size
+        window_start = now - w_size
 
         with self._lock:
             if user_id not in self._request_windows:
@@ -201,7 +213,7 @@ class SlidingWindowRateLimiter:
 
             if len(req_deque) >= max_rpm:
                 oldest = req_deque[0]
-                retry_after = max(0.5, round(self.window_size - (now - oldest), 1))
+                retry_after = max(0.5, round(w_size - (now - oldest), 1))
                 raise RateLimitExceededError(
                     message=f"Límite de {max_rpm} peticiones por minuto (RPM) alcanzado para su nivel.",
                     retry_after_seconds=retry_after,
@@ -209,6 +221,22 @@ class SlidingWindowRateLimiter:
 
             req_deque.append(now)
             return True
+
+    async def async_check_rate_limit(self, user_id: str, max_rpm: int) -> bool:
+        """Asynchronous check if user is within RPM limit."""
+        return self.check_rate_limit(user_id, max_rpm)
+
+    def get_user_tokens(self, user_id: str, max_capacity: float = 60.0) -> float:
+        """Get current remaining request quota or token capacity in active window."""
+        now = time.time()
+        window_start = now - self.window_size
+        with self._lock:
+            if user_id not in self._request_windows:
+                return float(max_capacity)
+            req_deque = self._request_windows[user_id]
+            while req_deque and req_deque[0] < window_start:
+                req_deque.popleft()
+            return float(max(0.0, max_capacity - len(req_deque)))
 
     def acquire_concurrency(self, user_id: str, max_concurrent: Optional[int] = None) -> bool:
         """Acquire a concurrent execution slot."""

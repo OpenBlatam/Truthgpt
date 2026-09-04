@@ -56,7 +56,7 @@ class WebhookManager:
         webhook_id = f"wh_{uuid.uuid4().hex[:12]}"
         secret = f"whsec_{uuid.uuid4().hex[:24]}"
         events = subscribed_events or ["*"]
-        
+
         sub = WebhookSubscription(
             webhook_id=webhook_id,
             user_id=user_id,
@@ -91,7 +91,7 @@ class WebhookManager:
         """
         event_id = f"evt_{uuid.uuid4().hex[:14]}"
         now = time.time()
-        
+
         # Build canonical payload for signature
         payload_data = {
             "event_id": event_id,
@@ -100,12 +100,12 @@ class WebhookManager:
             "timestamp": now,
             "data": data
         }
-        
+
         # Calculate HMAC signature
         canonical = json.dumps(payload_data, sort_keys=True)
         secret = (custom_secret or "tgpt_global_webhook_secret").encode()
         sig = hmac.new(secret, canonical.encode(), hashlib.sha256).hexdigest()
-        
+
         event = WebhookEventPayload(
             event_id=event_id,
             event_type=event_type,
@@ -114,18 +114,18 @@ class WebhookManager:
             data=data,
             signature=f"sha256={sig}"
         )
-        
+
         self._event_logs.append(event)
         if len(self._event_logs) > 1000:
             self._event_logs = self._event_logs[-1000:]
-            
+
         # Dispatch to any in-process listeners
         for listener in self._listeners:
             try:
                 listener(event)
             except Exception as e:
                 logger.error(f"Error in webhook listener: {e}")
-                
+
         return event
 
     @staticmethod

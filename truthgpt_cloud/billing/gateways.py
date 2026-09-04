@@ -5,7 +5,7 @@ Handles simulated and live billing workflows for Stripe Card, Crypto USDC/ETH, a
 
 import uuid
 import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 
 class PaymentGatewayService:
@@ -25,7 +25,7 @@ class PaymentGatewayService:
         """
         tx_id = f"tx_{payment_method[:6]}_{uuid.uuid4().hex[:12]}"
         inv_id = f"inv_tgpt_{uuid.uuid4().hex[:10]}"
-        
+
         # Method-specific metadata
         method_meta: Dict[str, Any] = {}
         if payment_method == "crypto_usdc":

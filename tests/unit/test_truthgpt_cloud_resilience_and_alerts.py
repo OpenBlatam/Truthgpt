@@ -12,7 +12,6 @@ Validates:
 
 import time
 import pytest
-import asyncio
 from fastapi.testclient import TestClient
 
 from truthgpt_cloud import (
@@ -21,11 +20,7 @@ from truthgpt_cloud import (
     CircuitBreakerOpen,
     CircuitState,
     retry_with_backoff,
-    RetryConfig,
-    AlertRule,
     cloud_telemetry,
-    proof_cache,
-    CachedProofEntry,
     CloudProofCache,
 )
 from truthgpt_cloud.storage import JsonFileStorageBackend
