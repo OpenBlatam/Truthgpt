@@ -136,6 +136,7 @@ from .swarm import (
     get_adversarial_team_nodes,
     get_default_swarm_nodes,
     get_graph_metrics,
+    get_topology_metrics,
     get_topological_reasoning_order,
 )
 from .telemetry import (
@@ -356,6 +357,7 @@ __all__ = [
     "detect_deadlocks_and_cycles",
     "calculate_agent_influence",
     "get_graph_metrics",
+    "get_topology_metrics",
     "_HAS_NETWORKX",
     "Z3TheoremSolver",
     "z3_solver_engine",

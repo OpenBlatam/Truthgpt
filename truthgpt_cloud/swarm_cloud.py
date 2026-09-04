@@ -16,6 +16,7 @@ from .swarm import (
     detect_deadlocks_and_cycles,
     calculate_agent_influence,
     get_graph_metrics,
+    get_topology_metrics,
     _HAS_NETWORKX,
 )
 
@@ -32,5 +33,6 @@ __all__ = [
     "detect_deadlocks_and_cycles",
     "calculate_agent_influence",
     "get_graph_metrics",
+    "get_topology_metrics",
     "_HAS_NETWORKX",
 ]

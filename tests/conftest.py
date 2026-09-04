@@ -190,6 +190,47 @@ def setup_test_environment():
         torch.cuda.empty_cache()
 
 
+@pytest.fixture(scope="session", autouse=True)
+def isolate_truthgpt_cloud_storage(tmp_path_factory):
+    """
+    Isolate TruthGPT Cloud storage during test sessions.
+    Copies the baseline subscriptions database to a temporary location so
+    that running tests never pollutes or modifies the repository's cloud_subscriptions_db.json.
+    """
+    import os
+    import shutil
+
+    base_cloud_dir = Path(__file__).resolve().parent.parent / "truthgpt_cloud"
+    orig_db = base_cloud_dir / "cloud_subscriptions_db.json"
+
+    temp_dir = tmp_path_factory.mktemp("truthgpt_cloud_storage")
+    isolated_db = temp_dir / "cloud_subscriptions_db.json"
+
+    if orig_db.exists():
+        shutil.copy2(str(orig_db), str(isolated_db))
+    else:
+        isolated_db.write_text("{}", encoding="utf-8")
+
+    old_env = os.environ.get("TRUTHGPT_STORAGE_PATH")
+    os.environ["TRUTHGPT_STORAGE_PATH"] = str(isolated_db)
+
+    try:
+        import truthgpt_cloud.billing.subscription as sub_mod
+        if hasattr(sub_mod, "subscription_manager"):
+            sub_mod.subscription_manager.storage_path = str(isolated_db)
+            sub_mod.subscription_manager._storage.filepath = str(isolated_db)
+    except Exception:
+        pass
+
+    yield str(isolated_db)
+
+    if old_env is not None:
+        os.environ["TRUTHGPT_STORAGE_PATH"] = old_env
+    else:
+        os.environ.pop("TRUTHGPT_STORAGE_PATH", None)
+
+
+
 def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line("markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')")

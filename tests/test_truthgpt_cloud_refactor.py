@@ -115,6 +115,22 @@ class TestTruthGPTCloudRefactor:
         from truthgpt_cloud.client.client import TruthGPTCloudClient
         assert client_bridge.TruthGPTCloudClient is TruthGPTCloudClient
 
+    def test_no_shadowed_modules_in_cloud_root(self):
+        """Verify that no .py files exist in truthgpt_cloud that shadow subpackage directories."""
+        import os
+        import truthgpt_cloud
+        
+        root_dir = os.path.dirname(os.path.abspath(truthgpt_cloud.__file__))
+        subdirs = {
+            d for d in os.listdir(root_dir)
+            if os.path.isdir(os.path.join(root_dir, d)) and not d.startswith((".", "__"))
+        }
+        for subdir in subdirs:
+            shadow_file = os.path.join(root_dir, f"{subdir}.py")
+            assert not os.path.exists(shadow_file), (
+                f"Shadowed file '{shadow_file}' found! It shadows subpackage '{subdir}'."
+            )
+
     def test_cache_functionality(self):
         """Verify semantic proof cache functionality and warm-up."""
         from truthgpt_cloud.cache import CloudProofCache
