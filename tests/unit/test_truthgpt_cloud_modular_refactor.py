@@ -323,6 +323,7 @@ class TestTruthGPTCloudModularRefactor:
         assert optimization_core.CloudFeature is not None
         assert optimization_core.VerificationEngineType is not None
         assert optimization_core.ProofStatus is not None
+        assert optimization_core.get_topology_metrics is not None
 
     def test_13_storage_path_env_override(self, tmp_path):
         """Test TRUTHGPT_STORAGE_PATH environment variable override."""
