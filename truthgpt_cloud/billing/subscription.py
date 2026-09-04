@@ -70,7 +70,6 @@ class SubscriptionManager:
             storage_path = os.environ.get("TRUTHGPT_STORAGE_PATH")
             if not storage_path:
                 if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
-                    import tempfile
                     test_dir = os.path.join(tempfile.gettempdir(), "truthgpt_test_storage")
                     os.makedirs(test_dir, exist_ok=True)
                     storage_path = os.path.join(test_dir, "cloud_subscriptions_test.json")
@@ -78,7 +77,6 @@ class SubscriptionManager:
                     parent_dir = os.path.dirname(base_dir)
                     orig = os.path.join(parent_dir, "cloud_subscriptions_db.json")
                     if os.path.exists(orig) and not os.path.exists(storage_path):
-                        import shutil
                         shutil.copy2(orig, storage_path)
                 else:
                     base_dir = os.path.dirname(os.path.abspath(__file__))
