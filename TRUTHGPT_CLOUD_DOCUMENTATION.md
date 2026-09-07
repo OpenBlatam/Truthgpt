@@ -91,9 +91,12 @@ truthgpt_cloud/
 │   ├── registry.py           # SOTA_PAPERS_CATALOG (FlashAttention-3, DeepSeek, etc.)
 │   ├── compiler.py           # CloudPaperCompiler (JIT runtime hooks)
 │   └── __init__.py
-└── [Bridges de compatibilidad]: billing.py, cache.py, client.py, engine_router.py,
-                                 exceptions.py, rate_limiter.py, resilience.py,
-                                 security.py, swarm_cloud.py, telemetry.py, tiers.py, verifier.py
+├── engine_router.py          # Bridge de compatibilidad hacia truthgpt_cloud.routing
+├── exceptions.py             # Bridge de compatibilidad hacia truthgpt_cloud.core.exceptions
+├── rate_limiter.py           # Bridge de compatibilidad hacia truthgpt_cloud.security / rate_limiting
+├── swarm_cloud.py            # Bridge de compatibilidad hacia truthgpt_cloud.swarm
+├── tiers.py                  # Bridge de compatibilidad hacia truthgpt_cloud.core.tiers
+└── verifier.py               # Bridge de compatibilidad hacia truthgpt_cloud.verification
 ```
 
 ---
