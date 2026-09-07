@@ -102,6 +102,8 @@ class SubscriptionManager:
 
     def _load_storage(self) -> None:
         """Load persistent subscription records and initialize demo users if needed."""
+        self._users = {}
+        self._api_key_to_user = {}
         raw_data = self._storage.load()
         if raw_data:
             for uid, udata in raw_data.items():
