@@ -3,7 +3,7 @@
 Provides Sliding-Window & Token Bucket Requests-Per-Minute (RPM) enforcement and concurrency guards.
 """
 
-from ..security.rate_limiter import (
+from ..rate_limiting import (
     TokenBucketRateLimiter,
     SlidingWindowRateLimiter,
     RateLimitExceeded,
@@ -24,3 +24,4 @@ __all__ = [
     "token_bucket_limiter",
     "cloud_rate_limiter",
 ]
+

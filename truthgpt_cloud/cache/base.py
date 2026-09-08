@@ -6,8 +6,10 @@ Defines the contract for semantic proof, KV, and theorem caching systems.
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
 
+from ..core.interfaces import IProofCache
 
-class BaseProofCache(ABC):
+
+class BaseProofCache(IProofCache):
     """Abstract base class for proof and theorem caching backends."""
 
     @abstractmethod

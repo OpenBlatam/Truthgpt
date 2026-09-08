@@ -112,7 +112,7 @@ frontier = "optimization_core.cli:app"
 truth = "truth_cli:app"
 
 [tool.setuptools]
-packages = ["optimization_core", "truth_cli"]
+packages = ["optimization_core", "truth_cli", "truthgpt_cloud"]
 
 [tool.black]
 line-length = 100

@@ -79,6 +79,7 @@ This directory contains the complete specifications for the `optimization_core` 
 - ✅ [08_RUST_CORE_SPEC.md](08_RUST_CORE_SPEC.md) - Rust Extension Backend
 - ✅ [11_JULIA_CORE_SPEC.md](11_JULIA_CORE_SPEC.md) - Julia Backend
 - ✅ [14_UTILS_SPEC.md](14_UTILS_SPEC.md) - Shared Core Utilities
+- ✅ [26_TRUTHGPT_CLOUD_SPEC.md](26_TRUTHGPT_CLOUD_SPEC.md) - TruthGPT Cloud Subsystem Architecture
 
 ### Pending Specs ⏳
 - ⏳ `15_BENCHMARKS_SPEC.md` - Performance Benchmarks

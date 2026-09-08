@@ -29,14 +29,29 @@ class JsonFileStorageBackend(StorageBackend):
     Debouncing prevents excessive disk I/O when rapid sequential writes occur.
     """
 
-    def __init__(self, file_path: str, debounce_ms: int = 200):
-        self.file_path = os.path.abspath(file_path)
-        self._debounce_seconds = debounce_ms / 1000.0
+    def __init__(
+        self,
+        file_path: Optional[str] = None,
+        debounce_ms: int = 200,
+        filepath: Optional[str] = None,
+        debounce_seconds: Optional[float] = None,
+    ):
+        actual_path = file_path or filepath or "cloud_subscriptions_db.json"
+        self.file_path = os.path.abspath(actual_path)
+        if debounce_seconds is not None:
+            self._debounce_seconds = float(debounce_seconds)
+        else:
+            self._debounce_seconds = debounce_ms / 1000.0
         self._lock = threading.RLock()
         self._memory_cache: Dict[str, Dict[str, Any]] = {}
         self._dirty = False
         self._flush_timer: Optional[threading.Timer] = None
         self._load_from_disk()
+
+    @property
+    def filepath(self) -> str:
+        """Alias for file_path for compatibility with legacy accessors."""
+        return self.file_path
 
     def _load_from_disk(self) -> None:
         """Load state from disk with fallback to backup if main file corrupted."""

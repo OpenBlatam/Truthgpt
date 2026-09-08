@@ -28,6 +28,25 @@ from .smt_engine import (
     _HAS_Z3,
     _HAS_SYMPY,
 )
+from .domain_invariants import (
+    verify_tensor_shapes,
+    verify_numerical_stability,
+    verify_attention_invariants,
+    verify_quantization_safety,
+    verify_optimizer_convergence,
+    verify_matrix_invariants,
+    verify_ode_stability,
+    verify_lyapunov_stability,
+    verify_loop_invariant,
+    verify_differential_privacy,
+    DomainInvariantsVerifier,
+)
+from .code_purity import (
+    verify_code_purity,
+    verify_code_purity_and_invariants,
+    SecurityHazardVisitor,
+    CodePurityVerifier,
+)
 
 __all__ = [
     "ProofCertificate",
@@ -44,6 +63,21 @@ __all__ = [
     "cloud_verifier",
     "Z3TheoremSolver",
     "z3_solver_engine",
+    "verify_tensor_shapes",
+    "verify_numerical_stability",
+    "verify_attention_invariants",
+    "verify_quantization_safety",
+    "verify_optimizer_convergence",
+    "verify_matrix_invariants",
+    "verify_ode_stability",
+    "verify_lyapunov_stability",
+    "verify_loop_invariant",
+    "verify_differential_privacy",
+    "DomainInvariantsVerifier",
+    "verify_code_purity",
+    "verify_code_purity_and_invariants",
+    "SecurityHazardVisitor",
+    "CodePurityVerifier",
     "_HAS_Z3",
     "_HAS_SYMPY",
 ]

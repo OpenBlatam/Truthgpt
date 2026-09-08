@@ -15,10 +15,8 @@ from ..core.exceptions import (
     RateLimitExceededError,
     QuotaExceededError,
 )
-from ..security.rate_limiter import (
-    SlidingWindowRateLimiter as InMemorySlidingWindowLimiter,
-    TokenBucketRateLimiter as InMemoryTokenBucketLimiter,
-)
+from .sliding_window import SlidingWindowRateLimiter as InMemorySlidingWindowLimiter
+from .token_bucket import TokenBucketRateLimiter as InMemoryTokenBucketLimiter
 
 logger = logging.getLogger("TruthGPT.RedisRateLimiter")
 

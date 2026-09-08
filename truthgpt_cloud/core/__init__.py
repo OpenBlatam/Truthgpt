@@ -1,6 +1,7 @@
 """
 🏛️ TruthGPT Cloud - Core Subpackage
-Defines subscription tier models, exceptions, constants, and foundational types.
+Defines subscription tier models, exceptions, constants, foundational types,
+abstract lifecycle interfaces, component registry, configuration, and factory.
 """
 
 from .constants import (
@@ -70,6 +71,45 @@ from .schemas import (
     validate_subscription_db,
 )
 
+from .context import (
+    TruthGPTCloudContext,
+    get_cloud_context,
+    create_isolated_context,
+    set_cloud_context,
+    reset_cloud_context,
+)
+
+from .interfaces import (
+    IStorageBackend,
+    IProofCache,
+    IFormalVerifier,
+    ISwarmOrchestrator,
+    IIntelligenceRouter,
+    IRateLimiter,
+    ISubscriptionManager,
+    IPaymentGateway,
+    ITelemetryCollector,
+    ICircuitBreaker,
+    IWebhookManager,
+    IPaperCompiler,
+)
+
+from .registry import CloudRegistry
+
+from .config import (
+    CloudConfigValidationError,
+    CloudStorageConfig,
+    CloudCacheConfig,
+    CloudVerifierConfig,
+    CloudRoutingConfig,
+    CloudRateLimiterConfig,
+    CloudTelemetryConfig,
+    CloudResilienceConfig,
+    CloudPlatformConfig,
+)
+
+from .factory import CloudFactory
+
 __all__ = [
     # Constants
     "CLOUD_PLATFORM_VERSION",
@@ -128,4 +168,37 @@ __all__ = [
     "WebhookSubscriptionSchema",
     "UserSubscriptionSchema",
     "validate_subscription_db",
+    # Interfaces
+    "IStorageBackend",
+    "IProofCache",
+    "IFormalVerifier",
+    "ISwarmOrchestrator",
+    "IIntelligenceRouter",
+    "IRateLimiter",
+    "ISubscriptionManager",
+    "IPaymentGateway",
+    "ITelemetryCollector",
+    "ICircuitBreaker",
+    "IWebhookManager",
+    "IPaperCompiler",
+    # Registry & Architecture
+    "CloudRegistry",
+    # Configuration
+    "CloudConfigValidationError",
+    "CloudStorageConfig",
+    "CloudCacheConfig",
+    "CloudVerifierConfig",
+    "CloudRoutingConfig",
+    "CloudRateLimiterConfig",
+    "CloudTelemetryConfig",
+    "CloudResilienceConfig",
+    "CloudPlatformConfig",
+    # Factory
+    "CloudFactory",
+    # Context & Dependency Injection
+    "TruthGPTCloudContext",
+    "get_cloud_context",
+    "create_isolated_context",
+    "set_cloud_context",
+    "reset_cloud_context",
 ]

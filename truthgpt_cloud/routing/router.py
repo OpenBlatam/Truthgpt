@@ -20,7 +20,7 @@ from ..swarm.orchestrator import cloud_swarm
 from ..telemetry import cloud_telemetry
 from ..cache import proof_cache
 from ..resilience.circuit_breaker import CircuitBreaker, CircuitBreakerOpen
-from ..security.rate_limiter import cloud_rate_limiter
+from ..rate_limiting import cloud_rate_limiter
 
 logger = logging.getLogger("TruthGPT.CloudRouter")
 
@@ -68,14 +68,24 @@ class CloudIntelligenceRouter:
     formal verification proof emission, swarm execution, and circuit breaker resilience.
     """
 
-    def __init__(self):
-        self.sub_manager = subscription_manager
-        self.verifier = cloud_verifier
-        self.swarm = cloud_swarm
-        self.telemetry = cloud_telemetry
-        self.cache = proof_cache
-        self.rate_limiter = cloud_rate_limiter
-        self._circuit_breaker = CircuitBreaker(
+    def __init__(
+        self,
+        subscription_manager: Optional[Any] = None,
+        verifier: Optional[Any] = None,
+        swarm: Optional[Any] = None,
+        telemetry: Optional[Any] = None,
+        cache: Optional[Any] = None,
+        rate_limiter: Optional[Any] = None,
+        circuit_breaker: Optional[Any] = None,
+        **kwargs: Any,
+    ):
+        self.sub_manager = subscription_manager if subscription_manager is not None else globals().get("subscription_manager")
+        self.verifier = verifier if verifier is not None else cloud_verifier
+        self.swarm = swarm if swarm is not None else cloud_swarm
+        self.telemetry = telemetry if telemetry is not None else cloud_telemetry
+        self.cache = cache if cache is not None else proof_cache
+        self.rate_limiter = rate_limiter if rate_limiter is not None else cloud_rate_limiter
+        self._circuit_breaker = circuit_breaker if circuit_breaker is not None else CircuitBreaker(
             name="inference_router",
             failure_threshold=10,
             recovery_timeout_seconds=30.0,

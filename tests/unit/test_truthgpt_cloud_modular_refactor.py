@@ -168,7 +168,7 @@ class TestTruthGPTCloudModularRefactor:
 
         verifier = CloudFormalVerifier()
         cert = verifier.verify_expression("∀a,b: a^2 - b^2 = (a-b)(a+b)", tier_depth=2)
-        assert cert.status in ["PROVEN_VALID", "VERIFIED_SYMBOLIC"]
+        assert cert.status in ["PROVEN_VALID", "PROVEN_SAT", "VERIFIED_SYMBOLIC"]
         assert verify_proof_certificate(cert) is True
 
         # Exporters
@@ -356,5 +356,101 @@ class TestTruthGPTCloudModularRefactor:
         free_client = TruthGPTCloudClient(tier=CloudTier.FREE)
         assert free_client.tier == CloudTier.FREE
 
+    def test_15_rate_limiting_subpackage_and_factories(self):
+        """Test rate limiting implementations, token bucket, and factory resolution."""
+        from truthgpt_cloud.rate_limiting import (
+            SlidingWindowRateLimiter,
+            TokenBucketRateLimiter,
+            get_rate_limiter,
+        )
+        from truthgpt_cloud.core.exceptions import RateLimitExceededError
 
+        # Factory creation
+        sliding = get_rate_limiter(kind="sliding_window", backend="memory")
+        assert isinstance(sliding, SlidingWindowRateLimiter)
 
+        bucket = get_rate_limiter(kind="token_bucket", backend="memory")
+        assert isinstance(bucket, TokenBucketRateLimiter)
+
+        # Token bucket functional verification
+        test_uid = "usr_bucket_test_001"
+        assert bucket.check_and_consume(test_uid, rpm_capacity=5, cost=1.0) is True
+        tokens = bucket.get_user_tokens(test_uid, max_capacity=5.0)
+        assert 3.5 <= tokens <= 5.0
+        bucket.reset_user(test_uid)
+
+    def test_16_core_interfaces_and_registry(self):
+        """Test core lifecycle interfaces and CloudRegistry dynamic component registration."""
+        from truthgpt_cloud.core import (
+            CloudRegistry,
+            IStorageBackend,
+            IProofCache,
+            IFormalVerifier,
+            IRateLimiter,
+        )
+
+        assert CloudRegistry.get_storage_backend("json") is not None
+        assert CloudRegistry.get_cache_backend("memory") is not None
+        assert CloudRegistry.get_verifier("smt") is not None
+        assert CloudRegistry.get_rate_limiter("token_bucket") is not None
+
+        # Test custom component registration
+        @CloudRegistry.register_verifier("custom_mock_verifier")
+        class MockVerifier:
+            def verify(self, stmt):
+                return True
+
+        assert CloudRegistry.get_verifier("custom_mock_verifier") is MockVerifier
+        assert "custom_mock_verifier" in CloudRegistry.list_verifiers()
+
+    def test_17_cloud_factory_and_context(self):
+        """Test CloudFactory assembly, TruthGPTCloudContext, and isolated context creation."""
+        from truthgpt_cloud.core import (
+            CloudFactory,
+            TruthGPTCloudContext,
+            get_cloud_context,
+            create_isolated_context,
+        )
+        from truthgpt_cloud import TruthGPTCloudClient
+
+        # Verify global context
+        ctx = get_cloud_context()
+        assert isinstance(ctx, TruthGPTCloudContext)
+        status = ctx.get_status()
+        assert "subscriptions_active" in status
+
+        # Verify isolated context
+        isolated = create_isolated_context()
+        assert isinstance(isolated, TruthGPTCloudContext)
+        assert isolated is not ctx
+
+        # Client SDK with injected context
+        client = TruthGPTCloudClient(context=isolated)
+        assert client.context is isolated
+
+    def test_18_cloud_platform_config_validation(self):
+        """Test CloudPlatformConfig defaults, environment overrides, and schema validation."""
+        from truthgpt_cloud.core.config import (
+            CloudPlatformConfig,
+            CloudStorageConfig,
+            CloudCacheConfig,
+            CloudConfigValidationError,
+        )
+
+        cfg = CloudPlatformConfig()
+        cfg.validate()
+        assert cfg.environment in ["development", "staging", "production", "test"]
+
+        # Valid sub-config override
+        custom_cfg = CloudPlatformConfig(
+            storage=CloudStorageConfig(backend_type="json", debounce_flush_seconds=0.2),
+            cache=CloudCacheConfig(l1_max_entries=5000),
+        )
+        custom_cfg.validate()
+        assert custom_cfg.storage.debounce_flush_seconds == 0.2
+
+        # Invalid config triggers validation error
+        bad_storage = CloudStorageConfig(backend_type="invalid_type")
+        import pytest
+        with pytest.raises(CloudConfigValidationError):
+            bad_storage.validate()

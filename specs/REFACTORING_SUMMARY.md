@@ -56,8 +56,9 @@ This document outlines the architectural enhancements, structural updates, and r
 9. ✅ [08_RUST_CORE_SPEC.md](08_RUST_CORE_SPEC.md) - Rust Extension Backend
 10. ✅ [11_JULIA_CORE_SPEC.md](11_JULIA_CORE_SPEC.md) - Julia Native Implementation
 11. ✅ [14_UTILS_SPEC.md](14_UTILS_SPEC.md) - Common Utilities Subsystem
-12. ✅ [SPEC_TEMPLATE.md](SPEC_TEMPLATE.md) - Spec Template Guidelines
-13. ✅ [README.md](README.md) - Spec Onboarding Guide
+12. ✅ [26_TRUTHGPT_CLOUD_SPEC.md](26_TRUTHGPT_CLOUD_SPEC.md) - TruthGPT Cloud Subsystem Architecture
+13. ✅ [SPEC_TEMPLATE.md](SPEC_TEMPLATE.md) - Spec Template Guidelines
+14. ✅ [README.md](README.md) - Spec Onboarding Guide
 
 ### Pending Specifications (13/25)
 

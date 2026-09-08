@@ -22,7 +22,7 @@ from ..core.exceptions import (
     TruthGPTCloudError,
 )
 from .models import UsageRecord, Invoice, ApiKeyInfo, WebhookSubscription, UserSubscription
-from .storage import AtomicJsonStorage
+from ..storage import StorageBackend, AtomicJsonStorage, SqliteStorageBackend
 from .gateways import PaymentGatewayService
 
 logger = logging.getLogger("TruthGPT.CloudBilling")
@@ -62,49 +62,69 @@ TOKEN_PACK_CATALOG: List[Dict[str, Any]] = [
 class SubscriptionManager:
     """
     Centralized subscription, accounting, and quota manager for TruthGPT Cloud.
-    Persists data in atomic storage for reliability across worker processes.
+    Persists data in pluggable storage backends (Atomic JSON, SQLite) for reliability across worker processes.
     """
 
-    def __init__(self, storage_path: Optional[str] = None):
-        if storage_path is None:
-            storage_path = os.environ.get("TRUTHGPT_STORAGE_PATH")
-            if not storage_path:
-                main_file = sys.argv[0] if sys.argv else ""
-                is_testing = (
-                    "PYTEST_CURRENT_TEST" in os.environ
-                    or "pytest" in sys.modules
-                    or "test_" in os.path.basename(main_file).lower()
-                    or os.path.basename(main_file).lower().startswith("test")
-                )
-                if is_testing:
-                    test_dir = os.path.join(tempfile.gettempdir(), "truthgpt_test_storage")
-                    os.makedirs(test_dir, exist_ok=True)
-                    storage_path = os.path.join(test_dir, "cloud_subscriptions_test.json")
-                    base_dir = os.path.dirname(os.path.abspath(__file__))
-                    parent_dir = os.path.dirname(base_dir)
-                    orig = os.path.join(parent_dir, "cloud_subscriptions_db.json")
-                    if os.path.exists(orig) and not os.path.exists(storage_path):
-                        shutil.copy2(orig, storage_path)
-                else:
-                    base_dir = os.path.dirname(os.path.abspath(__file__))
-                    parent_dir = os.path.dirname(base_dir)
-                    storage_path = os.path.join(parent_dir, "cloud_subscriptions_db.json")
-        self.storage_path = storage_path
-        self._storage = AtomicJsonStorage(storage_path)
+    def __init__(
+        self,
+        storage_path: Optional[str] = None,
+        storage: Optional[Union[StorageBackend, AtomicJsonStorage]] = None,
+    ):
+        if storage is not None:
+            self._storage = storage
+            self.storage_path = getattr(storage, "filepath", getattr(storage, "file_path", getattr(storage, "db_path", None)))
+        else:
+            if storage_path is None:
+                storage_path = os.environ.get("TRUTHGPT_STORAGE_PATH")
+                if not storage_path:
+                    main_file = sys.argv[0] if sys.argv else ""
+                    is_testing = (
+                        "PYTEST_CURRENT_TEST" in os.environ
+                        or "pytest" in sys.modules
+                        or os.environ.get("TRUTHGPT_TEST_ENV") == "1"
+                        or "test_" in os.path.basename(main_file).lower()
+                        or os.path.basename(main_file).lower().startswith("test")
+                    )
+                    if is_testing:
+                        test_dir = os.path.join(tempfile.gettempdir(), "truthgpt_test_storage")
+                        os.makedirs(test_dir, exist_ok=True)
+                        storage_path = os.path.join(test_dir, "cloud_subscriptions_test.json")
+                        base_dir = os.path.dirname(os.path.abspath(__file__))
+                        parent_dir = os.path.dirname(base_dir)
+                        orig = os.path.join(parent_dir, "cloud_subscriptions_db.json")
+                        if os.path.exists(orig) and not os.path.exists(storage_path):
+                            shutil.copy2(orig, storage_path)
+                    else:
+                        base_dir = os.path.dirname(os.path.abspath(__file__))
+                        parent_dir = os.path.dirname(base_dir)
+                        storage_path = os.path.join(parent_dir, "cloud_subscriptions_db.json")
+            self.storage_path = storage_path
+            backend_type = os.environ.get("TRUTHGPT_STORAGE_BACKEND", "json").lower()
+            if backend_type == "sqlite" and (storage_path.endswith(".db") or storage_path.endswith(".sqlite")):
+                self._storage = SqliteStorageBackend(storage_path)
+            else:
+                self._storage = AtomicJsonStorage(storage_path)
+
         self._users: Dict[str, UserSubscription] = {}
         self._api_key_to_user: Dict[str, str] = {}
         self._load_storage()
 
     @property
-    def storage(self) -> AtomicJsonStorage:
-        """Expose underlying atomic JSON storage backend."""
+    def storage(self) -> Union[StorageBackend, AtomicJsonStorage]:
+        """Expose underlying persistent storage backend."""
         return self._storage
 
     def _load_storage(self) -> None:
         """Load persistent subscription records and initialize demo users if needed."""
         self._users = {}
         self._api_key_to_user = {}
-        raw_data = self._storage.load()
+        if hasattr(self._storage, "get_all"):
+            raw_data = self._storage.get_all("subscriptions")
+        elif hasattr(self._storage, "load"):
+            raw_data = self._storage.load()
+        else:
+            raw_data = {}
+
         if raw_data:
             for uid, udata in raw_data.items():
                 usage_dict = udata.get("usage", {})
@@ -154,12 +174,26 @@ class SubscriptionManager:
             logger.debug(f"Security sync note: {e}")
 
     def _save_storage(self) -> None:
-        """Save subscription records to atomic disk storage."""
+        """Save subscription records to persistent storage."""
         raw_data = {}
         for uid, user in self._users.items():
             data = user.to_dict()
             raw_data[uid] = data
-        self._storage.save(raw_data)
+        if hasattr(self._storage, "set_all"):
+            self._storage.set_all("subscriptions", raw_data)
+        elif hasattr(self._storage, "save"):
+            self._storage.save(raw_data)
+
+    def migrate_to_storage_backend(self, target_backend: StorageBackend) -> int:
+        """
+        Migrate all in-memory user subscriptions into a target StorageBackend (e.g. SQLite).
+        Returns the number of user subscription records migrated.
+        """
+        raw_data = {uid: user.to_dict() for uid, user in self._users.items()}
+        target_backend.set_all("subscriptions", raw_data)
+        self._storage = target_backend
+        self.storage_path = getattr(target_backend, "db_path", getattr(target_backend, "file_path", self.storage_path))
+        return len(raw_data)
 
     def _ensure_demo_users(self) -> None:
         """Guarantee core default users exist in state."""

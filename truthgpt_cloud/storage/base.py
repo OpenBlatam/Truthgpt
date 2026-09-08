@@ -6,8 +6,10 @@ Defines the contract for persistent state engines (JSON, SQLite, Redis, PostgreS
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 
+from ..core.interfaces import IStorageBackend
 
-class StorageBackend(ABC):
+
+class StorageBackend(IStorageBackend):
     """Abstract interface for TruthGPT Cloud persistence."""
 
     @abstractmethod

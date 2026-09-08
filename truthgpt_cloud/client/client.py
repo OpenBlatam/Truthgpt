@@ -14,6 +14,7 @@ except ImportError:
     _HAS_HTTPX = False
 
 from ..core.tiers import CloudTier, TierConfig, get_tier_config, get_all_tiers
+from ..core.context import TruthGPTCloudContext, get_cloud_context
 from ..billing.subscription import subscription_manager, UserSubscription
 from ..billing.webhooks import webhook_manager
 from ..routing.router import cloud_router, CloudInferenceResponse
@@ -61,16 +62,30 @@ class TruthGPTCloudClient:
         base_url: Optional[str] = None,
         timeout: float = 30.0,
         http_client: Optional[Any] = None,
+        context: Optional[Any] = None,
     ):
-        self.sub_manager = subscription_manager
-        self.router = cloud_router
-        self.verifier = cloud_verifier
-        self.swarm = cloud_swarm
-        self.paper_compiler = cloud_paper_compiler
-        self.webhooks = webhook_manager
-        self.telemetry = cloud_telemetry
-        self.cache = proof_cache
-        self.security = cloud_security
+        if context is not None:
+            self.context = context
+            self.sub_manager = context.subscription_manager
+            self.router = context.router
+            self.verifier = context.verifier
+            self.swarm = context.swarm
+            self.paper_compiler = context.paper_compiler
+            self.webhooks = context.webhooks
+            self.telemetry = context.telemetry
+            self.cache = context.cache
+            self.security = context.security
+        else:
+            self.context = None
+            self.sub_manager = subscription_manager
+            self.router = cloud_router
+            self.verifier = cloud_verifier
+            self.swarm = cloud_swarm
+            self.paper_compiler = cloud_paper_compiler
+            self.webhooks = webhook_manager
+            self.telemetry = cloud_telemetry
+            self.cache = proof_cache
+            self.security = cloud_security
 
         self.base_url = base_url.rstrip("/") if base_url else None
         self.timeout = timeout
