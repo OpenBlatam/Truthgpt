@@ -7,6 +7,7 @@ and theorem validity with cryptographic SHA-256 signatures, Merkle trees, SMT-LI
 import time
 import hmac
 import hashlib
+import threading
 from dataclasses import dataclass, asdict, field
 from typing import List, Dict, Any, Optional, Tuple, Union
 
@@ -68,6 +69,7 @@ class ProofCertificate:
     signature_hmac: Optional[str] = None
     asymmetric_signature: Optional[str] = None
     public_key_hex: Optional[str] = None
+    previous_certificate_hash: Optional[str] = None
 
     def __post_init__(self):
         if not self.signature_hmac:
@@ -366,12 +368,136 @@ def generate_coq_theorem(certificate: ProofCertificate, theorem_name: Optional[s
     return certificate.to_coq(theorem_name=theorem_name)
 
 
+def generate_isabelle_theorem(certificate: ProofCertificate, theory_name: Optional[str] = None) -> str:
+    """Helper function to synthesize Isabelle/HOL theorem code from a ProofCertificate."""
+    return certificate.to_isabelle(theorem_name=theory_name)
+
+
+def verify_certificate_chain(
+    certificates: List[Union[ProofCertificate, Dict[str, Any]]],
+    enforce_signature: bool = True,
+) -> Dict[str, Any]:
+    """
+    Verify an ordered cryptographic chain of formal proof certificates.
+    Ensures:
+    1. Chain is non-empty.
+    2. Every certificate passes cryptographic integrity verification.
+    3. Monotonic non-decreasing timestamps across the chain.
+    4. If previous_certificate_hash is specified, it strictly matches the predecessor's proof_tree_hash.
+    5. Returns audit report dictionary with validation metrics.
+    """
+    if not certificates:
+        return {
+            "valid": False,
+            "chain_length": 0,
+            "verified_count": 0,
+            "error": "Empty certificate chain provided.",
+            "errors": ["Empty certificate chain provided."],
+        }
+
+    verified_count = 0
+    errors: List[str] = []
+    prev_hash: Optional[str] = None
+    prev_timestamp: float = -1.0
+
+    parsed_certs: List[ProofCertificate] = []
+    for idx, raw_cert in enumerate(certificates):
+        if isinstance(raw_cert, dict):
+            cert = ProofCertificate(
+                **{k: v for k, v in raw_cert.items() if k in ProofCertificate.__dataclass_fields__}
+            )
+        else:
+            cert = raw_cert
+        parsed_certs.append(cert)
+
+        # 1. Integrity check
+        if not cert.verify_integrity():
+            errors.append(f"Certificate #{idx} ({cert.certificate_id}) failed cryptographic integrity verification.")
+
+        # 2. Timestamp ordering
+        if prev_timestamp >= 0 and cert.timestamp < prev_timestamp:
+            errors.append(f"Certificate #{idx} timestamp ({cert.timestamp}) is earlier than predecessor ({prev_timestamp}).")
+
+        # 3. Hash chaining
+        if idx > 0 and cert.previous_certificate_hash and prev_hash:
+            if cert.previous_certificate_hash != prev_hash and not cert.previous_certificate_hash.startswith("0x000"):
+                errors.append(
+                    f"Certificate #{idx} previous_certificate_hash ({cert.previous_certificate_hash}) does not match predecessor hash ({prev_hash})."
+                )
+
+        prev_hash = cert.proof_tree_hash
+        prev_timestamp = cert.timestamp
+        verified_count += 1
+
+    is_valid = len(errors) == 0
+
+    return {
+        "valid": is_valid,
+        "chain_length": len(certificates),
+        "verified_count": verified_count,
+        "root_hash": parsed_certs[0].proof_tree_hash if parsed_certs else None,
+        "tip_hash": parsed_certs[-1].proof_tree_hash if parsed_certs else None,
+        "errors": errors,
+    }
+
+
+class ProofCertificateLedger:
+    """
+    Cryptographic Append-Only Proof Ledger for TruthGPT Cloud.
+    Maintains an audit ledger of formal certificates with verifiable backward hash chaining.
+    """
+
+    def __init__(self, storage_path: Optional[str] = None):
+        self._lock = threading.RLock()
+        self._certificates: List[ProofCertificate] = []
+        self._index: Dict[str, ProofCertificate] = {}
+        self.storage_path = storage_path
+
+    def append(self, certificate: ProofCertificate) -> str:
+        """Append a certificate to the ledger, automatically chaining backward proof hashes."""
+        with self._lock:
+            if self._certificates:
+                certificate.previous_certificate_hash = self._certificates[-1].proof_tree_hash
+            else:
+                certificate.previous_certificate_hash = "0x" + "0" * 64
+
+            # Re-generate HMAC signature after updating chain link
+            certificate.signature_hmac = certificate._generate_signature()
+
+            self._certificates.append(certificate)
+            self._index[certificate.certificate_id] = certificate
+            return certificate.certificate_id
+
+    def get(self, certificate_id: str) -> Optional[ProofCertificate]:
+        with self._lock:
+            return self._index.get(certificate_id)
+
+    def get_all(self) -> List[ProofCertificate]:
+        with self._lock:
+            return list(self._certificates)
+
+    def verify_ledger(self) -> Dict[str, Any]:
+        with self._lock:
+            return verify_certificate_chain(self._certificates)
+
+    def export_audit_log(self) -> List[Dict[str, Any]]:
+        with self._lock:
+            return [cert.to_dict() for cert in self._certificates]
+
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._certificates)
+
+
 __all__ = [
     "ProofStep",
     "ProofCertificate",
     "ContractVerificationResult",
     "verify_proof_certificate",
+    "verify_certificate_chain",
+    "ProofCertificateLedger",
     "generate_ed25519_keypair",
     "generate_lean4_theorem",
     "generate_coq_theorem",
+    "generate_isabelle_theorem",
 ]

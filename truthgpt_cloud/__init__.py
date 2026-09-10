@@ -428,6 +428,7 @@ __all__ = [
     "ITelemetryCollector",
     "ICircuitBreaker",
     "IWebhookManager",
+    "IPaperCompiler",
     "TruthGPTCloudContext",
     "get_cloud_context",
     "create_isolated_context",

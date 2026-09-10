@@ -52,6 +52,8 @@ class CloudFactory:
         elif cfg.backend_type == "sqlite":
             db_path = cfg.file_path or cfg.db_url or ":memory:"
             return backend_cls(db_path=db_path)
+        elif cfg.backend_type in ("memory", "in_memory"):
+            return backend_cls()
         else:
             file_path = cfg.file_path or str(
                 Path(__file__).resolve().parent.parent / "cloud_subscriptions_db.json"

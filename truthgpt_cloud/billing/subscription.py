@@ -10,6 +10,7 @@ import tempfile
 import time
 import uuid
 import logging
+import threading
 from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Union
@@ -22,7 +23,7 @@ from ..core.exceptions import (
     TruthGPTCloudError,
 )
 from .models import UsageRecord, Invoice, ApiKeyInfo, WebhookSubscription, UserSubscription
-from ..storage import StorageBackend, AtomicJsonStorage, SqliteStorageBackend
+from ..storage import StorageBackend, AtomicJsonStorage, SqliteStorageBackend, MemoryStorageBackend
 from .gateways import PaymentGatewayService
 
 logger = logging.getLogger("TruthGPT.CloudBilling")
@@ -62,7 +63,7 @@ TOKEN_PACK_CATALOG: List[Dict[str, Any]] = [
 class SubscriptionManager:
     """
     Centralized subscription, accounting, and quota manager for TruthGPT Cloud.
-    Persists data in pluggable storage backends (Atomic JSON, SQLite) for reliability across worker processes.
+    Persists data in pluggable storage backends (Atomic JSON, SQLite, In-Memory) for reliability across worker processes.
     """
 
     def __init__(
@@ -70,40 +71,53 @@ class SubscriptionManager:
         storage_path: Optional[str] = None,
         storage: Optional[Union[StorageBackend, AtomicJsonStorage]] = None,
     ):
+        self._lock = threading.RLock()
         if storage is not None:
             self._storage = storage
             self.storage_path = getattr(storage, "filepath", getattr(storage, "file_path", getattr(storage, "db_path", None)))
         else:
-            if storage_path is None:
-                storage_path = os.environ.get("TRUTHGPT_STORAGE_PATH")
-                if not storage_path:
-                    main_file = sys.argv[0] if sys.argv else ""
-                    is_testing = (
-                        "PYTEST_CURRENT_TEST" in os.environ
-                        or "pytest" in sys.modules
-                        or os.environ.get("TRUTHGPT_TEST_ENV") == "1"
-                        or "test_" in os.path.basename(main_file).lower()
-                        or os.path.basename(main_file).lower().startswith("test")
-                    )
-                    if is_testing:
-                        test_dir = os.path.join(tempfile.gettempdir(), "truthgpt_test_storage")
-                        os.makedirs(test_dir, exist_ok=True)
-                        storage_path = os.path.join(test_dir, "cloud_subscriptions_test.json")
-                        base_dir = os.path.dirname(os.path.abspath(__file__))
-                        parent_dir = os.path.dirname(base_dir)
-                        orig = os.path.join(parent_dir, "cloud_subscriptions_db.json")
-                        if os.path.exists(orig) and not os.path.exists(storage_path):
-                            shutil.copy2(orig, storage_path)
-                    else:
-                        base_dir = os.path.dirname(os.path.abspath(__file__))
-                        parent_dir = os.path.dirname(base_dir)
-                        storage_path = os.path.join(parent_dir, "cloud_subscriptions_db.json")
-            self.storage_path = storage_path
-            backend_type = os.environ.get("TRUTHGPT_STORAGE_BACKEND", "json").lower()
-            if backend_type == "sqlite" and (storage_path.endswith(".db") or storage_path.endswith(".sqlite")):
-                self._storage = SqliteStorageBackend(storage_path)
+            if storage_path == ":memory:":
+                self.storage_path = ":memory:"
+                self._storage = MemoryStorageBackend()
             else:
-                self._storage = AtomicJsonStorage(storage_path)
+                if storage_path is None:
+                    storage_path = os.environ.get("TRUTHGPT_STORAGE_PATH")
+                    if not storage_path:
+                        argv_str = " ".join(sys.argv).lower() if sys.argv else ""
+                        main_file = sys.argv[0] if sys.argv else ""
+                        is_testing = (
+                            "PYTEST_CURRENT_TEST" in os.environ
+                            or "pytest" in sys.modules
+                            or "unittest" in sys.modules
+                            or os.environ.get("TRUTHGPT_TEST_ENV") == "1"
+                            or "test_" in os.path.basename(main_file).lower()
+                            or os.path.basename(main_file).lower().startswith("test")
+                            or "unittest" in argv_str
+                            or "pytest" in argv_str
+                            or any("test" in arg.lower() for arg in (sys.argv or []))
+                        )
+                        if is_testing:
+                            test_dir = os.path.join(tempfile.gettempdir(), "truthgpt_test_storage")
+                            os.makedirs(test_dir, exist_ok=True)
+                            storage_path = os.path.join(test_dir, f"cloud_subscriptions_test_{os.getpid()}.json")
+                            base_dir = os.path.dirname(os.path.abspath(__file__))
+                            parent_dir = os.path.dirname(base_dir)
+                            orig = os.path.join(parent_dir, "cloud_subscriptions_db.json")
+                            if os.path.exists(orig):
+                                shutil.copy2(orig, storage_path)
+                        else:
+                            base_dir = os.path.dirname(os.path.abspath(__file__))
+                            parent_dir = os.path.dirname(base_dir)
+                            storage_path = os.path.join(parent_dir, "cloud_subscriptions_db.json")
+                self.storage_path = storage_path
+                if storage_path == ":memory:":
+                    self._storage = MemoryStorageBackend()
+                else:
+                    backend_type = os.environ.get("TRUTHGPT_STORAGE_BACKEND", "json").lower()
+                    if backend_type == "sqlite" and (storage_path.endswith(".db") or storage_path.endswith(".sqlite")):
+                        self._storage = SqliteStorageBackend(storage_path)
+                    else:
+                        self._storage = AtomicJsonStorage(storage_path)
 
         self._users: Dict[str, UserSubscription] = {}
         self._api_key_to_user: Dict[str, str] = {}
@@ -175,14 +189,15 @@ class SubscriptionManager:
 
     def _save_storage(self) -> None:
         """Save subscription records to persistent storage."""
-        raw_data = {}
-        for uid, user in self._users.items():
-            data = user.to_dict()
-            raw_data[uid] = data
-        if hasattr(self._storage, "set_all"):
-            self._storage.set_all("subscriptions", raw_data)
-        elif hasattr(self._storage, "save"):
-            self._storage.save(raw_data)
+        with self._lock:
+            raw_data = {}
+            for uid, user in self._users.items():
+                data = user.to_dict()
+                raw_data[uid] = data
+            if hasattr(self._storage, "set_all"):
+                self._storage.set_all("subscriptions", raw_data)
+            elif hasattr(self._storage, "save"):
+                self._storage.save(raw_data)
 
     def migrate_to_storage_backend(self, target_backend: StorageBackend) -> int:
         """
@@ -221,6 +236,28 @@ class SubscriptionManager:
         if modified:
             self._save_storage()
 
+    def cleanup_test_accounts(self) -> int:
+        """Remove temporary test accounts (any user whose id is not a canonical seed account)."""
+        seed_uids = {"usr_default_demo", "usr_pro_sample", "usr_ultra_enterprise", "usr_enterprise_sample"}
+        with self._lock:
+            to_remove = [uid for uid in list(self._users.keys()) if uid not in seed_uids]
+            for uid in to_remove:
+                user = self._users.pop(uid, None)
+                if user:
+                    for key in user.api_keys:
+                        self._api_key_to_user.pop(key, None)
+            if to_remove:
+                self._save_storage()
+            return len(to_remove)
+
+    def reset_to_seeds(self) -> None:
+        """Completely reset state to only canonical demo accounts."""
+        with self._lock:
+            self._users.clear()
+            self._api_key_to_user.clear()
+            self._ensure_demo_users()
+            self._save_storage()
+
     def register_user(
         self,
         email: str,
@@ -237,17 +274,18 @@ class SubscriptionManager:
         user_id = f"usr_{uuid.uuid4().hex[:10]}"
         api_key = f"tgpt_cloud_live_{uuid.uuid4().hex[:20]}"
 
-        user = UserSubscription(
-            user_id=user_id,
-            email=email,
-            name=name,
-            tier=tier,
-            api_keys=[api_key],
-            usage=UsageRecord()
-        )
-        self._users[user_id] = user
-        self._api_key_to_user[api_key] = user_id
-        self._save_storage()
+        with self._lock:
+            user = UserSubscription(
+                user_id=user_id,
+                email=email,
+                name=name,
+                tier=tier,
+                api_keys=[api_key],
+                usage=UsageRecord()
+            )
+            self._users[user_id] = user
+            self._api_key_to_user[api_key] = user_id
+            self._save_storage()
 
         try:
             from ..security import cloud_security
@@ -265,16 +303,18 @@ class SubscriptionManager:
 
     def get_user(self, user_id: str) -> Optional[UserSubscription]:
         """Retrieve user by user_id."""
-        return self._users.get(user_id)
+        with self._lock:
+            return self._users.get(user_id)
 
     get_subscription = get_user
 
     def get_user_by_api_key(self, api_key: str) -> Optional[UserSubscription]:
         """Resolve user subscription from an API key."""
-        user_id = self._api_key_to_user.get(api_key)
-        if user_id:
-            return self.get_user(user_id)
-        return None
+        with self._lock:
+            user_id = self._api_key_to_user.get(api_key)
+            if user_id:
+                return self.get_user(user_id)
+            return None
 
     def generate_new_api_key(
         self,
@@ -514,12 +554,13 @@ class SubscriptionManager:
         )
 
         # Increment purchased tokens balances
-        current_purchased = getattr(user.usage, "purchased_tokens_balance", 0)
-        total_purchased = getattr(user.usage, "total_purchased_tokens", 0)
-        user.usage.purchased_tokens_balance = current_purchased + pack["tokens"]
-        user.usage.total_purchased_tokens = total_purchased + pack["tokens"]
-        user.invoices.insert(0, invoice)
-        self._save_storage()
+        with self._lock:
+            current_purchased = getattr(user.usage, "purchased_tokens_balance", 0)
+            total_purchased = getattr(user.usage, "total_purchased_tokens", 0)
+            user.usage.purchased_tokens_balance = current_purchased + pack["tokens"]
+            user.usage.total_purchased_tokens = total_purchased + pack["tokens"]
+            user.invoices.insert(0, invoice)
+            self._save_storage()
 
         try:
             from ..telemetry import cloud_telemetry
@@ -557,89 +598,90 @@ class SubscriptionManager:
         is_swarm: bool = False
     ) -> bool:
         """Verify that user has enough quota (daily or purchased top-up balance) and record token usage."""
-        user = self.get_user(user_id)
-        if not user:
-            user = self.get_user_by_api_key(user_id)
-        if not user:
-            user = self.get_user("usr_default_demo")
-        if not user:
-            self._ensure_demo_users()
-            user = self.get_user("usr_default_demo")
+        with self._lock:
+            user = self.get_user(user_id)
+            if not user:
+                user = self.get_user_by_api_key(user_id)
+            if not user:
+                user = self.get_user("usr_default_demo")
+            if not user:
+                self._ensure_demo_users()
+                user = self.get_user("usr_default_demo")
 
-        tier_cfg = get_tier_config(user.tier if user else CloudTier.FREE)
+            tier_cfg = get_tier_config(user.tier if user else CloudTier.FREE)
 
-        # Check daily reset (every 24 hours)
-        now = time.time()
-        if user and (now - user.usage.last_reset_timestamp > 86400):
-            user.usage.tokens_consumed_today = 0
-            user.usage.daily_request_count = 0
-            user.usage.last_reset_timestamp = now
+            # Check daily reset (every 24 hours)
+            now = time.time()
+            if user and (now - user.usage.last_reset_timestamp > 86400):
+                user.usage.tokens_consumed_today = 0
+                user.usage.daily_request_count = 0
+                user.usage.last_reset_timestamp = now
 
-        # Check token quota: daily quota + purchased top-up balance
-        if user:
-            daily_remaining = max(0, tier_cfg.daily_token_limit - user.usage.tokens_consumed_today)
-            purchased_balance = getattr(user.usage, "purchased_tokens_balance", 0)
-            total_available = daily_remaining + purchased_balance
+            # Check token quota: daily quota + purchased top-up balance
+            if user:
+                daily_remaining = max(0, tier_cfg.daily_token_limit - user.usage.tokens_consumed_today)
+                purchased_balance = getattr(user.usage, "purchased_tokens_balance", 0)
+                total_available = daily_remaining + purchased_balance
 
-            if estimated_tokens > total_available:
-                try:
-                    from .webhooks import webhook_manager
-                    webhook_manager.emit_event("quota.exceeded", user.user_id, {
-                        "consumed": user.usage.tokens_consumed_today,
-                        "limit": tier_cfg.daily_token_limit,
-                        "purchased_balance": purchased_balance,
-                        "requested_tokens": estimated_tokens
-                    })
-                except Exception:
-                    pass
-                raise QuotaExceededError(
-                    message=(
-                        f"Límite de tokens superado ({user.usage.tokens_consumed_today}/{tier_cfg.daily_token_limit}, saldo adicional: {purchased_balance:,}). "
-                        f"Adquiere un paquete de tokens adicional (top-up) o actualiza tu suscripción a TruthGPT Pro o Ultra."
-                    ),
-                    limit=tier_cfg.daily_token_limit,
-                    consumed=user.usage.tokens_consumed_today
-                )
+                if estimated_tokens > total_available:
+                    try:
+                        from .webhooks import webhook_manager
+                        webhook_manager.emit_event("quota.exceeded", user.user_id, {
+                            "consumed": user.usage.tokens_consumed_today,
+                            "limit": tier_cfg.daily_token_limit,
+                            "purchased_balance": purchased_balance,
+                            "requested_tokens": estimated_tokens
+                        })
+                    except Exception:
+                        pass
+                    raise QuotaExceededError(
+                        message=(
+                            f"Límite de tokens superado ({user.usage.tokens_consumed_today}/{tier_cfg.daily_token_limit}, saldo adicional: {purchased_balance:,}). "
+                            f"Adquiere un paquete de tokens adicional (top-up) o actualiza tu suscripción a TruthGPT Pro o Ultra."
+                        ),
+                        limit=tier_cfg.daily_token_limit,
+                        consumed=user.usage.tokens_consumed_today
+                    )
 
-        # Record consumption
-        if user:
-            prev_pct = (user.usage.tokens_consumed_today / max(1, tier_cfg.daily_token_limit))
+            # Record consumption
+            if user:
+                prev_pct = (user.usage.tokens_consumed_today / max(1, tier_cfg.daily_token_limit))
 
-            # Consume from daily limit first, then from purchased balance
-            if user.usage.tokens_consumed_today < tier_cfg.daily_token_limit:
-                daily_fill = min(estimated_tokens, tier_cfg.daily_token_limit - user.usage.tokens_consumed_today)
-                user.usage.tokens_consumed_today += daily_fill
-                excess = estimated_tokens - daily_fill
-            else:
-                excess = estimated_tokens
+                # Consume from daily limit first, then from purchased balance
+                if user.usage.tokens_consumed_today < tier_cfg.daily_token_limit:
+                    daily_fill = min(estimated_tokens, tier_cfg.daily_token_limit - user.usage.tokens_consumed_today)
+                    user.usage.tokens_consumed_today += daily_fill
+                    excess = estimated_tokens - daily_fill
+                else:
+                    excess = estimated_tokens
 
-            if excess > 0:
-                current_purchased = getattr(user.usage, "purchased_tokens_balance", 0)
-                user.usage.purchased_tokens_balance = max(0, current_purchased - excess)
+                if excess > 0:
+                    current_purchased = getattr(user.usage, "purchased_tokens_balance", 0)
+                    user.usage.purchased_tokens_balance = max(0, current_purchased - excess)
 
-            user.usage.total_tokens_consumed += estimated_tokens
-            user.usage.daily_request_count += 1
-            new_pct = (user.usage.tokens_consumed_today / max(1, tier_cfg.daily_token_limit))
+                user.usage.total_tokens_consumed += estimated_tokens
+                user.usage.daily_request_count += 1
+                new_pct = (user.usage.tokens_consumed_today / max(1, tier_cfg.daily_token_limit))
 
-            # Trigger warning event if 80% threshold crossed
-            if prev_pct < 0.8 <= new_pct:
-                try:
-                    from .webhooks import webhook_manager
-                    webhook_manager.emit_event("quota.warning", user.user_id, {
-                        "consumed": user.usage.tokens_consumed_today,
-                        "limit": tier_cfg.daily_token_limit,
-                        "percentage": round(new_pct * 100, 1)
-                    })
-                except Exception:
-                    pass
+                # Trigger warning event if 80% threshold crossed
+                if prev_pct < 0.8 <= new_pct:
+                    try:
+                        from .webhooks import webhook_manager
+                        webhook_manager.emit_event("quota.warning", user.user_id, {
+                            "consumed": user.usage.tokens_consumed_today,
+                            "limit": tier_cfg.daily_token_limit,
+                            "percentage": round(new_pct * 100, 1)
+                        })
+                    except Exception:
+                        pass
 
-            if is_verification:
-                user.usage.verifications_run += 1
-            if is_swarm:
-                user.usage.swarm_sessions_count += 1
+                if is_verification:
+                    user.usage.verifications_run += 1
+                if is_swarm:
+                    user.usage.swarm_sessions_count += 1
 
-            self._save_storage()
-        return True
+                self._save_storage()
+            return True
 
 
     def get_user_status_summary(self, user_id: str) -> Dict[str, Any]:
@@ -740,6 +782,108 @@ class SubscriptionManager:
             },
             "active_api_keys_count": len(summary["api_keys"]),
             "invoices_count": len(summary["invoices"])
+        }
+
+    @classmethod
+    def create_isolated(cls, seed_demo_users: bool = True) -> "SubscriptionManager":
+        """Factory method to instantiate a fully isolated in-memory SubscriptionManager instance."""
+        mgr = cls(storage_path=":memory:")
+        if not seed_demo_users:
+            mgr._users.clear()
+            mgr._api_key_to_user.clear()
+        return mgr
+
+    def export_backup(self, backup_dir: Optional[str] = None) -> str:
+        """Create a timestamped backup snapshot of current subscription database."""
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        if backup_dir is None:
+            if self.storage_path and self.storage_path != ":memory:":
+                base_dir = os.path.dirname(os.path.abspath(self.storage_path))
+            else:
+                base_dir = tempfile.gettempdir()
+            backup_dir = os.path.join(base_dir, "backups")
+        os.makedirs(backup_dir, exist_ok=True)
+        backup_file = os.path.join(backup_dir, f"subscriptions_backup_{timestamp}.json")
+        raw_data = {uid: user.to_dict() for uid, user in self._users.items()}
+        import json
+        with open(backup_file, "w", encoding="utf-8") as f:
+            json.dump(raw_data, f, indent=2, ensure_ascii=False)
+        logger.info(f"Exported subscriptions backup to {backup_file}")
+        return backup_file
+
+    def restore_backup(self, backup_path: str) -> bool:
+        """Restore subscription records from a backup file."""
+        import json
+        if not os.path.exists(backup_path):
+            raise FileNotFoundError(f"Backup file not found: {backup_path}")
+        with open(backup_path, "r", encoding="utf-8") as f:
+            raw_data = json.load(f)
+        if not isinstance(raw_data, dict):
+            raise ValueError("Invalid backup format: expected JSON object")
+        self._users.clear()
+        self._api_key_to_user.clear()
+        for uid, udata in raw_data.items():
+            usage_dict = udata.get("usage", {})
+            usage = UsageRecord(**usage_dict) if usage_dict else UsageRecord()
+            invoices = [Invoice(**inv) for inv in udata.get("invoices", [])]
+            tier_val = CloudTier(udata.get("tier", "free"))
+            api_details = [
+                ApiKeyInfo(**d) for d in udata.get("api_key_details", udata.get("api_keys_detail", []))
+            ]
+            user = UserSubscription(
+                user_id=udata["user_id"],
+                email=udata.get("email", ""),
+                name=udata.get("name", "TruthGPT User"),
+                tier=tier_val,
+                billing_cycle=udata.get("billing_cycle", "monthly"),
+                status=udata.get("status", "active"),
+                api_keys=udata.get("api_keys", []),
+                subscription_start_date=udata.get("subscription_start_date", ""),
+                next_billing_date=udata.get("next_billing_date", ""),
+                usage=usage,
+                invoices=invoices,
+                api_key_details=api_details,
+                custom_limits=udata.get("custom_limits")
+            )
+            self._users[uid] = user
+            for key in user.api_keys:
+                self._api_key_to_user[key] = uid
+        self._save_storage()
+        return True
+
+    def compact_database(self) -> Dict[str, Any]:
+        """Compact database by cleaning inactive keys and checking record consistency."""
+        pruned_keys = 0
+        for uid, user in self._users.items():
+            if user.api_key_details:
+                active_details = [k for k in user.api_key_details if getattr(k, "is_active", True)]
+                pruned_keys += len(user.api_key_details) - len(active_details)
+                user.api_key_details = active_details
+        self._save_storage()
+        return {
+            "success": True,
+            "total_users": len(self._users),
+            "pruned_inactive_keys": pruned_keys,
+            "storage_path": self.storage_path
+        }
+
+    def validate_database_integrity(self) -> Dict[str, Any]:
+        """Audit database integrity: check orphaned keys, invalid tiers, and negative token balances."""
+        issues = []
+        for uid, user in self._users.items():
+            if not isinstance(user.tier, CloudTier):
+                issues.append(f"User {uid} has invalid tier type: {type(user.tier)}")
+            for k in user.api_keys:
+                if self._api_key_to_user.get(k) != uid:
+                    issues.append(f"Key {k[:12]}... mapping mismatch for user {uid}")
+            if user.usage.tokens_consumed_today < 0:
+                issues.append(f"User {uid} has negative consumed tokens")
+        return {
+            "valid": len(issues) == 0,
+            "total_users": len(self._users),
+            "issues_count": len(issues),
+            "issues": issues,
+            "storage_path": self.storage_path
         }
 
 

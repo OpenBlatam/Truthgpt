@@ -245,6 +245,12 @@ class CloudRegistry:
                 cls._storage_backends["atomic"] = AtomicJsonStorage
             except ImportError:
                 pass
+            try:
+                from ..storage.memory_storage import MemoryStorageBackend
+                cls._storage_backends["memory"] = MemoryStorageBackend
+                cls._storage_backends["in_memory"] = MemoryStorageBackend
+            except ImportError:
+                pass
 
             # Built-in Caches
             try:

@@ -26,6 +26,13 @@ from .domain_invariants import (
     verify_ode_stability as _verify_ode_stability,
     verify_loop_invariant as _verify_loop_invariant,
     verify_differential_privacy as _verify_differential_privacy,
+    verify_spectral_norm as _verify_spectral_norm,
+    verify_lipschitz_constant as _verify_lipschitz_constant,
+    verify_gradient_clipping_bounds as _verify_gradient_clipping_bounds,
+    verify_loss_monotonicity as _verify_loss_monotonicity,
+    verify_lora_rank_safety as _verify_lora_rank_safety,
+    verify_kv_cache_memory_bound as _verify_kv_cache_memory_bound,
+    DomainInvariantsVerifier,
 )
 from .code_purity import (
     verify_code_purity,
@@ -104,12 +111,14 @@ class CloudFormalVerifier(IFormalVerifier):
         self,
         claim: str,
         constraints: Optional[List[str]] = None,
+        depth_level: int = 2,
         tier: Optional[Any] = None,
+        tier_depth: Optional[int] = None,
         **kwargs: Any,
     ) -> ProofCertificate:
         """Verify an algebraic, logical, or mathematical claim and generate a cryptographic certificate."""
-        depth = kwargs.get("depth_level", kwargs.get("tier_depth", 3))
-        return self.verify_expression(claim_text=claim, constraints=constraints, tier_depth=depth)
+        effective_depth = tier_depth if tier_depth is not None else kwargs.get("tier_depth", depth_level)
+        return self.verify_expression(claim_text=claim, constraints=constraints, tier_depth=effective_depth)
 
     def solve_smt(
         self,
@@ -445,15 +454,6 @@ class CloudFormalVerifier(IFormalVerifier):
             pass
 
         return cert
-
-    def verify_claim(
-        self,
-        claim: str,
-        constraints: Optional[List[str]] = None,
-        depth_level: int = 2
-    ) -> ProofCertificate:
-        """Alias for verify_expression for ergonomic API compatibility."""
-        return self.verify_expression(claim_text=claim, constraints=constraints, tier_depth=depth_level)
 
     def verify_contract(
         self,
@@ -847,6 +847,89 @@ class CloudFormalVerifier(IFormalVerifier):
             noise_multiplier=noise_multiplier,
         )
 
+    def verify_spectral_norm(
+        self,
+        matrix: List[List[float]],
+        max_norm: float = 1.0
+    ) -> Dict[str, Any]:
+        """Formally verify bounded spectral norm sigma_max(W) <= max_norm."""
+        return _verify_spectral_norm(matrix, max_norm=max_norm)
+
+    def verify_lipschitz_constant(
+        self,
+        layer_type: str = "dense",
+        weight_spectral_norm: float = 1.0,
+        activation: str = "relu",
+        target_lipschitz: float = 1.0
+    ) -> Dict[str, Any]:
+        """Formally verify composite Lipschitz constant of neural layer."""
+        return _verify_lipschitz_constant(
+            layer_type=layer_type,
+            weight_spectral_norm=weight_spectral_norm,
+            activation=activation,
+            target_lipschitz=target_lipschitz
+        )
+
+    def verify_gradient_clipping_bounds(
+        self,
+        grad_norm: float,
+        max_norm: float = 1.0,
+        clip_type: str = "l2"
+    ) -> Dict[str, Any]:
+        """Formally verify gradient clipping bounds and directional preservation."""
+        return _verify_gradient_clipping_bounds(grad_norm=grad_norm, max_norm=max_norm, clip_type=clip_type)
+
+    def verify_loss_monotonicity(
+        self,
+        loss_sequence: List[float],
+        tolerance: float = 0.05,
+        strict: bool = False
+    ) -> Dict[str, Any]:
+        """Formally verify non-increasing loss convergence invariants."""
+        return _verify_loss_monotonicity(loss_sequence=loss_sequence, tolerance=tolerance, strict=strict)
+
+    def verify_lora_rank_safety(
+        self,
+        base_dim: int,
+        rank: int,
+        alpha: float,
+        target_modules: Optional[List[str]] = None,
+        max_rank_ratio: float = 0.5,
+        min_scaling: float = 0.05,
+        max_scaling: float = 16.0
+    ) -> Dict[str, Any]:
+        """Formally verify Low-Rank Adaptation (LoRA) configuration invariants."""
+        return _verify_lora_rank_safety(
+            base_dim=base_dim,
+            rank=rank,
+            alpha=alpha,
+            target_modules=target_modules,
+            max_rank_ratio=max_rank_ratio,
+            min_scaling=min_scaling,
+            max_scaling=max_scaling,
+        )
+
+    def verify_kv_cache_memory_bound(
+        self,
+        batch_size: int,
+        seq_len: int,
+        num_layers: int,
+        num_heads: int,
+        head_dim: int,
+        precision_bits: int = 16,
+        vram_budget_gb: float = 24.0
+    ) -> Dict[str, Any]:
+        """Formally verify Transformer KV-Cache memory footprint bounds against GPU VRAM budget."""
+        return _verify_kv_cache_memory_bound(
+            batch_size=batch_size,
+            seq_len=seq_len,
+            num_layers=num_layers,
+            num_heads=num_heads,
+            head_dim=head_dim,
+            precision_bits=precision_bits,
+            vram_budget_gb=vram_budget_gb,
+        )
+
     def verify_batch(
         self,
         claims: List[str],
@@ -892,6 +975,10 @@ verify_ode_stability = _verify_ode_stability
 verify_lyapunov_stability = _verify_ode_stability
 verify_loop_invariant = _verify_loop_invariant
 verify_differential_privacy = _verify_differential_privacy
+verify_spectral_norm = _verify_spectral_norm
+verify_lipschitz_constant = _verify_lipschitz_constant
+verify_gradient_clipping_bounds = _verify_gradient_clipping_bounds
+verify_loss_monotonicity = _verify_loss_monotonicity
 verify_code_purity_and_invariants = _verify_code_purity_and_invariants
 
 __all__ = [
@@ -909,9 +996,14 @@ __all__ = [
     "verify_lyapunov_stability",
     "verify_loop_invariant",
     "verify_differential_privacy",
+    "verify_spectral_norm",
+    "verify_lipschitz_constant",
+    "verify_gradient_clipping_bounds",
+    "verify_loss_monotonicity",
     "verify_code_purity_and_invariants",
     "DomainInvariantsVerifier",
     "CodePurityVerifier",
 ]
+
 
 

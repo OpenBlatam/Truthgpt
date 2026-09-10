@@ -37,9 +37,9 @@ class CloudStorageConfig:
 
     def validate(self) -> None:
         """Validate storage configuration."""
-        if self.backend_type not in ("json", "sqlite", "atomic"):
+        if self.backend_type not in ("json", "sqlite", "atomic", "memory", "in_memory"):
             raise CloudConfigValidationError(
-                f"Unsupported storage backend_type '{self.backend_type}'. Expected 'json', 'sqlite', or 'atomic'."
+                f"Unsupported storage backend_type '{self.backend_type}'. Expected 'json', 'sqlite', 'atomic', or 'memory'."
             )
         if self.debounce_flush_seconds < 0:
             raise CloudConfigValidationError("debounce_flush_seconds must be non-negative.")

@@ -9,9 +9,12 @@ from .models import (
 )
 from .certificate import (
     verify_proof_certificate,
+    verify_certificate_chain,
+    ProofCertificateLedger,
     generate_ed25519_keypair,
     generate_lean4_theorem,
     generate_coq_theorem,
+    generate_isabelle_theorem,
 )
 from .merkle import (
     MerkleTree,
@@ -39,6 +42,12 @@ from .domain_invariants import (
     verify_lyapunov_stability,
     verify_loop_invariant,
     verify_differential_privacy,
+    verify_spectral_norm,
+    verify_lipschitz_constant,
+    verify_gradient_clipping_bounds,
+    verify_loss_monotonicity,
+    verify_lora_rank_safety,
+    verify_kv_cache_memory_bound,
     DomainInvariantsVerifier,
 )
 from .code_purity import (
@@ -53,9 +62,12 @@ __all__ = [
     "ContractVerificationResult",
     "ProofStep",
     "verify_proof_certificate",
+    "verify_certificate_chain",
+    "ProofCertificateLedger",
     "generate_ed25519_keypair",
     "generate_lean4_theorem",
     "generate_coq_theorem",
+    "generate_isabelle_theorem",
     "MerkleTree",
     "compute_merkle_root",
     "verify_merkle_inclusion",
@@ -73,6 +85,12 @@ __all__ = [
     "verify_lyapunov_stability",
     "verify_loop_invariant",
     "verify_differential_privacy",
+    "verify_spectral_norm",
+    "verify_lipschitz_constant",
+    "verify_gradient_clipping_bounds",
+    "verify_loss_monotonicity",
+    "verify_lora_rank_safety",
+    "verify_kv_cache_memory_bound",
     "DomainInvariantsVerifier",
     "verify_code_purity",
     "verify_code_purity_and_invariants",
@@ -81,4 +99,5 @@ __all__ = [
     "_HAS_Z3",
     "_HAS_SYMPY",
 ]
+
 

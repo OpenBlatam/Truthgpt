@@ -23,6 +23,7 @@ from .graph_topology import (
     _HAS_NETWORKX,
 )
 from ..telemetry import cloud_telemetry
+from ..core.interfaces import ISwarmOrchestrator
 
 
 logger = logging.getLogger("TruthGPT.CloudSwarm")
@@ -30,7 +31,7 @@ logger = logging.getLogger("TruthGPT.CloudSwarm")
 
 
 
-class CloudSwarmOrchestrator:
+class CloudSwarmOrchestrator(ISwarmOrchestrator):
     """
     High-performance Cloud Swarm coordinator for TruthGPT Pro, Ultra & Enterprise tiers.
     Orchestrates specialized agent personas with multi-round adversarial debate and CoVe backtracking.
@@ -264,6 +265,151 @@ class CloudSwarmOrchestrator:
         graph = build_swarm_topology_graph(nodes, topology_type=topology)
         return get_graph_metrics(graph)
 
+    def render_topology_mermaid(self, topology: str = "hierarchical") -> str:
+        """Generate a Mermaid diagram definition visualizing the coordination network of a topology."""
+        topo = topology.lower()
+        if topo in ["adversarial_debate", "adversarial"]:
+            return """graph LR
+    Proponent["🔵 Proponent (Theorem Formulation)"]
+    Adversary["🔴 Red Team (Refutation & Counterexamples)"]
+    HoareAuditor["🛡️ Hoare Logic Contract Auditor"]
+    ConsensusJudge{"⚖️ Consensus Judge"}
+    Proponent -->|Claim & Proof Steps| Adversary
+    Adversary -->|Counterexample Challenges| Proponent
+    Proponent -->|Refined Lemmas| HoareAuditor
+    Adversary -->|Edge Conditions| HoareAuditor
+    HoareAuditor -->|Verified Invariants| ConsensusJudge"""
+        elif topo in ["quantum_consensus", "quantum"]:
+            return """graph TD
+    Prompt["💬 Master Goal"]
+    A1["⚛️ SMT Solver Agent"]
+    A2["⚛️ SymPy Algebraic Agent"]
+    A3["⚛️ Literature Cross-Verifier"]
+    A4["⚛️ Numerical Stability Agent"]
+    Consensus{"🌟 Quantum Singularity Consensus"}
+    Prompt --> A1
+    Prompt --> A2
+    Prompt --> A3
+    Prompt --> A4
+    A1 <--> A2
+    A2 <--> A3
+    A3 <--> A4
+    A1 --> Consensus
+    A2 --> Consensus
+    A3 --> Consensus
+    A4 --> Consensus"""
+        elif topo in ["hierarchical_audit", "hierarchical"]:
+            return """graph TD
+    Lead["👑 Chief Formal Strategist"]
+    Worker1["🐝 SMT Lemma Prover"]
+    Worker2["🐝 AST Code Auditor"]
+    Worker3["🐝 Literature Benchmarker"]
+    Validator["🛡️ Sovereign Proof Validator"]
+    Lead --> Worker1
+    Lead --> Worker2
+    Lead --> Worker3
+    Worker1 --> Validator
+    Worker2 --> Validator
+    Worker3 --> Validator"""
+        else:  # Star or default
+            return """graph TD
+    Center["⭐ Swarm Hub Dispatcher"]
+    A1["🐝 Agent Alpha"]
+    A2["🐝 Agent Beta"]
+    A3["🐝 Agent Gamma"]
+    Center <--> A1
+    Center <--> A2
+    Center <--> A3"""
+
+    def select_optimal_topology(self, prompt: str, tier: str = "pro") -> str:
+        """
+        Dynamically select the optimal swarm topology based on prompt complexity and tier allowances.
+        """
+        tier_lower = str(tier).lower().split(".")[-1]
+        p_lower = prompt.lower()
+
+        if tier_lower in ["free", "lite"]:
+            return "star"
+
+        if any(w in p_lower for w in ["adversarial", "refut", "contraejemplo", "counterexample", "attack", "exploit"]):
+            return "adversarial_debate"
+        elif any(w in p_lower for w in ["quantum", "singularity", "ensemble", "complex", "teorema", "lemma", "formal"]):
+            if tier_lower in ["ultra", "enterprise"]:
+                return "quantum_consensus"
+            return "adversarial_debate"
+        elif any(w in p_lower for w in ["audit", "contract", "purity", "security", "code"]):
+            return "hierarchical_audit"
+        return "hierarchical"
+
+    def compute_weighted_consensus(
+        self,
+        agents: List[SwarmAgentNode],
+        weights: Optional[Dict[str, float]] = None
+    ) -> float:
+        """
+        Calculate Borda/Bayesian weighted consensus score across swarm agents.
+        """
+        if not agents:
+            return 1.0
+        default_weights = {
+            "chief_formal_theorist": 1.5,
+            "z3_smt_logic_solver": 2.0,
+            "adversarial_auditor": 1.8,
+            "sota_literature_researcher": 1.2,
+            "hoare_contract_verifier": 1.6,
+        }
+        total_weight = 0.0
+        weighted_score = 0.0
+        for a in agents:
+            role_key = a.role_name.lower().replace(" ", "_")
+            w = (weights or {}).get(role_key, default_weights.get(role_key, 1.0))
+            weighted_score += a.confidence * w
+            total_weight += w
+
+        return round(weighted_score / total_weight, 4) if total_weight > 0 else 0.998
+
+    def orchestrate(
+        self,
+        query: str,
+        tier: Optional[Any] = None,
+    ) -> Any:
+        """Execute multi-agent swarm reasoning and return execution trace."""
+        topo = self.select_optimal_topology(query, tier=str(tier) if tier else "pro")
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop and loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(
+                    asyncio.run,
+                    self.execute_swarm_session(prompt=query, topology=topo)
+                ).result()
+        else:
+            return asyncio.run(self.execute_swarm_session(prompt=query, topology=topo))
+
+    def execute_debate(
+        self,
+        topic: str,
+        rounds: int = 3,
+        agents: Optional[List[Any]] = None,
+    ) -> Any:
+        """Execute adversarial multi-agent debate across multiple structured rounds."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop and loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(
+                    asyncio.run,
+                    self.execute_adversarial_debate(prompt=topic, rounds=rounds, agents=agents)
+                ).result()
+        else:
+            return asyncio.run(self.execute_adversarial_debate(prompt=topic, rounds=rounds, agents=agents))
+
 
 # Global singleton instance
 cloud_swarm = CloudSwarmOrchestrator()
@@ -282,4 +428,5 @@ __all__ = [
     "get_topology_metrics",
     "_HAS_NETWORKX",
 ]
+
 

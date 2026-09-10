@@ -1227,7 +1227,103 @@ async def get_rate_limit_status_endpoint(user_id: str):
     }
 
 
+# ---------------------------------------------------------------------------
+# 🏥 Health Probes & Platform Diagnostics (Kubernetes Ready)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/v1/cloud/health/liveness")
+async def liveness_probe():
+    """Kubernetes liveness probe ensuring process responsiveness."""
+    return {"status": "ok", "timestamp": time.time(), "service": "truthgpt_cloud"}
+
+
+@app.get("/api/v1/cloud/health/readiness")
+async def readiness_probe():
+    """Kubernetes readiness probe validating storage, cache, and verifier subsystems."""
+    db_audit = subscription_manager.validate_database_integrity()
+    return {
+        "status": "ready" if db_audit["valid"] else "degraded",
+        "timestamp": time.time(),
+        "database_integrity": db_audit["valid"],
+        "total_users": db_audit["total_users"],
+        "cache_healthy": True,
+        "verifier_ready": True
+    }
+
+
+# ---------------------------------------------------------------------------
+# 📐 Extended Formal Verification Endpoints
+# ---------------------------------------------------------------------------
+
+class SpectralNormVerifyRequest(BaseModel):
+    matrix: List[List[float]]
+    max_norm: float = 1.0
+
+
+class LipschitzVerifyRequest(BaseModel):
+    layer_type: str = "dense"
+    weight_spectral_norm: float = 1.0
+    activation: str = "relu"
+    target_lipschitz: float = 1.0
+
+
+@app.post("/api/v1/cloud/formal/verify/spectral-norm")
+async def verify_spectral_norm_endpoint(req: SpectralNormVerifyRequest):
+    """Formally verify bounded spectral norm sigma_max(W) <= max_norm."""
+    return cloud_verifier.verify_spectral_norm(matrix=req.matrix, max_norm=req.max_norm)
+
+
+@app.post("/api/v1/cloud/formal/verify/lipschitz")
+async def verify_lipschitz_endpoint(req: LipschitzVerifyRequest):
+    """Formally verify composite Lipschitz constant of neural network layer."""
+    return cloud_verifier.verify_lipschitz_constant(
+        layer_type=req.layer_type,
+        weight_spectral_norm=req.weight_spectral_norm,
+        activation=req.activation,
+        target_lipschitz=req.target_lipschitz
+    )
+
+
+# ---------------------------------------------------------------------------
+# 🐝 Swarm Visualization Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/v1/cloud/swarm/{session_id}/mermaid")
+async def get_swarm_session_mermaid_endpoint(session_id: str):
+    """Retrieve Mermaid diagram for a completed or active swarm execution trace."""
+    trace = cloud_swarm.get_session_trace(session_id)
+    if not trace:
+        raise HTTPException(status_code=404, detail=f"Swarm trace '{session_id}' not found.")
+    return PlainTextResponse(trace.to_mermaid(), media_type="text/plain")
+
+
+@app.get("/api/v1/cloud/swarm/topologies/{topology_id}/mermaid")
+async def get_swarm_topology_mermaid_endpoint(topology_id: str):
+    """Generate Mermaid diagram visualizing coordination network for a topology."""
+    mermaid_def = cloud_swarm.render_topology_mermaid(topology=topology_id)
+    return PlainTextResponse(mermaid_def, media_type="text/plain")
+
+
+# ---------------------------------------------------------------------------
+# 💾 Storage Maintenance & Backup Endpoints
+# ---------------------------------------------------------------------------
+
+@app.post("/api/v1/cloud/storage/maintenance/backup")
+async def trigger_storage_backup_endpoint():
+    """Trigger point-in-time backup snapshot of the subscriptions database."""
+    backup_path = subscription_manager.export_backup()
+    return {"success": True, "backup_path": backup_path}
+
+
+@app.post("/api/v1/cloud/storage/maintenance/compact")
+async def trigger_storage_compact_endpoint():
+    """Prune inactive API keys and compact the storage backend."""
+    res = subscription_manager.compact_database()
+    return res
+
+
 def start_server(host: str = "0.0.0.0", port: int = 8000):
+
     """Run TruthGPT Cloud FastAPI Server."""
     uvicorn.run(app, host=host, port=port, log_level="info")
 

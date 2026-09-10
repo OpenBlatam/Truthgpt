@@ -67,11 +67,11 @@ class SwarmExecutionTrace:
     confidence_aggregate: float = 0.998
     consensus_score: float = 0.998
 
-    def to_mermaid_graph(self) -> str:
-        """Generate a Mermaid diagram representing the multi-agent swarm debate topology."""
+    def to_mermaid(self) -> str:
+        """Alias for to_mermaid_graph generating rich Mermaid diagram of the swarm trace."""
         lines = [
             "graph TD",
-            f'    Prompt["💬 Query: {self.prompt[:35]}..."]',
+            f'    Prompt["💬 Query: {self.prompt[:40]}..."]',
             f'    Consensus["👑 Consensus Score: {self.consensus_score * 100:.1f}%"]',
         ]
         for idx, agt in enumerate(self.agents_involved):
@@ -79,7 +79,16 @@ class SwarmExecutionTrace:
             lines.append(f'    Agent_{idx}["🐝 {clean_role}<br/>Conf: {agt.confidence * 100:.1f}%"]')
             lines.append(f"    Prompt --> Agent_{idx}")
             lines.append(f"    Agent_{idx} --> Consensus")
+        if self.debate_rounds:
+            for d in self.debate_rounds:
+                r_id = f"Round_{d.round_number}"
+                lines.append(f'    {r_id}{{"⚖️ Round {d.round_number}: {d.topic[:30]}..."}}')
+                lines.append(f"    Consensus -.-> {r_id}")
         return "\n".join(lines)
+
+    def to_mermaid_graph(self) -> str:
+        """Generate a Mermaid diagram representing the multi-agent swarm debate topology."""
+        return self.to_mermaid()
 
     def to_reasoning_dag(self) -> Dict[str, Any]:
         """Export the swarm execution structure as a directed acyclic reasoning graph (DAG)."""

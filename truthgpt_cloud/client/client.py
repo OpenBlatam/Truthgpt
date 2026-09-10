@@ -905,6 +905,77 @@ class TruthGPTCloudClient:
         return self.security.verify_ledger_integrity()
 
     # ---------------------------------------------------------------------------
+    # 📐 Extended Formal Verification & Swarm Visualizers
+    # ---------------------------------------------------------------------------
+
+    def verify_spectral_norm(
+        self,
+        matrix: List[List[float]],
+        max_norm: float = 1.0
+    ) -> Dict[str, Any]:
+        """Formally verify bounded spectral norm sigma_max(W) <= max_norm."""
+        return self.verifier.verify_spectral_norm(matrix, max_norm=max_norm)
+
+    def verify_lipschitz(
+        self,
+        layer_type: str = "dense",
+        weight_spectral_norm: float = 1.0,
+        activation: str = "relu",
+        target_lipschitz: float = 1.0
+    ) -> Dict[str, Any]:
+        """Formally verify composite Lipschitz constant of a neural network layer."""
+        return self.verifier.verify_lipschitz_constant(
+            layer_type=layer_type,
+            weight_spectral_norm=weight_spectral_norm,
+            activation=activation,
+            target_lipschitz=target_lipschitz
+        )
+
+    def verify_gradient_clipping(
+        self,
+        grad_norm: float,
+        max_norm: float = 1.0
+    ) -> Dict[str, Any]:
+        """Formally verify gradient clipping bounds and collinear angle preservation."""
+        return self.verifier.verify_gradient_clipping_bounds(grad_norm=grad_norm, max_norm=max_norm)
+
+    def verify_loss_monotonicity(
+        self,
+        loss_sequence: List[float],
+        tolerance: float = 0.05,
+        strict: bool = False
+    ) -> Dict[str, Any]:
+        """Formally verify non-increasing loss convergence invariants."""
+        return self.verifier.verify_loss_monotonicity(loss_sequence=loss_sequence, tolerance=tolerance, strict=strict)
+
+    def batch_verify_claims(
+        self,
+        claims: List[str],
+        tier_depth: int = 2
+    ) -> List[ProofCertificate]:
+        """Formally verify multiple mathematical claims synchronously."""
+        return self.verifier.verify_batch(claims, tier_depth=tier_depth)
+
+    def visualize_swarm(self, session_id: str) -> str:
+        """Retrieve trace from session ID and render its Mermaid diagram."""
+        trace = self.swarm.get_session_trace(session_id)
+        if not trace:
+            raise ValueError(f"Swarm session trace '{session_id}' not found.")
+        return trace.to_mermaid()
+
+    def render_swarm_topology_mermaid(self, topology: str = "hierarchical") -> str:
+        """Render a Mermaid definition for a specific swarm coordination topology."""
+        return self.swarm.render_topology_mermaid(topology=topology)
+
+    def export_database_backup(self, backup_dir: Optional[str] = None) -> str:
+        """Create a point-in-time backup snapshot of the subscriptions database."""
+        return self.sub_manager.export_backup(backup_dir=backup_dir)
+
+    def database_health(self) -> Dict[str, Any]:
+        """Validate database integrity and return diagnostic status."""
+        return self.sub_manager.validate_database_integrity()
+
+    # ---------------------------------------------------------------------------
     # Ergonomic Aliases
     # ---------------------------------------------------------------------------
     verify = verify_claim
@@ -918,3 +989,4 @@ class TruthGPTCloudClient:
 
 
 __all__ = ["TruthGPTCloudClient"]
+

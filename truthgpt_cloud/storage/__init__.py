@@ -7,10 +7,12 @@ from .base import StorageBackend
 from .json_storage import JsonFileStorageBackend
 from .atomic import AtomicJsonStorage
 from .sqlite_storage import SqliteStorageBackend
+from .memory_storage import MemoryStorageBackend
 
 __all__ = [
     "StorageBackend",
     "JsonFileStorageBackend",
     "AtomicJsonStorage",
     "SqliteStorageBackend",
+    "MemoryStorageBackend",
 ]
