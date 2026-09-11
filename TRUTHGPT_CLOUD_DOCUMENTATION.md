@@ -34,51 +34,71 @@ El sistema ha sido refactorizado en submódulos canónicos con alta cohesión y 
 ```
 truthgpt_cloud/
 ├── __init__.py               # Re-exporta la API pública completa
-├── core/                     # Dominio central: Tiers, configuraciones y excepciones
+├── core/                     # Dominio central: Tiers, configuraciones, excepciones, health y secrets
 │   ├── tiers.py              # Definición de CloudTier y TierConfig
 │   ├── exceptions.py         # Jerarquía tipada de errores de dominio
+│   ├── context.py            # Contexto de petición aislado (TruthGPTCloudContext)
+│   ├── health.py             # Diagnóstico integral de subsistemas (CloudHealthChecker)
+│   ├── secrets.py            # Gestión y enmascaramiento seguro de secretos (CloudSecretsProvider)
+│   ├── factory.py            # Fábricas de servicios del clúster
+│   ├── registry.py           # Registro de componentes y plugins
+│   ├── schemas.py            # Esquemas Pydantic v2
 │   └── __init__.py
 ├── billing/                  # Motor de suscripciones, límites y pagos
 │   ├── models.py             # UserSubscription, Invoice, UsageRecord
-│   ├── subscription.py       # SubscriptionManager con soporte concurrente
-│   ├── rate_limiter.py       # SlidingWindowRateLimiter y TokenBucketRateLimiter
-│   ├── webhooks.py           # WebhookManager para eventos asíncronos
+│   ├── subscription.py       # SubscriptionManager con soporte concurrente y rotación de claves
+│   ├── rate_limiter.py       # Bridge de compatibilidad a rate_limiting
+│   ├── webhooks.py           # WebhookManager para eventos asíncronos con reintentos y dead-letter
 │   ├── gateways.py           # Stripe, Crypto USDC y Mock Payment Gateways
 │   ├── storage.py            # Adaptador de almacenamiento de billing
 │   └── __init__.py
 ├── cache/                    # Caché semántica LRU de pruebas formales y KV
 │   ├── models.py             # CachedProofEntry
 │   ├── proof_cache.py        # CloudProofCache y singleton proof_cache
+│   ├── redis_cache.py        # RedisProofCacheBackend (L2 cache distribuida)
 │   └── __init__.py
 ├── telemetry/                # Telemetría de clúster, percentiles p50/p95/p99 y Prometheus
-│   ├── models.py             # AuditLogEntry
+│   ├── models.py             # AuditLogEntry, AlertRule
 │   ├── collector.py          # CloudTelemetryCollector y singleton cloud_telemetry
-│   ├── prometheus.py         # Formateador de métricas Prometheus
+│   ├── prometheus.py         # Formateador y exportador de métricas Prometheus
+│   ├── structured_logging.py # Logging estructurado con structlog
+│   ├── rich_diagnostics.py   # Diagnóstico visual en terminal con rich
+│   ├── system_metrics.py     # Métricas de hardware y SO con psutil
 │   └── __init__.py
-├── security/                 # Seguridad, RBAC, hash SHA-256 de claves y rate limiter
+├── security/                 # Seguridad, RBAC, hash SHA-256 de claves y autenticación JWT
 │   ├── scopes.py             # ApiKeyScope
-│   ├── models.py             # ApiKeyMetadata
-│   ├── rate_limiter.py       # TokenBucketRateLimiter de seguridad
+│   ├── models.py             # ApiKeyMetadata, LedgerBlock
+│   ├── rate_limiter.py       # Bridge de seguridad hacia rate_limiting
 │   ├── manager.py            # CloudSecurityManager y singleton cloud_security
+│   ├── jwt_auth.py           # Creación y validación de tokens JWT de sesión
 │   └── __init__.py
-├── resilience/               # Tolerancia a fallos: Circuit Breaker y Exponential Backoff con Jitter
+├── resilience/               # Tolerancia a fallos: Circuit Breaker, Exponential Backoff y Adaptive Concurrency
 │   ├── circuit_breaker.py    # CircuitBreaker de 3 estados (CLOSED, OPEN, HALF_OPEN)
 │   ├── retry.py              # retry_with_backoff decorador síncrono y asíncrono
+│   ├── adaptive_limiter.py   # AdaptiveConcurrencyLimiter (control AIMD dinámico de concurrencia)
 │   └── __init__.py
-├── rate_limiting/            # Controladores de tasa de ventana deslizante
+├── rate_limiting/            # Controladores de tasa en memoria y Redis
 │   ├── sliding_window.py     # SlidingWindowRateLimiter y cloud_rate_limiter
+│   ├── token_bucket.py       # TokenBucketRateLimiter
+│   ├── redis_limiter.py      # RedisSlidingWindowRateLimiter y RedisTokenBucketRateLimiter
 │   └── __init__.py
 ├── verification/             # Demostración formal y criptografía
 │   ├── verifier.py           # CloudFormalVerifier (Z3 SMT, Hoare, AST, Tensores)
-│   ├── certificate.py        # ProofCertificate (JSON-LD, SMT2, Lean4, Coq)
-│   ├── merkle.py             # MerkleTree criptográfico con validación de ramas
+│   ├── domain_invariants.py  # DomainInvariantsVerifier (MoE, FlashAttention, RoPE, FP8, Lyapunov)
+│   ├── code_purity.py        # CodePurityVerifier (análisis AST de efectos secundarios)
+│   ├── certificate.py        # ProofCertificate (JSON-LD, SMT2, Lean4, Coq, Isabelle/HOL)
+│   ├── merkle.py             # MerkleTree criptográfico con validación de ramas y exclusión
+│   ├── smt_engine.py         # Z3TheoremSolver simbólico
 │   └── __init__.py
 ├── swarm/                    # Orquestación multi-agente
 │   ├── agents.py             # SwarmAgentNode y agentes especializados
-│   ├── orchestrator.py       # CloudSwarmOrchestrator con topologías
+│   ├── orchestrator.py       # CloudSwarmOrchestrator con topologías y Tree-of-Thoughts
+│   ├── graph_topology.py     # Análisis de grafos de swarm con NetworkX (DAG, ciclos, influencia)
+│   ├── models.py             # ThoughtNode, TreeOfThoughtsTrace, DebateRound
 │   └── __init__.py
 ├── routing/                  # Enrutamiento de inferencia
 │   ├── router.py             # CloudIntelligenceRouter con cuotas, circuit breaker y fallback GPU
+│   ├── models.py             # CloudInferenceResponse, StreamChunk
 │   └── __init__.py
 ├── client/                   # SDK Cliente
 │   ├── client.py             # TruthGPTCloudClient con sync, async, streaming SSE y SRE APIs
@@ -86,6 +106,9 @@ truthgpt_cloud/
 ├── storage/                  # Capa de persistencia
 │   ├── base.py               # Protocolo StorageBackend
 │   ├── json_storage.py       # JsonFileStorageBackend con dirty debounce y respaldos atómicos
+│   ├── atomic.py             # AtomicJsonStorage transaccional
+│   ├── sqlite_storage.py     # SqliteStorageBackend para alta concurrencia
+│   ├── memory_storage.py     # MemoryStorageBackend para pruebas y ejecución volátil
 │   └── __init__.py
 ├── papers/                   # Catálogo y compilador JIT de investigación SOTA
 │   ├── registry.py           # SOTA_PAPERS_CATALOG (FlashAttention-3, DeepSeek, etc.)
@@ -93,7 +116,7 @@ truthgpt_cloud/
 │   └── __init__.py
 ├── engine_router.py          # Bridge de compatibilidad hacia truthgpt_cloud.routing
 ├── exceptions.py             # Bridge de compatibilidad hacia truthgpt_cloud.core.exceptions
-├── rate_limiter.py           # Bridge de compatibilidad hacia truthgpt_cloud.security / rate_limiting
+├── rate_limiter.py           # Bridge de compatibilidad hacia truthgpt_cloud.rate_limiting
 ├── swarm_cloud.py            # Bridge de compatibilidad hacia truthgpt_cloud.swarm
 ├── tiers.py                  # Bridge de compatibilidad hacia truthgpt_cloud.core.tiers
 └── verifier.py               # Bridge de compatibilidad hacia truthgpt_cloud.verification
