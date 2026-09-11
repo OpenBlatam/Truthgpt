@@ -12,10 +12,96 @@ import uuid
 import asyncio
 import hashlib
 import logging
-from typing import Dict, List, Any, Optional, Tuple
+from dataclasses import dataclass, field, asdict
+from typing import Dict, List, Any, Optional, Tuple, Callable, Union
 
 from .certificate import ProofCertificate, ContractVerificationResult
 from .merkle import MerkleTree
+
+
+@dataclass
+class BatchVerificationResult:
+    """Aggregated outcome of a parallel formal verification batch."""
+    total_claims: int
+    passed_count: int
+    failed_count: int
+    skipped_count: int
+    total_duration_ms: float
+    success_rate: float
+    certificates: List[ProofCertificate] = field(default_factory=list)
+    errors: Dict[int, str] = field(default_factory=dict)
+
+    @property
+    def total(self) -> int:
+        return self.total_claims
+
+    @property
+    def passed(self) -> int:
+        return self.passed_count
+
+    @property
+    def failed(self) -> int:
+        return self.failed_count
+
+    @property
+    def skipped(self) -> int:
+        return self.skipped_count
+
+    @property
+    def total_time_ms(self) -> float:
+        return self.total_duration_ms
+
+    @property
+    def average_latency_ms(self) -> float:
+        return (self.total_duration_ms / self.total_claims) if self.total_claims > 0 else 0.0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "total_claims": self.total_claims,
+            "total": self.total_claims,
+            "passed_count": self.passed_count,
+            "passed": self.passed_count,
+            "failed_count": self.failed_count,
+            "failed": self.failed_count,
+            "skipped_count": self.skipped_count,
+            "skipped": self.skipped_count,
+            "total_duration_ms": self.total_duration_ms,
+            "total_time_ms": self.total_duration_ms,
+            "success_rate": self.success_rate,
+            "certificates": [
+                c.to_dict() if hasattr(c, "to_dict") else asdict(c)
+                for c in self.certificates
+            ],
+            "errors": self.errors,
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        if key in ("total", "total_claims"):
+            return self.total_claims
+        if key in ("passed", "passed_count"):
+            return self.passed_count
+        if key in ("failed", "failed_count"):
+            return self.failed_count
+        if key in ("skipped", "skipped_count"):
+            return self.skipped_count
+        if key in ("total_time_ms", "total_duration_ms"):
+            return self.total_duration_ms
+        if key == "success_rate":
+            return self.success_rate
+        if key == "certificates":
+            return self.certificates
+        if key == "errors":
+            return self.errors
+        return getattr(self, key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except (AttributeError, KeyError):
+            return default
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key) or key in ("total", "passed", "failed", "skipped", "total_time_ms", "certificates", "errors")
 from .domain_invariants import (
     verify_tensor_shapes as _verify_tensor_shapes,
     verify_numerical_stability as _verify_numerical_stability,
@@ -32,12 +118,17 @@ from .domain_invariants import (
     verify_loss_monotonicity as _verify_loss_monotonicity,
     verify_lora_rank_safety as _verify_lora_rank_safety,
     verify_kv_cache_memory_bound as _verify_kv_cache_memory_bound,
+    verify_moe_routing_invariants as _verify_moe_routing_invariants,
+    verify_rope_frequency_invariants as _verify_rope_frequency_invariants,
+    verify_flash_attention_tiling as _verify_flash_attention_tiling,
+    verify_microscaling_fp8_bounds as _verify_microscaling_fp8_bounds,
     DomainInvariantsVerifier,
 )
 from .code_purity import (
     verify_code_purity,
     verify_code_purity_and_invariants as _verify_code_purity_and_invariants,
     SecurityHazardVisitor,
+    CodePurityVerifier,
 )
 from ..core.interfaces import IFormalVerifier
 from ..cache import proof_cache
@@ -930,6 +1021,84 @@ class CloudFormalVerifier(IFormalVerifier):
             vram_budget_gb=vram_budget_gb,
         )
 
+    def verify_moe_routing(
+        self,
+        num_experts: int,
+        top_k: int,
+        tokens_per_batch: int,
+        capacity_factor: float = 1.25,
+        gating_weights: Optional[List[float]] = None,
+        aux_loss_coeff: float = 0.01,
+        drop_tokens: bool = False,
+    ) -> Dict[str, Any]:
+        """Formally verify Mixture of Experts (MoE) routing invariants."""
+        return _verify_moe_routing_invariants(
+            num_experts=num_experts,
+            top_k=top_k,
+            tokens_per_batch=tokens_per_batch,
+            capacity_factor=capacity_factor,
+            gating_weights=gating_weights,
+            aux_loss_coeff=aux_loss_coeff,
+            drop_tokens=drop_tokens,
+        )
+
+    def verify_rope_frequencies(
+        self,
+        head_dim: int,
+        max_position_embeddings: int = 8192,
+        base_theta: float = 10000.0,
+        scaling_factor: float = 1.0,
+        scaling_type: str = "linear",
+        low_freq_factor: float = 1.0,
+        high_freq_factor: float = 4.0,
+    ) -> Dict[str, Any]:
+        """Formally verify Rotary Position Embeddings (RoPE) frequency invariants."""
+        return _verify_rope_frequency_invariants(
+            head_dim=head_dim,
+            max_position_embeddings=max_position_embeddings,
+            base_theta=base_theta,
+            scaling_factor=scaling_factor,
+            scaling_type=scaling_type,
+            low_freq_factor=low_freq_factor,
+            high_freq_factor=high_freq_factor,
+        )
+
+    def verify_flash_attention_tiling(
+        self,
+        block_m: int = 128,
+        block_n: int = 64,
+        head_dim: int = 128,
+        is_causal: bool = True,
+        precision_bytes: int = 2,
+        sram_budget_bytes: int = 227328,
+    ) -> Dict[str, Any]:
+        """Formally verify FlashAttention-2/3 SRAM block tiling invariants."""
+        return _verify_flash_attention_tiling(
+            block_m=block_m,
+            block_n=block_n,
+            head_dim=head_dim,
+            is_causal=is_causal,
+            precision_bytes=precision_bytes,
+            sram_budget_bytes=sram_budget_bytes,
+        )
+
+    def verify_microscaling_fp8(
+        self,
+        format: str = "e4m3",
+        block_size: int = 32,
+        scale_bias: int = 127,
+        values: Optional[List[float]] = None,
+        max_dynamic_range_db: float = 96.0,
+    ) -> Dict[str, Any]:
+        """Formally verify Microscaling (MXFP8 / NVFP4) block quantization invariants."""
+        return _verify_microscaling_fp8_bounds(
+            format=format,
+            block_size=block_size,
+            scale_bias=scale_bias,
+            values=values,
+            max_dynamic_range_db=max_dynamic_range_db,
+        )
+
     def verify_batch(
         self,
         claims: List[str],
@@ -948,6 +1117,170 @@ class CloudFormalVerifier(IFormalVerifier):
         tasks = [loop.run_in_executor(None, self.verify_expression, c, None, tier_depth) for c in claims]
         return list(await asyncio.gather(*tasks))
 
+    def verify_batch_parallel(
+        self,
+        claims: List[str],
+        tier_depth: int = 2,
+        max_concurrency: int = 4,
+        on_progress: Optional[Callable[[int, int], None]] = None,
+    ) -> BatchVerificationResult:
+        """
+        Verify multiple mathematical claims in parallel using a thread pool worker queue.
+        Isolates Z3 contexts across worker threads, tracks per-claim latencies,
+        handles exceptions gracefully without aborting the batch, and emits progress callbacks.
+        """
+        import concurrent.futures
+        t0 = time.perf_counter()
+        total = len(claims)
+        if total == 0:
+            return BatchVerificationResult(
+                total_claims=0,
+                passed_count=0,
+                failed_count=0,
+                skipped_count=0,
+                total_duration_ms=0.0,
+                success_rate=0.0,
+                certificates=[],
+            )
+
+        results: List[Optional[ProofCertificate]] = [None] * total
+        completed_count = 0
+
+        def _worker(idx: int, claim_text: str):
+            return idx, self.verify_expression(claim_text, tier_depth=tier_depth)
+
+        workers = min(max_concurrency, max(1, total))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+            future_to_idx = {executor.submit(_worker, i, c): i for i, c in enumerate(claims)}
+            for future in concurrent.futures.as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                try:
+                    res_idx, cert = future.result()
+                    results[res_idx] = cert
+                except Exception as exc:
+                    logger.error(f"Error in batch parallel verification for claim {idx}: {exc}")
+                completed_count += 1
+                if on_progress:
+                    try:
+                        on_progress(completed_count, total)
+                    except Exception:
+                        pass
+
+        total_ms = round((time.perf_counter() - t0) * 1000, 2)
+        valid_certs = [c for c in results if c is not None]
+        passed = sum(1 for c in valid_certs if any(kw in str(c.status).upper() for kw in ("PROVEN", "VERIFIED", "VALID")))
+        failed = len(valid_certs) - passed
+        skipped = total - len(valid_certs)
+        rate = round((passed / max(1, total)) * 100, 2)
+
+        return BatchVerificationResult(
+            total_claims=total,
+            passed_count=passed,
+            failed_count=failed,
+            skipped_count=skipped,
+            total_duration_ms=total_ms,
+            success_rate=rate,
+            certificates=valid_certs,
+        )
+
+    async def verify_batch_parallel(
+        self,
+        claims: List[Union[str, Dict[str, Any]]],
+        tier_depth: int = 2,
+        max_concurrency: int = 4,
+        on_progress: Optional[Callable[[int, int], None]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Formally verify multiple claims in parallel with controlled concurrency via asyncio.Semaphore.
+        Returns aggregated execution statistics and the list of cryptographic certificates.
+        """
+        start_time = time.perf_counter()
+        sem = asyncio.Semaphore(max_concurrency)
+        certificates: List[Optional[ProofCertificate]] = [None] * len(claims)
+        completed_count = 0
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.get_event_loop()
+
+        async def _verify_one(idx: int, item: Union[str, Dict[str, Any]]):
+            nonlocal completed_count
+            async with sem:
+                if isinstance(item, dict):
+                    claim_text = item.get("claim", "")
+                    constraints = item.get("constraints")
+                    depth = item.get("tier_depth", item.get("depth_level", tier_depth))
+                else:
+                    claim_text = str(item)
+                    constraints = None
+                    depth = tier_depth
+
+                cert = await loop.run_in_executor(
+                    None, self.verify_expression, claim_text, constraints, depth
+                )
+                certificates[idx] = cert
+                completed_count += 1
+                if on_progress:
+                    try:
+                        on_progress(completed_count, len(claims))
+                    except Exception:
+                        pass
+
+        tasks = [_verify_one(i, c) for i, c in enumerate(claims)]
+        await asyncio.gather(*tasks)
+
+        elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+        passed_count = sum(1 for c in certificates if c and c.is_valid)
+        failed_count = sum(1 for c in certificates if c and not c.is_valid)
+        throughput = (len(claims) / (elapsed_ms / 1000.0)) if elapsed_ms > 0 else 0.0
+
+        return {
+            "total": len(claims),
+            "passed": passed_count,
+            "failed": failed_count,
+            "skipped": 0,
+            "total_time_ms": round(elapsed_ms, 2),
+            "throughput_claims_per_sec": round(throughput, 2),
+            "certificates": certificates,
+        }
+
+    def verify_batch_parallel_sync(
+        self,
+        claims: List[Union[str, Dict[str, Any]]],
+        tier_depth: int = 2,
+        max_concurrency: int = 4,
+        on_progress: Optional[Callable[[int, int], None]] = None,
+    ) -> Dict[str, Any]:
+        """Synchronously execute parallel batch formal verification."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(
+                    asyncio.run,
+                    self.verify_batch_parallel(
+                        claims=claims,
+                        tier_depth=tier_depth,
+                        max_concurrency=max_concurrency,
+                        on_progress=on_progress,
+                    )
+                )
+                return future.result()
+        else:
+            return asyncio.run(
+                self.verify_batch_parallel(
+                    claims=claims,
+                    tier_depth=tier_depth,
+                    max_concurrency=max_concurrency,
+                    on_progress=on_progress,
+                )
+            )
+
     def get_certificate(self, cert_id: str) -> Optional[ProofCertificate]:
         """Retrieve cached certificate by ID."""
         return self._local_certificates.get(cert_id)
@@ -962,6 +1295,38 @@ class CloudFormalVerifier(IFormalVerifier):
         and absence of hazardous side effects using Python AST analysis and SymPy.
         """
         return _verify_code_purity_and_invariants(code_str)
+
+    def verify_moe_routing(self, *args, **kwargs) -> Dict[str, Any]:
+        """Verify Mixture of Experts (MoE) routing invariants."""
+        return _verify_moe_routing_invariants(*args, **kwargs)
+
+    def verify_rope_frequencies(self, *args, **kwargs) -> Dict[str, Any]:
+        """Verify Rotary Positional Embedding (RoPE) frequency invariants."""
+        return _verify_rope_frequency_invariants(*args, **kwargs)
+
+    def verify_flash_attention_tiling(self, *args, **kwargs) -> Dict[str, Any]:
+        """Verify FlashAttention SRAM tiling and memory bounds."""
+        return _verify_flash_attention_tiling(*args, **kwargs)
+
+    def verify_microscaling_fp8(self, *args, **kwargs) -> Dict[str, Any]:
+        """Verify OCP Microscaling FP8/FP4 quantization boundaries."""
+        return _verify_microscaling_fp8_bounds(*args, **kwargs)
+
+    def verify_lora_rank_safety(self, *args, **kwargs) -> Dict[str, Any]:
+        """Verify LoRA low-rank adaptation rank safety bounds."""
+        return _verify_lora_rank_safety(*args, **kwargs)
+
+    def verify_kv_cache_memory_bound(self, *args, **kwargs) -> Dict[str, Any]:
+        """Verify Transformer KV-cache memory footprint against VRAM budget."""
+        return _verify_kv_cache_memory_bound(*args, **kwargs)
+
+    def verify_spectral_norm(self, *args, **kwargs) -> Dict[str, Any]:
+        """Verify spectral norm boundary of weight matrix."""
+        return _verify_spectral_norm(*args, **kwargs)
+
+    def verify_lipschitz_constant(self, *args, **kwargs) -> Dict[str, Any]:
+        """Verify composite Lipschitz continuity constant of layer."""
+        return _verify_lipschitz_constant(*args, **kwargs)
 
 
 # Global singleton instance
@@ -979,7 +1344,17 @@ verify_spectral_norm = _verify_spectral_norm
 verify_lipschitz_constant = _verify_lipschitz_constant
 verify_gradient_clipping_bounds = _verify_gradient_clipping_bounds
 verify_loss_monotonicity = _verify_loss_monotonicity
+verify_lora_rank_safety = _verify_lora_rank_safety
+verify_kv_cache_memory_bound = _verify_kv_cache_memory_bound
+verify_moe_routing_invariants = _verify_moe_routing_invariants
+verify_rope_frequency_invariants = _verify_rope_frequency_invariants
+verify_flash_attention_tiling = _verify_flash_attention_tiling
+verify_microscaling_fp8_bounds = _verify_microscaling_fp8_bounds
+verify_tensor_shapes = _verify_tensor_shapes
+verify_numerical_stability = _verify_numerical_stability
+verify_code_purity = verify_code_purity
 verify_code_purity_and_invariants = _verify_code_purity_and_invariants
+CodePurityVerifier = CodePurityVerifier
 
 __all__ = [
     "compute_merkle_root",
@@ -988,6 +1363,8 @@ __all__ = [
     "CloudFormalVerifier",
     "cloud_verifier",
     "SecurityHazardVisitor",
+    "verify_tensor_shapes",
+    "verify_numerical_stability",
     "verify_attention_invariants",
     "verify_quantization_safety",
     "verify_optimizer_convergence",
@@ -1000,6 +1377,13 @@ __all__ = [
     "verify_lipschitz_constant",
     "verify_gradient_clipping_bounds",
     "verify_loss_monotonicity",
+    "verify_lora_rank_safety",
+    "verify_kv_cache_memory_bound",
+    "verify_moe_routing_invariants",
+    "verify_rope_frequency_invariants",
+    "verify_flash_attention_tiling",
+    "verify_microscaling_fp8_bounds",
+    "verify_code_purity",
     "verify_code_purity_and_invariants",
     "DomainInvariantsVerifier",
     "CodePurityVerifier",

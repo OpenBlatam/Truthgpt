@@ -22,6 +22,7 @@ from ..verification.verifier import cloud_verifier
 from ..verification.certificate import ProofCertificate, ContractVerificationResult
 from ..verification.merkle import MerkleTree
 from ..swarm.orchestrator import cloud_swarm, SwarmExecutionTrace
+from ..swarm.models import TreeOfThoughtsTrace
 from ..papers.compiler import cloud_paper_compiler
 from ..papers.registry import get_all_papers
 from ..telemetry import cloud_telemetry
@@ -570,6 +571,151 @@ class TruthGPTCloudClient:
         """Execute and verify raw SMT-LIB2 script using cloud SMT engine."""
         return self.verifier.verify_smt2_script(smt2_text=smt2_text, timeout_ms=timeout_ms)
 
+    def verify_lora_rank_safety(
+        self,
+        base_dim: int,
+        rank: int,
+        alpha: float,
+        target_modules: Optional[List[str]] = None,
+        max_rank_ratio: float = 0.5,
+        min_scaling: float = 0.05,
+        max_scaling: float = 16.0
+    ) -> Dict[str, Any]:
+        """Formally verify Low-Rank Adaptation (LoRA) configuration invariants."""
+        return self.verifier.verify_lora_rank_safety(
+            base_dim=base_dim,
+            rank=rank,
+            alpha=alpha,
+            target_modules=target_modules,
+            max_rank_ratio=max_rank_ratio,
+            min_scaling=min_scaling,
+            max_scaling=max_scaling
+        )
+
+    def verify_kv_cache_memory_bound(
+        self,
+        batch_size: int,
+        seq_len: int,
+        num_layers: int,
+        num_heads: int,
+        head_dim: int,
+        precision_bits: int = 16,
+        vram_budget_gb: float = 24.0
+    ) -> Dict[str, Any]:
+        """Formally verify Transformer KV-Cache memory footprint bounds against GPU VRAM budget."""
+        return self.verifier.verify_kv_cache_memory_bound(
+            batch_size=batch_size,
+            seq_len=seq_len,
+            num_layers=num_layers,
+            num_heads=num_heads,
+            head_dim=head_dim,
+            precision_bits=precision_bits,
+            vram_budget_gb=vram_budget_gb
+        )
+
+    def verify_moe_routing(
+        self,
+        num_experts: int,
+        top_k: int,
+        tokens_per_batch: int,
+        capacity_factor: float = 1.25,
+        gating_weights: Optional[List[float]] = None,
+        aux_loss_coeff: float = 0.01,
+        drop_tokens: bool = False
+    ) -> Dict[str, Any]:
+        """Formally verify Mixture of Experts (MoE) routing invariants."""
+        return self.verifier.verify_moe_routing(
+            num_experts=num_experts,
+            top_k=top_k,
+            tokens_per_batch=tokens_per_batch,
+            capacity_factor=capacity_factor,
+            gating_weights=gating_weights,
+            aux_loss_coeff=aux_loss_coeff,
+            drop_tokens=drop_tokens
+        )
+
+    def verify_rope_frequencies(
+        self,
+        head_dim: int,
+        max_position_embeddings: int = 8192,
+        base_theta: float = 10000.0,
+        scaling_factor: float = 1.0,
+        scaling_type: str = "linear",
+        low_freq_factor: float = 1.0,
+        high_freq_factor: float = 4.0
+    ) -> Dict[str, Any]:
+        """Formally verify Rotary Position Embeddings (RoPE) frequency invariants."""
+        return self.verifier.verify_rope_frequencies(
+            head_dim=head_dim,
+            max_position_embeddings=max_position_embeddings,
+            base_theta=base_theta,
+            scaling_factor=scaling_factor,
+            scaling_type=scaling_type,
+            low_freq_factor=low_freq_factor,
+            high_freq_factor=high_freq_factor
+        )
+
+    def verify_flash_attention_tiling(
+        self,
+        block_m: int = 128,
+        block_n: int = 64,
+        head_dim: int = 128,
+        is_causal: bool = True,
+        precision_bytes: int = 2,
+        sram_budget_bytes: int = 227328
+    ) -> Dict[str, Any]:
+        """Formally verify FlashAttention-2/3 SRAM block tiling invariants."""
+        return self.verifier.verify_flash_attention_tiling(
+            block_m=block_m,
+            block_n=block_n,
+            head_dim=head_dim,
+            is_causal=is_causal,
+            precision_bytes=precision_bytes,
+            sram_budget_bytes=sram_budget_bytes
+        )
+
+    def verify_microscaling_fp8(
+        self,
+        format: str = "e4m3",
+        block_size: int = 32,
+        scale_bias: int = 127,
+        values: Optional[List[float]] = None,
+        max_dynamic_range_db: float = 96.0
+    ) -> Dict[str, Any]:
+        """Formally verify Microscaling (MXFP8 / NVFP4) block quantization invariants."""
+        return self.verifier.verify_microscaling_fp8(
+            format=format,
+            block_size=block_size,
+            scale_bias=scale_bias,
+            values=values,
+            max_dynamic_range_db=max_dynamic_range_db
+        )
+
+    def verify_spectral_norm(self, matrix: List[List[float]], max_norm: float = 1.0) -> Dict[str, Any]:
+        """Formally verify bounded spectral norm sigma_max(W) <= max_norm."""
+        return self.verifier.verify_spectral_norm(matrix=matrix, max_norm=max_norm)
+
+    def verify_lipschitz(
+        self,
+        layer_type: str = "dense",
+        weight_spectral_norm: float = 1.0,
+        activation: str = "relu",
+        target_lipschitz: float = 1.0
+    ) -> Dict[str, Any]:
+        """Formally verify composite Lipschitz constant of neural network layer."""
+        return self.verifier.verify_lipschitz_constant(
+            layer_type=layer_type,
+            weight_spectral_norm=weight_spectral_norm,
+            activation=activation,
+            target_lipschitz=target_lipschitz
+        )
+
+    def verify_claims_concurrently(self, claims: List[str], max_workers: int = 4) -> List[ProofCertificate]:
+        """Verify multiple mathematical claims concurrently using thread pool."""
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
+            return list(pool.map(self.verify_claim, claims))
+
     # ---------------------------------------------------------------------------
     # 📜 Proof Export APIs
     # ---------------------------------------------------------------------------
@@ -649,6 +795,39 @@ class TruthGPTCloudClient:
                 adversary_focus=adversary_focus,
                 rounds=rounds,
                 user_id=self.user_id
+            )
+        )
+
+    async def run_tree_of_thoughts_async(
+        self,
+        prompt: str,
+        max_depth: int = 3,
+        branching_factor: int = 3,
+        min_confidence_threshold: float = 0.70
+    ) -> TreeOfThoughtsTrace:
+        """Execute Tree-of-Thoughts exploratory swarm reasoning asynchronously."""
+        return await self.swarm.run_tree_of_thoughts(
+            prompt=prompt,
+            max_depth=max_depth,
+            branching_factor=branching_factor,
+            min_confidence_threshold=min_confidence_threshold,
+            user_id=self.user_id
+        )
+
+    def run_tree_of_thoughts(
+        self,
+        prompt: str,
+        max_depth: int = 3,
+        branching_factor: int = 3,
+        min_confidence_threshold: float = 0.70
+    ) -> TreeOfThoughtsTrace:
+        """Execute Tree-of-Thoughts exploratory swarm reasoning synchronously."""
+        return _run_sync(
+            self.run_tree_of_thoughts_async(
+                prompt=prompt,
+                max_depth=max_depth,
+                branching_factor=branching_factor,
+                min_confidence_threshold=min_confidence_threshold
             )
         )
 
@@ -737,6 +916,64 @@ class TruthGPTCloudClient:
     def list_available_tiers() -> List[Dict[str, Any]]:
         """List all subscription tier offerings and pricing matrices."""
         return get_all_tiers()
+
+    def get_token_pack_catalog(self) -> List[Dict[str, Any]]:
+        """Return available on-demand top-up token packs and prices."""
+        return self.sub_manager.get_token_pack_catalog()
+
+    def purchase_token_pack(
+        self,
+        pack_id: str,
+        payment_method: str = "stripe_card",
+        promo_code: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Purchase on-demand top-up tokens, processing immediate payment and adding tokens to user balance.
+        """
+        return self.sub_manager.purchase_token_pack(
+            user_id=self.user_id,
+            pack_id=pack_id,
+            payment_method=payment_method,
+            promo_code=promo_code
+        )
+
+    def charge_service(
+        self,
+        amount_usd: float,
+        description: str = "TruthGPT Cloud Service Compute",
+        payment_method: str = "stripe_card"
+    ) -> Dict[str, Any]:
+        """
+        Directly charge the TruthGPT user for cloud service operations, emitting an official invoice receipt.
+        """
+        return self.sub_manager.charge_user(
+            user_id=self.user_id,
+            amount_usd=amount_usd,
+            description=description,
+            payment_method=payment_method
+        )
+
+    def charge_usage_tokens(
+        self,
+        tokens_consumed: int,
+        unit_price_per_1k_tokens: float = 0.002,
+        description: Optional[str] = None,
+        payment_method: str = "stripe_card"
+    ) -> Dict[str, Any]:
+        """
+        Charge user for metered token consumption.
+        """
+        return self.sub_manager.charge_usage_tokens(
+            user_id=self.user_id,
+            tokens_consumed=tokens_consumed,
+            unit_price_per_1k_tokens=unit_price_per_1k_tokens,
+            description=description,
+            payment_method=payment_method
+        )
+
+    def get_invoices(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Retrieve billing invoices and receipts for the current TruthGPT user."""
+        return self.sub_manager.get_user_invoices(self.user_id, limit=limit)
 
     # ---------------------------------------------------------------------------
     # 🔔 Webhooks API
@@ -975,6 +1212,254 @@ class TruthGPTCloudClient:
         """Validate database integrity and return diagnostic status."""
         return self.sub_manager.validate_database_integrity()
 
+    def verify_spectral_norm(self, matrix: List[List[float]], max_norm: float = 1.0) -> Dict[str, Any]:
+        """Formally verify bounded spectral norm sigma_max(W) <= max_norm."""
+        return self.verifier.verify_spectral_norm(matrix=matrix, max_norm=max_norm)
+
+    def verify_lipschitz(
+        self,
+        layer_type: str = "dense",
+        weight_spectral_norm: float = 1.0,
+        activation: str = "relu",
+        target_lipschitz: float = 1.0,
+    ) -> Dict[str, Any]:
+        """Formally verify composite Lipschitz constant of neural network layer."""
+        return self.verifier.verify_lipschitz_constant(
+            layer_type=layer_type,
+            weight_spectral_norm=weight_spectral_norm,
+            activation=activation,
+            target_lipschitz=target_lipschitz,
+        )
+
+    def verify_lora_rank(
+        self,
+        d_model: int = 4096,
+        rank: int = 16,
+        alpha: float = 32.0,
+        num_heads: int = 32,
+        target_norm_bound: float = 2.0,
+    ) -> Dict[str, Any]:
+        """Formally verify LoRA rank safety and spectral norm delta bounds."""
+        return self.verifier.verify_lora_rank_safety(
+            d_model=d_model,
+            rank=rank,
+            alpha=alpha,
+            num_heads=num_heads,
+            target_norm_bound=target_norm_bound,
+        )
+
+    def verify_kv_cache_memory(
+        self,
+        batch_size: int = 1,
+        seq_len: int = 4096,
+        num_layers: int = 32,
+        num_kv_heads: int = 8,
+        head_dim: int = 128,
+        precision_bytes: int = 2,
+        vram_budget_gb: float = 8.0,
+    ) -> Dict[str, Any]:
+        """Formally verify KV cache VRAM footprint does not exceed budget."""
+        return self.verifier.verify_kv_cache_memory_bound(
+            batch_size=batch_size,
+            seq_len=seq_len,
+            num_layers=num_layers,
+            num_kv_heads=num_kv_heads,
+            head_dim=head_dim,
+            precision_bytes=precision_bytes,
+            vram_budget_gb=vram_budget_gb,
+        )
+
+    def verify_moe_routing(
+        self,
+        num_experts: int,
+        top_k: int,
+        tokens_per_batch: int,
+        capacity_factor: float = 1.25,
+        gating_weights: Optional[List[float]] = None,
+        aux_loss_coeff: float = 0.01,
+        drop_tokens: bool = False,
+    ) -> Dict[str, Any]:
+        """Formally verify Mixture of Experts (MoE) routing invariants."""
+        return self.verifier.verify_moe_routing(
+            num_experts=num_experts,
+            top_k=top_k,
+            tokens_per_batch=tokens_per_batch,
+            capacity_factor=capacity_factor,
+            gating_weights=gating_weights,
+            aux_loss_coeff=aux_loss_coeff,
+            drop_tokens=drop_tokens,
+        )
+
+    def verify_rope_frequencies(
+        self,
+        head_dim: int,
+        max_position_embeddings: int = 8192,
+        base_theta: float = 10000.0,
+        scaling_factor: float = 1.0,
+        scaling_type: str = "linear",
+        low_freq_factor: float = 1.0,
+        high_freq_factor: float = 4.0,
+    ) -> Dict[str, Any]:
+        """Formally verify Rotary Position Embeddings (RoPE) frequency invariants."""
+        return self.verifier.verify_rope_frequencies(
+            head_dim=head_dim,
+            max_position_embeddings=max_position_embeddings,
+            base_theta=base_theta,
+            scaling_factor=scaling_factor,
+            scaling_type=scaling_type,
+            low_freq_factor=low_freq_factor,
+            high_freq_factor=high_freq_factor,
+        )
+
+    def verify_flash_attention_tiling(
+        self,
+        block_m: int = 128,
+        block_n: int = 64,
+        head_dim: int = 128,
+        is_causal: bool = True,
+        precision_bytes: int = 2,
+        sram_budget_bytes: int = 227328,
+    ) -> Dict[str, Any]:
+        """Formally verify FlashAttention-2/3 SRAM block tiling invariants."""
+        return self.verifier.verify_flash_attention_tiling(
+            block_m=block_m,
+            block_n=block_n,
+            head_dim=head_dim,
+            is_causal=is_causal,
+            precision_bytes=precision_bytes,
+            sram_budget_bytes=sram_budget_bytes,
+        )
+
+    def verify_microscaling_fp8(
+        self,
+        format: str = "e4m3",
+        block_size: int = 32,
+        scale_bias: int = 127,
+        values: Optional[List[float]] = None,
+        max_dynamic_range_db: float = 96.0,
+    ) -> Dict[str, Any]:
+        """Formally verify Microscaling (MXFP8 / NVFP4) block quantization invariants."""
+        return self.verifier.verify_microscaling_fp8(
+            format=format,
+            block_size=block_size,
+            scale_bias=scale_bias,
+            values=values,
+            max_dynamic_range_db=max_dynamic_range_db,
+        )
+
+    def check_health(self) -> Dict[str, Any]:
+        """Perform comprehensive readiness and subsystem health check."""
+        from ..core.health import cloud_health_checker
+        res = cloud_health_checker.check_readiness()
+        if isinstance(res, dict):
+            return res
+        return res.to_dict() if hasattr(res, "to_dict") else vars(res)
+
+    def get_platform_diagnostics(self) -> Dict[str, Any]:
+        """Inspect runtime environment, hardware resources, solvers, and platform metrics."""
+        from ..core.health import cloud_health_checker
+        res = cloud_health_checker.get_platform_diagnostics()
+        if isinstance(res, dict):
+            return res
+        return res.to_dict() if hasattr(res, "to_dict") else vars(res)
+
+    def check_liveness(self) -> bool:
+        """Lightweight ping probe for Kubernetes liveness."""
+        from ..core.health import cloud_health_checker
+        return cloud_health_checker.check_liveness()
+
+    def check_readiness(self) -> Dict[str, Any]:
+        """Deep readiness probe evaluating critical subsystems."""
+        from ..core.health import cloud_health_checker
+        res = cloud_health_checker.check_readiness()
+        if isinstance(res, dict):
+            return res
+        return res.to_dict() if hasattr(res, "to_dict") else vars(res)
+
+    def audit_secrets(self, required_keys: Optional[List[str]] = None) -> Dict[str, bool]:
+        """Audit the configuration status of essential secrets without disclosing sensitive values."""
+        from ..core.secrets import cloud_secrets
+        return cloud_secrets.audit_secrets_presence(required_keys=required_keys)
+
+    # ---------------------------------------------------------------------------
+    # 🌳 Tree-of-Thoughts Reasoning Swarm
+    # ---------------------------------------------------------------------------
+
+    async def run_tree_of_thoughts_async(
+        self,
+        prompt: str,
+        max_depth: int = 3,
+        branching_factor: int = 3,
+        min_confidence_threshold: float = 0.70,
+    ) -> TreeOfThoughtsTrace:
+        """Asynchronously execute Tree-of-Thoughts multi-branch reasoning with SMT pruning."""
+        user_id = self.user.user_id if self.user else "usr_client_default"
+        return await self.swarm.run_tree_of_thoughts(
+            prompt=prompt,
+            max_depth=max_depth,
+            branching_factor=branching_factor,
+            min_confidence_threshold=min_confidence_threshold,
+            user_id=user_id,
+        )
+
+    def run_tree_of_thoughts(
+        self,
+        prompt: str,
+        max_depth: int = 3,
+        branching_factor: int = 3,
+        min_confidence_threshold: float = 0.70,
+    ) -> TreeOfThoughtsTrace:
+        """Synchronously execute Tree-of-Thoughts multi-branch reasoning with SMT pruning."""
+        return _run_sync(
+            self.run_tree_of_thoughts_async(
+                prompt=prompt,
+                max_depth=max_depth,
+                branching_factor=branching_factor,
+                min_confidence_threshold=min_confidence_threshold,
+            )
+        )
+
+    # ---------------------------------------------------------------------------
+    # 📬 Webhook Dead Letter Queue (DLQ)
+    # ---------------------------------------------------------------------------
+
+    def get_webhook_dlq(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Retrieve recent failed webhook delivery attempts in the DLQ."""
+        return self.webhooks.get_dlq_entries(limit=limit)
+
+    def retry_webhook_dlq(
+        self,
+        attempt_id: str,
+        dispatcher_fn: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """Retry a failed webhook delivery attempt from the DLQ."""
+        success = self.webhooks.retry_dlq_entry(attempt_id=attempt_id, dispatcher_fn=dispatcher_fn)
+        return {"success": success, "attempt_id": attempt_id}
+
+    def clear_webhook_dlq(self) -> int:
+        """Flush the Dead Letter Queue, returning the count of cleared entries."""
+        return self.webhooks.clear_dlq()
+
+    def rotate_api_key(
+        self,
+        old_api_key: str,
+        user_id: Optional[str] = None,
+        label: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Atomically rotate an existing API key for current user."""
+        target_uid = user_id or (self.user.user_id if self.user else "usr_client_default")
+        new_key, key_detail = self.sub_manager.rotate_api_key(
+            user_id=target_uid,
+            old_api_key=old_api_key,
+            label=label,
+        )
+        return {
+            "success": True,
+            "user_id": target_uid,
+            "new_api_key": new_key,
+            "key_details": key_detail.to_dict() if hasattr(key_detail, "to_dict") else vars(key_detail),
+        }
+
     # ---------------------------------------------------------------------------
     # Ergonomic Aliases
     # ---------------------------------------------------------------------------
@@ -986,6 +1471,12 @@ class TruthGPTCloudClient:
     purge_cache = purge_expired_cache
     profile = get_user_info
     whoami = get_user_info
+    verify_moe = verify_moe_routing
+    verify_rope = verify_rope_frequencies
+    verify_flash_attention = verify_flash_attention_tiling
+    verify_fp8 = verify_microscaling_fp8
+    tree_of_thoughts = run_tree_of_thoughts
+    tot = run_tree_of_thoughts
 
 
 __all__ = ["TruthGPTCloudClient"]

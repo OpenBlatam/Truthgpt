@@ -48,6 +48,10 @@ from .domain_invariants import (
     verify_loss_monotonicity,
     verify_lora_rank_safety,
     verify_kv_cache_memory_bound,
+    verify_moe_routing_invariants,
+    verify_rope_frequency_invariants,
+    verify_flash_attention_tiling,
+    verify_microscaling_fp8_bounds,
     DomainInvariantsVerifier,
 )
 from .code_purity import (
@@ -91,6 +95,10 @@ __all__ = [
     "verify_loss_monotonicity",
     "verify_lora_rank_safety",
     "verify_kv_cache_memory_bound",
+    "verify_moe_routing_invariants",
+    "verify_rope_frequency_invariants",
+    "verify_flash_attention_tiling",
+    "verify_microscaling_fp8_bounds",
     "DomainInvariantsVerifier",
     "verify_code_purity",
     "verify_code_purity_and_invariants",
@@ -99,5 +107,6 @@ __all__ = [
     "_HAS_Z3",
     "_HAS_SYMPY",
 ]
+
 
 

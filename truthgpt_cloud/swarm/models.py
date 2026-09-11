@@ -3,6 +3,7 @@
 Defines agent nodes, debate rounds, and execution trace artifacts for multi-agent swarm orchestration.
 """
 
+import uuid
 from dataclasses import dataclass, field, asdict
 from typing import Optional, List, Dict, Any
 
@@ -17,6 +18,11 @@ class SwarmAgentNode:
     reasoning_steps: List[str] = field(default_factory=list)
     confidence: float = 0.98
     phase: int = 1
+    latency_ms: float = 0.0
+    tokens_consumed: int = 0
+    started_at: Optional[float] = None
+    completed_at: Optional[float] = None
+    error: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -27,7 +33,12 @@ class SwarmAgentNode:
             "contribution": self.contribution,
             "reasoning_steps": self.reasoning_steps,
             "confidence": self.confidence,
-            "phase": self.phase
+            "phase": self.phase,
+            "latency_ms": self.latency_ms,
+            "tokens_consumed": self.tokens_consumed,
+            "started_at": self.started_at,
+            "completed_at": self.completed_at,
+            "error": self.error,
         }
 
 
@@ -66,6 +77,17 @@ class SwarmExecutionTrace:
     cove_backtracking_count: int = 0
     confidence_aggregate: float = 0.998
     consensus_score: float = 0.998
+    trace_id: str = ""
+    parent_trace_id: Optional[str] = None
+    agent_latencies: Dict[str, float] = field(default_factory=dict)
+
+    def __post_init__(self):
+        if not self.trace_id:
+            self.trace_id = f"trace_swm_{uuid.uuid4().hex[:16]}"
+        if not self.agent_latencies and self.agents_involved:
+            for a in self.agents_involved:
+                if hasattr(a, "agent_id") and hasattr(a, "latency_ms"):
+                    self.agent_latencies[a.agent_id] = a.latency_ms
 
     def to_mermaid(self) -> str:
         """Alias for to_mermaid_graph generating rich Mermaid diagram of the swarm trace."""
@@ -123,9 +145,60 @@ class SwarmExecutionTrace:
             "edges": edges,
         }
 
+    def to_opentelemetry_spans(self) -> List[Dict[str, Any]]:
+        """
+        Export swarm execution trace to OpenTelemetry-compatible span dictionaries.
+        """
+        spans = []
+        root_span_id = f"span_{self.session_id[-16:]}" if len(self.session_id) >= 16 else f"span_{self.session_id}"
+        root_span = {
+            "trace_id": self.trace_id,
+            "span_id": root_span_id,
+            "parent_span_id": self.parent_trace_id,
+            "name": f"swarm_execution_{self.topology}",
+            "kind": "SERVER",
+            "duration_ms": self.execution_time_ms,
+            "attributes": {
+                "swarm.session_id": self.session_id,
+                "swarm.user_id": self.user_id,
+                "swarm.topology": self.topology,
+                "swarm.total_tokens": self.total_tokens,
+                "swarm.agents_count": len(self.agents_involved),
+                "swarm.consensus_score": self.consensus_score,
+                "swarm.formal_invariants": self.formal_invariants_checked,
+            },
+            "status": {"code": "OK"},
+        }
+        spans.append(root_span)
+
+        for agent in self.agents_involved:
+            agent_span = {
+                "trace_id": self.trace_id,
+                "span_id": f"span_{agent.agent_id[-12:]}" if len(agent.agent_id) >= 12 else f"span_{agent.agent_id}",
+                "parent_span_id": root_span_id,
+                "name": f"agent_node:{agent.role_name}",
+                "kind": "INTERNAL",
+                "duration_ms": agent.latency_ms or (self.execution_time_ms / max(len(self.agents_involved), 1)),
+                "attributes": {
+                    "agent.id": agent.agent_id,
+                    "agent.role": agent.role_name,
+                    "agent.specialization": agent.specialization,
+                    "agent.confidence": agent.confidence,
+                    "agent.tokens": agent.tokens_consumed,
+                    "agent.status": agent.status,
+                },
+                "status": {"code": "ERROR" if agent.error else "OK"},
+            }
+            spans.append(agent_span)
+
+        return spans
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "session_id": self.session_id,
+            "trace_id": self.trace_id,
+            "parent_trace_id": self.parent_trace_id,
+            "agent_latencies": self.agent_latencies,
             "user_id": self.user_id,
             "prompt": self.prompt,
             "topology": self.topology,
@@ -141,8 +214,92 @@ class SwarmExecutionTrace:
         }
 
 
+@dataclass
+class ThoughtNode:
+    node_id: str
+    parent_id: Optional[str]
+    depth: int
+    thought: str
+    confidence: float = 0.95
+    status: str = "explored"  # "explored", "pruned", "selected", "backtracked"
+    verification_feedback: Optional[str] = None
+    agent_id: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "node_id": self.node_id,
+            "parent_id": self.parent_id,
+            "depth": self.depth,
+            "thought": self.thought,
+            "confidence": self.confidence,
+            "status": self.status,
+            "verification_feedback": self.verification_feedback,
+            "agent_id": self.agent_id,
+        }
+
+
+@dataclass
+class TreeOfThoughtsTrace:
+    session_id: str
+    root_query: str
+    max_depth: int
+    branching_factor: int
+    total_nodes_explored: int
+    pruned_branches_count: int
+    backtracking_events_count: int
+    execution_time_ms: float
+    selected_path: List[ThoughtNode]
+    all_nodes: List[ThoughtNode]
+    consensus_solution: str
+    confidence_score: float = 0.995
+
+    def to_mermaid(self) -> str:
+        """Render Tree-of-Thoughts tree in Mermaid graph TD format with status highlighting."""
+        lines = [
+            "graph TD",
+            f'    Root["💬 Root Query: {self.root_query[:40]}..."]',
+        ]
+        for n in self.all_nodes:
+            clean_thought = n.thought.replace('"', "'")[:40] + ("..." if len(n.thought) > 40 else "")
+            icon = "✅" if n.status == "selected" else ("❌" if n.status == "pruned" else "↩️" if n.status == "backtracked" else "💡")
+            label = f'{icon} [{n.status.upper()}] d={n.depth}<br/>{clean_thought}<br/>Conf: {n.confidence*100:.1f}%'
+            lines.append(f'    {n.node_id}["{label}"]')
+            if n.parent_id and n.parent_id != "root":
+                lines.append(f"    {n.parent_id} --> {n.node_id}")
+            else:
+                lines.append(f"    Root --> {n.node_id}")
+
+        lines.append(f'    Solution["🏆 Verified Solution<br/>Conf: {self.confidence_score*100:.1f}%"]')
+        if self.selected_path:
+            last_selected = self.selected_path[-1]
+            lines.append(f"    {last_selected.node_id} ==> Solution")
+        else:
+            lines.append("    Root ==> Solution")
+        return "\n".join(lines)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "session_id": self.session_id,
+            "root_query": self.root_query,
+            "max_depth": self.max_depth,
+            "branching_factor": self.branching_factor,
+            "total_nodes_explored": self.total_nodes_explored,
+            "pruned_branches_count": self.pruned_branches_count,
+            "backtracking_events_count": self.backtracking_events_count,
+            "execution_time_ms": self.execution_time_ms,
+            "selected_path": [n.to_dict() for n in self.selected_path],
+            "all_nodes": [n.to_dict() for n in self.all_nodes],
+            "consensus_solution": self.consensus_solution,
+            "confidence_score": self.confidence_score,
+            "mermaid_graph": self.to_mermaid(),
+        }
+
+
 __all__ = [
     "SwarmAgentNode",
     "DebateRound",
     "SwarmExecutionTrace",
+    "ThoughtNode",
+    "TreeOfThoughtsTrace",
 ]
+

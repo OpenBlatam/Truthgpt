@@ -5,11 +5,11 @@ Handles simulated and live billing workflows for Stripe Card, Crypto USDC/ETH, a
 
 import uuid
 import time
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 
 class PaymentGatewayService:
-    """Service to process checkouts and validate payment webhooks."""
+    """Service to process checkouts, charges, and validate payment webhooks."""
 
     @staticmethod
     def process_payment(
@@ -17,7 +17,9 @@ class PaymentGatewayService:
         amount_usd: float,
         tier_id: str,
         billing_cycle: str = "monthly",
-        payment_method: str = "stripe_card"
+        payment_method: str = "stripe_card",
+        description: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Process a payment transaction through the selected gateway.
@@ -57,16 +59,54 @@ class PaymentGatewayService:
                 "stripe_charge_id": f"ch_{uuid.uuid4().hex[:16]}"
             }
 
+        if metadata:
+            method_meta.update(metadata)
+
         return {
             "success": True,
             "transaction_id": tx_id,
             "invoice_id": inv_id,
-            "amount_usd": amount_usd,
+            "amount_usd": round(amount_usd, 4),
             "tier_id": tier_id,
             "billing_cycle": billing_cycle,
             "payment_method": payment_method,
+            "description": description or f"TruthGPT Cloud {tier_id.upper()} ({billing_cycle})",
             "status": "paid",
             "metadata": method_meta,
+            "timestamp": time.time()
+        }
+
+    @classmethod
+    def charge_user(
+        cls,
+        user_id: str,
+        amount_usd: float,
+        description: str = "TruthGPT Cloud Usage Charge",
+        payment_method: str = "stripe_card",
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Directly charge a user for on-demand cloud usage (inference, verification, swarm compute).
+        """
+        return cls.process_payment(
+            user_id=user_id,
+            amount_usd=amount_usd,
+            tier_id="usage_metered",
+            billing_cycle="pay_as_you_go",
+            payment_method=payment_method,
+            description=description,
+            metadata=metadata
+        )
+
+    @staticmethod
+    def refund_payment(transaction_id: str, amount_usd: float) -> Dict[str, Any]:
+        """Refund a payment transaction."""
+        return {
+            "success": True,
+            "refund_id": f"ref_{uuid.uuid4().hex[:12]}",
+            "original_transaction_id": transaction_id,
+            "amount_refunded_usd": amount_usd,
+            "status": "refunded",
             "timestamp": time.time()
         }
 

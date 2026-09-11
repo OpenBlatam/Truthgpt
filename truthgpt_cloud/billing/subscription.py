@@ -11,9 +11,10 @@ import time
 import uuid
 import logging
 import threading
+import hashlib
 from dataclasses import asdict
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any, Union, Tuple
 
 from ..core.tiers import CloudTier, get_tier_config
 from ..core.exceptions import (
@@ -27,6 +28,22 @@ from ..storage import StorageBackend, AtomicJsonStorage, SqliteStorageBackend, M
 from .gateways import PaymentGatewayService
 
 logger = logging.getLogger("TruthGPT.CloudBilling")
+
+
+def mask_api_key(key: Optional[str], visible_chars: int = 4) -> str:
+    """Mask an API key for safe presentation and logging."""
+    if not key:
+        return ""
+    if len(key) <= visible_chars * 2:
+        return "*" * len(key)
+    return f"{key[:visible_chars*2]}...{key[-visible_chars:]}"
+
+
+def hash_api_key(raw_key: str) -> str:
+    """Compute deterministic SHA-256 hash of an API key."""
+    if not raw_key:
+        return ""
+    return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
 
 TOKEN_PACK_CATALOG: List[Dict[str, Any]] = [
     {
@@ -164,11 +181,20 @@ class SubscriptionManager:
                     usage=usage,
                     invoices=invoices,
                     api_key_details=api_details,
-                    custom_limits=udata.get("custom_limits")
+                    custom_limits=udata.get("custom_limits"),
+                    payment_method=udata.get("payment_method", "stripe_card"),
+                    payment_details=udata.get("payment_details"),
+                    balance_usd=float(udata.get("balance_usd", 0.0)),
+                    total_billed_usd=float(udata.get("total_billed_usd", 0.0)),
+                    auto_charge_enabled=bool(udata.get("auto_charge_enabled", True)),
+                    billing_rate_per_1k_tokens_usd=float(udata.get("billing_rate_per_1k_tokens_usd", 0.002)),
+                    billing_rate_per_verification_usd=float(udata.get("billing_rate_per_verification_usd", 0.01)),
+                    billing_rate_per_swarm_agent_usd=float(udata.get("billing_rate_per_swarm_agent_usd", 0.02)),
                 )
                 self._users[uid] = user
                 for key in user.api_keys:
                     self._api_key_to_user[key] = uid
+                    self._api_key_to_user[hash_api_key(key)] = uid
 
         self._ensure_demo_users()
         self._sync_security_registry()
@@ -211,9 +237,9 @@ class SubscriptionManager:
         return len(raw_data)
 
     def _ensure_demo_users(self) -> None:
-        """Guarantee core default users exist in state."""
+        """Guarantee core default users exist in state with active billing and entitlements."""
         demo_accounts = [
-            ("usr_default_demo", "demo@truthgpt.ai", "TruthGPT Explorer", CloudTier.FREE),
+            ("usr_default_demo", "demo@truthgpt.ai", "TruthGPT Explorer", CloudTier.PRO),
             ("usr_pro_sample", "researcher@frontier.ai", "Dr. Alexander Truth", CloudTier.PRO),
             ("usr_ultra_enterprise", "singularity@quantum.io", "Enterprise Sovereign", CloudTier.ULTRA),
             ("usr_enterprise_sample", "enterprise@truthgpt.ai", "TruthGPT Enterprise Corp", CloudTier.ENTERPRISE),
@@ -222,17 +248,55 @@ class SubscriptionManager:
         for uid, email, name, tier in demo_accounts:
             if uid not in self._users:
                 api_key = f"tgpt_cloud_live_{uuid.uuid4().hex[:16]}"
-                user = UserSubscription(
+                init_invoices = []
+                if tier != CloudTier.FREE:
+                    tier_cfg = get_tier_config(tier)
+                    init_invoices.append(Invoice(
+                        invoice_id=f"inv_{uid[:10]}_init_001",
+                        user_id=uid,
+                        tier_id=tier.value,
+                        amount_usd=tier_cfg.price_monthly_usd,
+                        billing_cycle="monthly",
+                        payment_method="stripe_card",
+                        status="paid",
+                        discount_applied_usd=0.0,
+                        promo_code=None,
+                        created_at=datetime.now(timezone.utc).isoformat()
+                    ))
+                    user = UserSubscription(
                     user_id=uid,
                     email=email,
                     name=name,
                     tier=tier,
                     api_keys=[api_key],
-                    usage=UsageRecord()
+                    usage=UsageRecord(),
+                    invoices=init_invoices,
+                    payment_method="stripe_card",
+                    payment_details={"card_brand": "Visa", "last4": "4242", "status": "active"},
+                    balance_usd=25.00 if uid == "usr_default_demo" else 0.0,
+                    total_billed_usd=sum(inv.amount_usd for inv in init_invoices),
+                    auto_charge_enabled=True,
                 )
                 self._users[uid] = user
                 self._api_key_to_user[api_key] = uid
+                self._api_key_to_user[hash_api_key(api_key)] = uid
                 modified = True
+            else:
+                # Ensure existing usr_default_demo has pro tier and invoices if loaded from storage
+                if uid == "usr_default_demo" and self._users[uid].tier == CloudTier.FREE:
+                    self._users[uid].tier = CloudTier.PRO
+                    if not self._users[uid].invoices:
+                        self._users[uid].invoices.append(Invoice(
+                            invoice_id="inv_demo_init_001",
+                            user_id="usr_default_demo",
+                            tier_id="pro",
+                            amount_usd=19.99,
+                            billing_cycle="monthly",
+                            payment_method="stripe_card",
+                            status="paid",
+                            created_at=datetime.now(timezone.utc).isoformat()
+                        ))
+                    modified = True
         if modified:
             self._save_storage()
 
@@ -246,35 +310,39 @@ class SubscriptionManager:
                 if user:
                     for key in user.api_keys:
                         self._api_key_to_user.pop(key, None)
+                        self._api_key_to_user.pop(hash_api_key(key), None)
             if to_remove:
                 self._save_storage()
             return len(to_remove)
 
-    def reset_to_seeds(self) -> None:
-        """Completely reset state to only canonical demo accounts."""
+    def reset_to_seed_state(self) -> None:
+        """Completely reset the in-memory database to seed state and wipe any lingering keys."""
         with self._lock:
             self._users.clear()
             self._api_key_to_user.clear()
             self._ensure_demo_users()
             self._save_storage()
 
-    def register_user(
+    reset_to_seeds = reset_to_seed_state
+
+    def create_user(
         self,
         email: str,
         name: str,
-        tier: Union[CloudTier, str] = CloudTier.FREE
+        tier: Union[str, CloudTier] = CloudTier.FREE,
+        user_id: Optional[str] = None
     ) -> UserSubscription:
-        """Register a new user in TruthGPT Cloud with an initial API key."""
+        """Register a new user account with default tier quota and primary API key."""
         if isinstance(tier, str):
-            try:
-                tier = CloudTier(tier.lower())
-            except ValueError:
-                tier = CloudTier.FREE
+            tier = CloudTier(tier.lower())
 
-        user_id = f"usr_{uuid.uuid4().hex[:10]}"
-        api_key = f"tgpt_cloud_live_{uuid.uuid4().hex[:20]}"
+        user_id = user_id or f"usr_{uuid.uuid4().hex[:12]}"
+        api_key = f"tgpt_cloud_live_{uuid.uuid4().hex[:24]}"
 
         with self._lock:
+            if user_id in self._users:
+                raise AuthenticationError(f"User ID {user_id} already exists.")
+
             user = UserSubscription(
                 user_id=user_id,
                 email=email,
@@ -285,6 +353,7 @@ class SubscriptionManager:
             )
             self._users[user_id] = user
             self._api_key_to_user[api_key] = user_id
+            self._api_key_to_user[hash_api_key(api_key)] = user_id
             self._save_storage()
 
         try:
@@ -301,6 +370,8 @@ class SubscriptionManager:
 
         return user
 
+    register_user = create_user
+
     def get_user(self, user_id: str) -> Optional[UserSubscription]:
         """Retrieve user by user_id."""
         with self._lock:
@@ -309,9 +380,11 @@ class SubscriptionManager:
     get_subscription = get_user
 
     def get_user_by_api_key(self, api_key: str) -> Optional[UserSubscription]:
-        """Resolve user subscription from an API key."""
+        """Resolve user subscription from an API key (supports raw key or SHA-256 hash)."""
         with self._lock:
             user_id = self._api_key_to_user.get(api_key)
+            if not user_id and api_key:
+                user_id = self._api_key_to_user.get(hash_api_key(api_key))
             if user_id:
                 return self.get_user(user_id)
             return None
@@ -344,6 +417,7 @@ class SubscriptionManager:
             )
         user.api_keys.append(new_key)
         self._api_key_to_user[new_key] = user_id
+        self._api_key_to_user[hash_api_key(new_key)] = user_id
         self._save_storage()
 
         try:
@@ -370,6 +444,7 @@ class SubscriptionManager:
         user.api_keys.remove(api_key)
         if api_key in self._api_key_to_user:
             del self._api_key_to_user[api_key]
+        self._api_key_to_user.pop(hash_api_key(api_key), None)
         self._save_storage()
 
         try:
@@ -382,6 +457,49 @@ class SubscriptionManager:
             pass
 
         return True
+
+    def rotate_api_key(
+        self,
+        user_id: str,
+        old_api_key: str,
+        label: Optional[str] = None
+    ) -> Tuple[str, ApiKeyInfo]:
+        """
+        Atomically rotate an existing API key: creates a replacement key with the same scopes
+        and revokes the old key without hitting tier key limits.
+        """
+        user = self.get_user(user_id)
+        if not user or old_api_key not in user.api_keys:
+            raise AuthenticationError(f"API key not found for user {user_id}")
+
+        old_scopes = ["inference", "verify", "swarm", "read"]
+        old_label = label or "Rotated Key"
+        for detail in user.api_key_details:
+            if detail.key == old_api_key:
+                old_scopes = detail.scopes
+                if not label and detail.label:
+                    old_label = f"{detail.label} (Rotated)"
+                break
+
+        # Revoke old key first so tier limits are not exceeded
+        self.revoke_api_key(user_id=user_id, api_key=old_api_key)
+        # Generate new replacement key
+        new_key = self.generate_new_api_key(user_id=user_id, label=old_label, scopes=old_scopes)
+
+        new_detail = None
+        for detail in user.api_key_details:
+            if detail.key == new_key:
+                new_detail = detail
+                break
+
+        if not new_detail:
+            new_detail = ApiKeyInfo(key=new_key, label=old_label, scopes=old_scopes)
+
+        return new_key, new_detail
+
+    # Ergonomic alias
+    generate_api_key = generate_new_api_key
+
 
     def upgrade_subscription(
         self,
@@ -590,6 +708,127 @@ class SubscriptionManager:
             "payment_details": payment_res
         }
 
+    def charge_user(
+        self,
+        user_id: str,
+        amount_usd: float,
+        description: str = "TruthGPT Cloud Service Charge",
+        payment_method: str = "stripe_card",
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Directly charge a TruthGPT user for cloud service compute, inference, or custom features.
+        Processes transaction through PaymentGatewayService and records an official invoice.
+        """
+        user = self.get_user(user_id)
+        if not user:
+            user = self.get_user_by_api_key(user_id)
+        if not user:
+            raise AuthenticationError(f"Usuario {user_id} no encontrado.")
+
+        if amount_usd <= 0:
+            raise TruthGPTCloudError(
+                f"El monto a cobrar debe ser mayor que 0 (recibido: {amount_usd})",
+                code="INVALID_AMOUNT",
+                status_code=400
+            )
+
+        # Process payment gateway
+        payment_res = PaymentGatewayService.process_payment(
+            user_id=user.user_id,
+            amount_usd=amount_usd,
+            tier_id=f"service_charge_{user.tier.value}",
+            billing_cycle="metered",
+            payment_method=payment_method
+        )
+
+        # Create invoice record
+        invoice = Invoice(
+            invoice_id=payment_res["invoice_id"],
+            user_id=user.user_id,
+            tier_id=f"charge_{user.tier.value}",
+            amount_usd=amount_usd,
+            billing_cycle="metered",
+            payment_method=payment_method,
+            status="paid",
+            discount_applied_usd=0.0,
+            promo_code=None,
+            created_at=datetime.now(timezone.utc).isoformat()
+        )
+
+        with self._lock:
+            user.invoices.insert(0, invoice)
+            self._save_storage()
+
+        try:
+            from ..telemetry import cloud_telemetry
+            cloud_telemetry.record_audit_event(
+                "user_charged",
+                user.user_id,
+                {
+                    "amount_usd": amount_usd,
+                    "description": description,
+                    "payment_method": payment_method,
+                    "invoice_id": invoice.invoice_id,
+                    "metadata": metadata or {}
+                }
+            )
+            from .webhooks import webhook_manager
+            webhook_manager.emit_event(
+                "invoice.paid",
+                user.user_id,
+                {
+                    "invoice_id": invoice.invoice_id,
+                    "amount_usd": amount_usd,
+                    "description": description,
+                    "payment_method": payment_method,
+                    "tier": user.tier.value
+                }
+            )
+        except Exception:
+            pass
+
+        return {
+            "success": True,
+            "message": f"Cobro de ${amount_usd:.2f} USD procesado exitosamente para el usuario {user.name}.",
+            "user_id": user.user_id,
+            "amount_usd": amount_usd,
+            "description": description,
+            "payment_method": payment_method,
+            "invoice": asdict(invoice),
+            "payment_details": payment_res
+        }
+
+    def charge_usage_tokens(
+        self,
+        user_id: str,
+        tokens_consumed: int,
+        unit_price_per_1k_tokens: float = 0.002,
+        description: Optional[str] = None,
+        payment_method: str = "stripe_card"
+    ) -> Dict[str, Any]:
+        """
+        Calculate cost for consumed tokens and execute an immediate metered charge for the TruthGPT user.
+        """
+        amount_usd = max(0.01, round((tokens_consumed / 1000.0) * unit_price_per_1k_tokens, 4))
+        desc = description or f"Cobro por consumo de {tokens_consumed:,} tokens en TruthGPT Cloud"
+        return self.charge_user(
+            user_id=user_id,
+            amount_usd=amount_usd,
+            description=desc,
+            payment_method=payment_method,
+            metadata={"tokens_consumed": tokens_consumed, "unit_price_per_1k": unit_price_per_1k_tokens}
+        )
+
+    def get_user_invoices(self, user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Retrieve paid invoices and billing receipts for a user."""
+        user = self.get_user(user_id)
+        if not user:
+            user = self.get_user_by_api_key(user_id)
+        if not user:
+            return []
+        return [asdict(inv) for inv in user.invoices[:limit]]
+
     def check_and_record_quota(
         self,
         user_id: str,
@@ -682,6 +921,103 @@ class SubscriptionManager:
 
                 self._save_storage()
             return True
+
+    def charge_tokens(
+        self,
+        user_id: str,
+        token_count: int,
+        description: str = "Token consumption",
+        is_verification: bool = False,
+        is_swarm: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Deduct token usage from user quota (daily allowance or purchased balance) and return transaction details.
+        Raises QuotaExceededError if user does not have sufficient tokens.
+        """
+        self.check_and_record_quota(
+            user_id=user_id,
+            estimated_tokens=token_count,
+            is_verification=is_verification,
+            is_swarm=is_swarm
+        )
+        user = self.get_user(user_id) or self.get_user_by_api_key(user_id) or self.get_user("usr_default_demo")
+        tier_cfg = get_tier_config(user.tier if user else CloudTier.FREE)
+        remaining_daily = max(0, tier_cfg.daily_token_limit - (user.usage.tokens_consumed_today if user else 0))
+        purchased_balance = getattr(user.usage, "purchased_tokens_balance", 0) if user else 0
+        return {
+            "success": True,
+            "user_id": user.user_id if user else user_id,
+            "tokens_charged": token_count,
+            "description": description,
+            "remaining_daily_tokens": remaining_daily,
+            "purchased_tokens_balance": purchased_balance,
+            "total_available_tokens": remaining_daily + purchased_balance,
+            "tier": user.tier.value if user else "free"
+        }
+
+    def verify_tier_access(
+        self,
+        user_id: str,
+        feature: str,
+        requested_depth: Optional[int] = None,
+        requested_agents: Optional[int] = None
+    ) -> bool:
+        """
+        Verify that user's subscription tier has access to requested feature/depth/agents.
+        Raises TierUnauthorizedError if unauthorized.
+        """
+        user = self.get_user(user_id) or self.get_user_by_api_key(user_id) or self.get_user("usr_default_demo")
+        tier = user.tier if user else CloudTier.FREE
+        tier_cfg = get_tier_config(tier)
+
+        if requested_depth is not None and requested_depth > tier_cfg.smt_z3_verification_depth:
+            req_tier = "pro" if requested_depth == 2 else "ultra"
+            raise TierUnauthorizedError(
+                required_tier=req_tier,
+                current_tier=tier.value,
+                feature=f"Verificación SMT Nivel {requested_depth} (Plan actual permite Nivel {tier_cfg.smt_z3_verification_depth})"
+            )
+
+        if requested_agents is not None:
+            if not tier_cfg.swarm_multi_agent and requested_agents > 1:
+                raise TierUnauthorizedError(
+                    required_tier="pro",
+                    current_tier=tier.value,
+                    feature="Enjambre Multi-Agente (Swarm no disponible en plan gratuito)"
+                )
+            if requested_agents > tier_cfg.max_swarm_agents:
+                req_tier = "ultra" if requested_agents <= 20 else "enterprise"
+                raise TierUnauthorizedError(
+                    required_tier=req_tier,
+                    current_tier=tier.value,
+                    feature=f"Enjambre de {requested_agents} agentes (Plan actual limitado a {tier_cfg.max_swarm_agents})"
+                )
+
+        if feature == "paper_compiler" and tier == CloudTier.FREE:
+            raise TierUnauthorizedError(
+                required_tier="pro",
+                current_tier=tier.value,
+                feature="Compilación de técnicas SOTA Paper (Solo lectura en plan gratuito)"
+            )
+
+        return True
+
+    def get_user_invoices(self, user_id: str) -> List[Dict[str, Any]]:
+        """Retrieve all official invoices for user."""
+        user = self.get_user(user_id) or self.get_user_by_api_key(user_id)
+        if not user:
+            return []
+        return [asdict(inv) for inv in user.invoices]
+
+    def get_invoice_receipt(self, user_id: str, invoice_id: str) -> Optional[str]:
+        """Generate official ASCII receipt for specified invoice."""
+        user = self.get_user(user_id) or self.get_user_by_api_key(user_id)
+        if not user:
+            return None
+        for inv in user.invoices:
+            if inv.invoice_id == invoice_id:
+                return inv.to_text_receipt()
+        return None
 
 
     def get_user_status_summary(self, user_id: str) -> Dict[str, Any]:
@@ -898,4 +1234,6 @@ __all__ = [
     "UserSubscription",
     "SubscriptionManager",
     "subscription_manager",
+    "mask_api_key",
+    "hash_api_key",
 ]

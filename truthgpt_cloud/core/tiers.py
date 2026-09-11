@@ -53,6 +53,12 @@ class TierConfig:
     dedicated_api_keys: int
     features_list: List[str] = field(default_factory=list)
 
+    # Metered Billing Rates (USD)
+    price_per_1k_input_tokens: float = 0.0015
+    price_per_1k_output_tokens: float = 0.0020
+    price_per_verification_usd: float = 0.0050
+    price_per_swarm_agent_usd: float = 0.0100
+
     @property
     def tokens_per_minute(self) -> int:
         """Estimated tokens per minute based on daily token limit."""
@@ -276,9 +282,36 @@ def get_all_tiers() -> List[Dict[str, Any]]:
             "latency_tier": cfg.latency_tier,
             "available_models": cfg.available_models,
             "default_model": cfg.default_model,
+            "price_per_1k_input_tokens": cfg.price_per_1k_input_tokens,
+            "price_per_1k_output_tokens": cfg.price_per_1k_output_tokens,
+            "price_per_verification_usd": cfg.price_per_verification_usd,
+            "price_per_swarm_agent_usd": cfg.price_per_swarm_agent_usd,
             "features_list": cfg.features_list
         })
     return tiers_data
+
+
+def calculate_request_cost(
+    tier: Union[str, CloudTier, TierConfig],
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    is_verification: bool = False,
+    swarm_agents: int = 0,
+) -> float:
+    """Calculate the exact USD cost for an inference / verification / swarm request."""
+    if isinstance(tier, TierConfig):
+        cfg = tier
+    else:
+        cfg = get_tier_config(tier)
+
+    token_cost = (
+        (max(0, input_tokens) / 1000.0) * cfg.price_per_1k_input_tokens +
+        (max(0, output_tokens) / 1000.0) * cfg.price_per_1k_output_tokens
+    )
+    verify_cost = cfg.price_per_verification_usd if is_verification else 0.0
+    swarm_cost = (max(0, swarm_agents) * cfg.price_per_swarm_agent_usd) if swarm_agents > 0 else 0.0
+    total = token_cost + verify_cost + swarm_cost
+    return max(0.0001, round(total, 6))
 
 
 __all__ = [
@@ -287,4 +320,5 @@ __all__ = [
     "TIER_CONFIGURATIONS",
     "get_tier_config",
     "get_all_tiers",
+    "calculate_request_cost",
 ]

@@ -45,6 +45,8 @@ from truthgpt_cloud import (
     create_session_jwt,
     verify_session_jwt,
     get_system_metrics,
+    cloud_health_checker,
+    cloud_secrets,
 )
 from truthgpt_cloud.telemetry.prometheus import (
     generate_prometheus_metrics,
@@ -1239,15 +1241,23 @@ async def liveness_probe():
 
 @app.get("/api/v1/cloud/health/readiness")
 async def readiness_probe():
-    """Kubernetes readiness probe validating storage, cache, and verifier subsystems."""
-    db_audit = subscription_manager.validate_database_integrity()
+    """Kubernetes readiness probe validating storage, cache, verifier, and swarm subsystems."""
+    readiness = cloud_health_checker.check_readiness()
+    return readiness.to_dict() if hasattr(readiness, "to_dict") else asdict(readiness)
+
+
+@app.get("/api/v1/cloud/health/diagnostics")
+async def platform_diagnostics_endpoint():
+    """Deep platform diagnostic inspection of hardware, runtime, solvers, and subsystems."""
+    return cloud_health_checker.get_platform_diagnostics()
+
+
+@app.get("/api/v1/cloud/health/secrets-audit")
+async def secrets_audit_endpoint():
+    """Audit status and presence of essential cloud credentials and encryption secrets."""
     return {
-        "status": "ready" if db_audit["valid"] else "degraded",
-        "timestamp": time.time(),
-        "database_integrity": db_audit["valid"],
-        "total_users": db_audit["total_users"],
-        "cache_healthy": True,
-        "verifier_ready": True
+        "success": True,
+        "secrets_audit": cloud_secrets.audit_secrets_presence(),
     }
 
 
@@ -1267,6 +1277,43 @@ class LipschitzVerifyRequest(BaseModel):
     target_lipschitz: float = 1.0
 
 
+class MOEVerifyRequest(BaseModel):
+    num_experts: int
+    top_k: int
+    tokens_per_batch: int
+    capacity_factor: Optional[float] = 1.25
+    gating_weights: Optional[List[float]] = None
+    aux_loss_coeff: Optional[float] = 0.01
+    drop_tokens: Optional[bool] = False
+
+
+class ROPEVerifyRequest(BaseModel):
+    head_dim: int
+    max_position_embeddings: Optional[int] = 8192
+    base_theta: Optional[float] = 10000.0
+    scaling_factor: Optional[float] = 1.0
+    scaling_type: Optional[str] = "linear"
+    low_freq_factor: Optional[float] = 1.0
+    high_freq_factor: Optional[float] = 4.0
+
+
+class FlashAttentionVerifyRequest(BaseModel):
+    block_m: Optional[int] = 128
+    block_n: Optional[int] = 64
+    head_dim: Optional[int] = 128
+    is_causal: Optional[bool] = True
+    precision_bytes: Optional[int] = 2
+    sram_budget_bytes: Optional[int] = 227328
+
+
+class MicroscalingFP8VerifyRequest(BaseModel):
+    format: Optional[str] = "e4m3"
+    block_size: Optional[int] = 32
+    scale_bias: Optional[int] = 127
+    values: Optional[List[float]] = None
+    max_dynamic_range_db: Optional[float] = 96.0
+
+
 @app.post("/api/v1/cloud/formal/verify/spectral-norm")
 async def verify_spectral_norm_endpoint(req: SpectralNormVerifyRequest):
     """Formally verify bounded spectral norm sigma_max(W) <= max_norm."""
@@ -1281,6 +1328,59 @@ async def verify_lipschitz_endpoint(req: LipschitzVerifyRequest):
         weight_spectral_norm=req.weight_spectral_norm,
         activation=req.activation,
         target_lipschitz=req.target_lipschitz
+    )
+
+
+@app.post("/api/v1/cloud/formal/verify/moe")
+async def verify_moe_endpoint(req: MOEVerifyRequest):
+    """Formally verify Mixture of Experts (MoE) routing invariants."""
+    return cloud_verifier.verify_moe_routing(
+        num_experts=req.num_experts,
+        top_k=req.top_k,
+        tokens_per_batch=req.tokens_per_batch,
+        capacity_factor=req.capacity_factor or 1.25,
+        gating_weights=req.gating_weights,
+        aux_loss_coeff=req.aux_loss_coeff or 0.01,
+        drop_tokens=bool(req.drop_tokens),
+    )
+
+
+@app.post("/api/v1/cloud/formal/verify/rope")
+async def verify_rope_endpoint(req: ROPEVerifyRequest):
+    """Formally verify Rotary Position Embeddings (RoPE) frequency invariants."""
+    return cloud_verifier.verify_rope_frequencies(
+        head_dim=req.head_dim,
+        max_position_embeddings=req.max_position_embeddings or 8192,
+        base_theta=req.base_theta or 10000.0,
+        scaling_factor=req.scaling_factor or 1.0,
+        scaling_type=req.scaling_type or "linear",
+        low_freq_factor=req.low_freq_factor or 1.0,
+        high_freq_factor=req.high_freq_factor or 4.0,
+    )
+
+
+@app.post("/api/v1/cloud/formal/verify/flash-attention")
+async def verify_flash_attention_endpoint(req: FlashAttentionVerifyRequest):
+    """Formally verify FlashAttention SRAM block tiling invariants."""
+    return cloud_verifier.verify_flash_attention_tiling(
+        block_m=req.block_m or 128,
+        block_n=req.block_n or 64,
+        head_dim=req.head_dim or 128,
+        is_causal=req.is_causal if req.is_causal is not None else True,
+        precision_bytes=req.precision_bytes or 2,
+        sram_budget_bytes=req.sram_budget_bytes or 227328,
+    )
+
+
+@app.post("/api/v1/cloud/formal/verify/microscaling-fp8")
+async def verify_microscaling_fp8_endpoint(req: MicroscalingFP8VerifyRequest):
+    """Formally verify Microscaling (MXFP8 / NVFP4) block quantization invariants."""
+    return cloud_verifier.verify_microscaling_fp8(
+        format=req.format or "e4m3",
+        block_size=req.block_size or 32,
+        scale_bias=req.scale_bias or 127,
+        values=req.values,
+        max_dynamic_range_db=req.max_dynamic_range_db or 96.0,
     )
 
 

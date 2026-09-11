@@ -3,6 +3,7 @@
 """
 
 import time
+import hashlib
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
@@ -19,6 +20,15 @@ class UsageRecord:
     daily_request_count: int = 0
     purchased_tokens_balance: int = 0
     total_purchased_tokens: int = 0
+    credit_balance_usd: float = 0.0
+    balance_usd: float = 0.0
+    total_spent_usd: float = 0.0
+
+    def __post_init__(self):
+        if self.balance_usd == 0.0 and self.credit_balance_usd != 0.0:
+            self.balance_usd = self.credit_balance_usd
+        elif self.credit_balance_usd == 0.0 and self.balance_usd != 0.0:
+            self.credit_balance_usd = self.balance_usd
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -36,6 +46,8 @@ class Invoice:
     discount_applied_usd: float = 0.0
     promo_code: Optional[str] = None
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    description: str = "TruthGPT Cloud Service Charge"
+    items: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -48,6 +60,7 @@ class Invoice:
             f"========================================================\n"
             f"Invoice ID:      {self.invoice_id}\n"
             f"Customer ID:     {self.user_id}\n"
+            f"Description:     {self.description}\n"
             f"Subscription:    {self.tier_id.upper()} ({self.billing_cycle})\n"
             f"Payment Method:  {self.payment_method}\n"
             f"Status:          {self.status.upper()}\n"
@@ -66,9 +79,12 @@ class ApiKeyInfo:
     key: str = ""
     key_id: str = ""
     key_prefix: str = ""
+    key_hash: str = ""
+    key_version: int = 1
     label: str = "Default API Key"
     name: str = "Default API Key"
     created_at: float = field(default_factory=time.time)
+    expires_at: Optional[float] = None
     last_used_at: Optional[float] = None
     is_active: bool = True
     scopes: List[str] = field(default_factory=lambda: ["all"])
@@ -76,6 +92,8 @@ class ApiKeyInfo:
     def __post_init__(self):
         if not self.key_prefix and self.key:
             self.key_prefix = self.key[:16] + "..."
+        if not self.key_hash and self.key:
+            self.key_hash = hashlib.sha256(self.key.encode("utf-8")).hexdigest()
         if not self.label and self.name:
             self.label = self.name
         elif not self.name and self.label:
@@ -127,6 +145,15 @@ class UserSubscription:
     api_key_details: List[ApiKeyInfo] = field(default_factory=list)
     webhooks: List[WebhookSubscription] = field(default_factory=list)
     custom_limits: Optional[Dict[str, Any]] = None
+    # Cloud Billing & Metered Charging extensions
+    payment_method: str = "stripe_card"
+    payment_details: Optional[Dict[str, Any]] = None
+    balance_usd: float = 0.0
+    total_billed_usd: float = 0.0
+    auto_charge_enabled: bool = True
+    billing_rate_per_1k_tokens_usd: float = 0.002
+    billing_rate_per_verification_usd: float = 0.01
+    billing_rate_per_swarm_agent_usd: float = 0.02
 
     @property
     def api_keys_detail(self) -> List[ApiKeyInfo]:

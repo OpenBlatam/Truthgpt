@@ -15,6 +15,8 @@ from .subscription import (
     SubscriptionManager,
     subscription_manager,
     TOKEN_PACK_CATALOG,
+    mask_api_key,
+    hash_api_key,
 )
 
 from .storage import AtomicJsonStorage
@@ -22,6 +24,8 @@ from .gateways import PaymentGatewayService
 from .webhooks import (
     WebhookManager,
     WebhookEventPayload,
+    WebhookDeliveryAttempt,
+    DeadLetterEntry,
     webhook_manager,
 )
 
@@ -50,11 +54,15 @@ __all__ = [
     "ApiKeyInfo",
     "WebhookSubscription",
     "WebhookEventPayload",
+    "WebhookDeliveryAttempt",
+    "DeadLetterEntry",
     "UserSubscription",
     # Managers & Services
     "SubscriptionManager",
     "subscription_manager",
     "TOKEN_PACK_CATALOG",
+    "mask_api_key",
+    "hash_api_key",
     "PaymentGatewayService",
     "WebhookManager",
     "webhook_manager",

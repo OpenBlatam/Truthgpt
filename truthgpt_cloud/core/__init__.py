@@ -23,6 +23,7 @@ from .tiers import (
     TIER_CONFIGURATIONS,
     get_tier_config,
     get_all_tiers,
+    calculate_request_cost,
 )
 
 from .exceptions import (
@@ -110,6 +111,22 @@ from .config import (
 
 from .factory import CloudFactory
 
+from .health import (
+    SubsystemHealth,
+    HealthStatus,
+    PlatformHealthReport,
+    CloudHealthChecker,
+    cloud_health_checker,
+)
+
+from .secrets import (
+    mask_secret,
+    CloudSecretsProvider,
+    cloud_secrets_provider,
+    cloud_secrets,
+    secrets_provider,
+)
+
 __all__ = [
     # Constants
     "CLOUD_PLATFORM_VERSION",
@@ -128,6 +145,7 @@ __all__ = [
     "TIER_CONFIGURATIONS",
     "get_tier_config",
     "get_all_tiers",
+    "calculate_request_cost",
     # Exceptions
     "TruthGPTCloudError",
     "AuthenticationError",
@@ -201,4 +219,16 @@ __all__ = [
     "create_isolated_context",
     "set_cloud_context",
     "reset_cloud_context",
+    # Health & Diagnostics
+    "SubsystemHealth",
+    "HealthStatus",
+    "PlatformHealthReport",
+    "CloudHealthChecker",
+    "cloud_health_checker",
+    # Secrets Management
+    "mask_secret",
+    "CloudSecretsProvider",
+    "cloud_secrets_provider",
+    "cloud_secrets",
+    "secrets_provider",
 ]

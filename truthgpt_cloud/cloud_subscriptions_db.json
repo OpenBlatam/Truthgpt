@@ -3,7 +3,7 @@
     "user_id": "usr_default_demo",
     "email": "demo@truthgpt.ai",
     "name": "TruthGPT Explorer",
-    "tier": "free",
+    "tier": "pro",
     "billing_cycle": "monthly",
     "status": "active",
     "api_keys": [
@@ -21,7 +21,20 @@
       "purchased_tokens_balance": 0,
       "total_purchased_tokens": 0
     },
-    "invoices": [],
+    "invoices": [
+      {
+        "invoice_id": "inv_demo_init_001",
+        "user_id": "usr_default_demo",
+        "tier_id": "pro",
+        "amount_usd": 19.99,
+        "billing_cycle": "monthly",
+        "payment_method": "stripe_card",
+        "status": "paid",
+        "discount_applied_usd": 0.0,
+        "promo_code": null,
+        "created_at": "2026-08-28T00:00:00+00:00"
+      }
+    ],
     "api_key_details": [
       {
         "key": "tgpt_cloud_live_demo_free_key_001",
@@ -38,7 +51,19 @@
       }
     ],
     "webhooks": [],
-    "custom_limits": null
+    "custom_limits": null,
+    "payment_method": "stripe_card",
+    "payment_details": {
+      "card_brand": "Visa",
+      "last4": "4242",
+      "stripe_customer_id": "cus_tgpt_demo_001"
+    },
+    "balance_usd": 50.0,
+    "total_billed_usd": 19.99,
+    "auto_charge_enabled": true,
+    "billing_rate_per_1k_tokens_usd": 0.002,
+    "billing_rate_per_verification_usd": 0.01,
+    "billing_rate_per_swarm_agent_usd": 0.02
   },
   "usr_pro_sample": {
     "user_id": "usr_pro_sample",
@@ -191,6 +216,61 @@
         "key_prefix": "tgpt_cloud_live_...",
         "label": "Enterprise Master Key",
         "name": "Enterprise Master Key",
+        "created_at": 1787952726.0,
+        "last_used_at": null,
+        "is_active": true,
+        "scopes": [
+          "all"
+        ]
+      }
+    ],
+
+    "webhooks": [],
+    "custom_limits": null
+  },
+  "usr_truthgpt_user": {
+    "user_id": "usr_truthgpt_user",
+    "email": "user@truthgpt.ai",
+    "name": "TruthGPT User",
+    "tier": "pro",
+    "billing_cycle": "monthly",
+    "status": "active",
+    "api_keys": [
+      "tgpt_cloud_live_truthgpt_user_key_777"
+    ],
+    "subscription_start_date": "2026-09-01T00:00:00+00:00",
+    "next_billing_date": "2026-10-01T00:00:00+00:00",
+    "usage": {
+      "total_tokens_consumed": 24500,
+      "tokens_consumed_today": 1850,
+      "verifications_run": 12,
+      "swarm_sessions_count": 3,
+      "last_reset_timestamp": 1787952726.0,
+      "daily_request_count": 15,
+      "purchased_tokens_balance": 500000,
+      "total_purchased_tokens": 500000
+    },
+    "invoices": [
+      {
+        "invoice_id": "inv_truthgpt_init_001",
+        "user_id": "usr_truthgpt_user",
+        "tier_id": "pro",
+        "amount_usd": 19.99,
+        "billing_cycle": "monthly",
+        "payment_method": "stripe_card",
+        "status": "paid",
+        "discount_applied_usd": 0.0,
+        "promo_code": null,
+        "created_at": "2026-09-01T00:00:00+00:00"
+      }
+    ],
+    "api_key_details": [
+      {
+        "key": "tgpt_cloud_live_truthgpt_user_key_777",
+        "key_id": "key_truthgpt_001",
+        "key_prefix": "tgpt_cloud_live_...",
+        "label": "TruthGPT User Master Key",
+        "name": "TruthGPT User Master Key",
         "created_at": 1787952726.0,
         "last_used_at": null,
         "is_active": true,

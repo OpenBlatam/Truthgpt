@@ -17,8 +17,12 @@ from .billing import (
     WebhookEventPayload,
     WebhookManager,
     WebhookSubscription,
+    WebhookDeliveryAttempt,
+    DeadLetterEntry,
     subscription_manager,
     webhook_manager,
+    hash_api_key,
+    mask_api_key,
 )
 from .cache import (
     _HAS_SIMSIMD,
@@ -102,6 +106,18 @@ from .core import (
     create_isolated_context,
     set_cloud_context,
     reset_cloud_context,
+    # Health & Diagnostics
+    SubsystemHealth,
+    HealthStatus,
+    PlatformHealthReport,
+    CloudHealthChecker,
+    cloud_health_checker,
+    # Secrets Management
+    CloudSecretsProvider,
+    cloud_secrets_provider,
+    cloud_secrets,
+    secrets_provider,
+    mask_secret,
 )
 from .papers import (
     SOTA_PAPERS_CATALOG,
@@ -130,6 +146,7 @@ from .resilience import (
     CircuitState,
     RetryConfig,
     retry_with_backoff,
+    AdaptiveConcurrencyLimiter,
 )
 from .routing import (
     _HAS_TIKTOKEN,
@@ -154,6 +171,7 @@ from .security import (
 from .storage import (
     JsonFileStorageBackend,
     SqliteStorageBackend,
+    MemoryStorageBackend,
     StorageBackend,
 )
 from .swarm import (
@@ -162,6 +180,8 @@ from .swarm import (
     DebateRound,
     SwarmAgentNode,
     SwarmExecutionTrace,
+    ThoughtNode,
+    TreeOfThoughtsTrace,
     build_swarm_topology_graph,
     calculate_agent_influence,
     cloud_swarm,
@@ -223,7 +243,22 @@ from .verification import (
     verify_lyapunov_stability,
     verify_loop_invariant,
     verify_differential_privacy,
+    verify_spectral_norm,
+    verify_lipschitz_constant,
+    verify_gradient_clipping_bounds,
+    verify_loss_monotonicity,
+    verify_lora_rank_safety,
+    verify_kv_cache_memory_bound,
+    verify_moe_routing_invariants,
+    verify_rope_frequency_invariants,
+    verify_flash_attention_tiling,
+    verify_microscaling_fp8_bounds,
+    verify_tensor_shapes,
+    verify_numerical_stability,
+    verify_code_purity,
     verify_code_purity_and_invariants,
+    DomainInvariantsVerifier,
+    CodePurityVerifier,
 )
 
 __version__ = CLOUD_PLATFORM_VERSION
@@ -282,6 +317,8 @@ __all__ = [
     # Swarm Orchestration
     "SwarmAgentNode",
     "DebateRound",
+    "ThoughtNode",
+    "TreeOfThoughtsTrace",
     "get_default_swarm_nodes",
     "get_adversarial_team_nodes",
     "SwarmExecutionTrace",
@@ -317,6 +354,7 @@ __all__ = [
     "CircuitState",
     "retry_with_backoff",
     "RetryConfig",
+    "AdaptiveConcurrencyLimiter",
     # Domain Exceptions
     "TruthGPTCloudError",
     "AuthenticationError",
@@ -445,5 +483,42 @@ __all__ = [
     "verify_loop_invariant",
     "verify_differential_privacy",
     "verify_code_purity_and_invariants",
+    "verify_spectral_norm",
+    "verify_lipschitz_constant",
+    "verify_gradient_clipping_bounds",
+    "verify_loss_monotonicity",
+    "verify_lora_rank_safety",
+    "verify_kv_cache_memory_bound",
+    "verify_moe_routing_invariants",
+    "verify_rope_frequency_invariants",
+    "verify_flash_attention_tiling",
+    "verify_microscaling_fp8_bounds",
+    "verify_tensor_shapes",
+    "verify_numerical_stability",
+    "verify_code_purity",
+    "DomainInvariantsVerifier",
+    "CodePurityVerifier",
+    "MemoryStorageBackend",
+    "AtomicJsonStorage",
+    # Health & Diagnostics
+    "SubsystemHealth",
+    "HealthStatus",
+    "PlatformHealthReport",
+    "CloudHealthChecker",
+    "cloud_health_checker",
+    # Secrets Management
+    "CloudSecretsProvider",
+    "cloud_secrets_provider",
+    "cloud_secrets",
+    "secrets_provider",
+    "mask_secret",
+    # Advanced Resilience & Swarm Reasoning
+    "AdaptiveConcurrencyLimiter",
+    "ThoughtNode",
+    "TreeOfThoughtsTrace",
+    "WebhookDeliveryAttempt",
+    "hash_api_key",
+    "mask_api_key",
 ]
+
 

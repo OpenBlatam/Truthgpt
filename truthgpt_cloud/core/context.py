@@ -40,6 +40,8 @@ class TruthGPTCloudContext:
     security: CloudSecurityManager
     paper_compiler: CloudPaperCompiler
     webhooks: WebhookManager
+    health_checker: Optional[Any] = None
+    secrets: Optional[Any] = None
 
     def get_status(self) -> dict[str, Any]:
         """Return diagnostic health and status dictionary for all subsystems in this context."""
@@ -49,6 +51,7 @@ class TruthGPTCloudContext:
             "swarm_agents": len(getattr(self.swarm, "active_nodes", {})),
             "telemetry_metrics_collected": len(getattr(self.telemetry, "_metrics_buffer", [])),
             "papers_catalog_size": len(getattr(self.paper_compiler, "get_all_papers", lambda: [])()),
+            "health_status": getattr(self.health_checker, "check_liveness", lambda: True)() if self.health_checker else True,
         }
 
 
@@ -72,6 +75,8 @@ def get_cloud_context() -> TruthGPTCloudContext:
         from ..cache.proof_cache import proof_cache
         from ..security.manager import cloud_security
         from ..papers.compiler import cloud_paper_compiler
+        from .health import cloud_health_checker
+        from .secrets import cloud_secrets_provider
 
         _GLOBAL_CLOUD_CONTEXT = TruthGPTCloudContext(
             subscription_manager=subscription_manager,
@@ -83,6 +88,8 @@ def get_cloud_context() -> TruthGPTCloudContext:
             security=cloud_security,
             paper_compiler=cloud_paper_compiler,
             webhooks=webhook_manager,
+            health_checker=cloud_health_checker,
+            secrets=cloud_secrets_provider,
         )
     return _GLOBAL_CLOUD_CONTEXT
 
@@ -118,6 +125,8 @@ def create_isolated_context(
     from ..cache.proof_cache import CloudProofCache
     from ..security.manager import CloudSecurityManager
     from ..papers.compiler import CloudPaperCompiler
+    from .health import CloudHealthChecker
+    from .secrets import CloudSecretsProvider
 
     if storage_backend is None and custom_storage_path is None:
         test_dir = os.path.join(tempfile.gettempdir(), "truthgpt_context_isolated")
@@ -133,6 +142,8 @@ def create_isolated_context(
     telem = CloudTelemetryCollector()
     compiler = CloudPaperCompiler()
     webhooks = WebhookManager()
+    health_checker = CloudHealthChecker()
+    secrets = CloudSecretsProvider()
 
     return TruthGPTCloudContext(
         subscription_manager=sub_mgr,
@@ -144,6 +155,8 @@ def create_isolated_context(
         security=sec_mgr,
         paper_compiler=compiler,
         webhooks=webhooks,
+        health_checker=health_checker,
+        secrets=secrets,
     )
 
 

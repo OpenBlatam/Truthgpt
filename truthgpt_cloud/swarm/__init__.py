@@ -6,6 +6,8 @@ from .models import (
     SwarmAgentNode,
     DebateRound,
     SwarmExecutionTrace,
+    ThoughtNode,
+    TreeOfThoughtsTrace,
 )
 from .agents import (
     get_default_swarm_nodes,
@@ -29,6 +31,8 @@ __all__ = [
     "get_default_swarm_nodes",
     "get_adversarial_team_nodes",
     "SwarmExecutionTrace",
+    "ThoughtNode",
+    "TreeOfThoughtsTrace",
     "CloudSwarmOrchestrator",
     "cloud_swarm",
     "build_swarm_topology_graph",
@@ -39,3 +43,4 @@ __all__ = [
     "get_topology_metrics",
     "_HAS_NETWORKX",
 ]
+

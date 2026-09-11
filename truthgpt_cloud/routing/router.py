@@ -9,11 +9,12 @@ import time
 import uuid
 import logging
 from dataclasses import asdict
-from typing import Dict, List, Optional, Any, AsyncGenerator
+from typing import Dict, List, Optional, Any, AsyncGenerator, Iterator
 
 from .models import CloudInferenceResponse, StreamChunk
 from ..core.tiers import CloudTier, get_tier_config
 from ..core.exceptions import TruthGPTCloudError
+from ..core.interfaces import IIntelligenceRouter
 from ..billing.subscription import subscription_manager
 from ..verification.verifier import cloud_verifier
 from ..swarm.orchestrator import cloud_swarm
@@ -177,7 +178,8 @@ class CloudIntelligenceRouter:
                         prompt=prompt,
                         user_id=uid,
                         max_agents=tier_cfg.max_swarm_agents,
-                        depth_level=tier_cfg.smt_z3_verification_depth
+                        depth_level=tier_cfg.smt_z3_verification_depth,
+                        charge_user=False
                     )
                     swarm_trace_data = swarm_trace.to_dict() if hasattr(swarm_trace, "to_dict") else asdict(swarm_trace)
 

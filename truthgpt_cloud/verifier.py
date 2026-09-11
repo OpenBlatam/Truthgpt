@@ -32,8 +32,18 @@ from .verification import (
     verify_lipschitz_constant,
     verify_gradient_clipping_bounds,
     verify_loss_monotonicity,
+    verify_lora_rank_safety,
+    verify_kv_cache_memory_bound,
+    verify_moe_routing_invariants,
+    verify_rope_frequency_invariants,
+    verify_flash_attention_tiling,
+    verify_microscaling_fp8_bounds,
+    verify_tensor_shapes,
+    verify_numerical_stability,
+    verify_code_purity,
     verify_code_purity_and_invariants,
     DomainInvariantsVerifier,
+    CodePurityVerifier,
 )
 
 __all__ = [
@@ -51,6 +61,8 @@ __all__ = [
     "cloud_verifier",
     "Z3TheoremSolver",
     "z3_solver_engine",
+    "verify_tensor_shapes",
+    "verify_numerical_stability",
     "verify_attention_invariants",
     "verify_quantization_safety",
     "verify_optimizer_convergence",
@@ -63,9 +75,18 @@ __all__ = [
     "verify_lipschitz_constant",
     "verify_gradient_clipping_bounds",
     "verify_loss_monotonicity",
+    "verify_lora_rank_safety",
+    "verify_kv_cache_memory_bound",
+    "verify_moe_routing_invariants",
+    "verify_rope_frequency_invariants",
+    "verify_flash_attention_tiling",
+    "verify_microscaling_fp8_bounds",
+    "verify_code_purity",
     "verify_code_purity_and_invariants",
     "DomainInvariantsVerifier",
+    "CodePurityVerifier",
     "_HAS_Z3",
     "_HAS_SYMPY",
 ]
+
 

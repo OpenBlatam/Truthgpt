@@ -133,10 +133,20 @@ class PaymentError(TruthGPTCloudError):
 
 
 class PaymentRequiredError(PaymentError):
-    """Raised when an unpaid invoice or past due balance blocks execution."""
-    def __init__(self, message: str = "Pago requerido para continuar con la ejecución."):
+    """Raised when an unpaid invoice, past due balance, or required payment blocks execution."""
+    def __init__(
+        self,
+        message: str = "Pago requerido para continuar con la ejecución.",
+        user_id: Optional[str] = None,
+        amount_due: float = 0.0,
+        reason: Optional[str] = None
+    ):
         super().__init__(message)
         self.code = "PAYMENT_REQUIRED"
+        self.status_code = 402
+        self.user_id = user_id
+        self.amount_due = amount_due
+        self.reason = reason or "past_due_or_insufficient_funds"
 
 
 __all__ = [
