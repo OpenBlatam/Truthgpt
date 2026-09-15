@@ -9,8 +9,10 @@ import os
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
+from .interfaces import ISecretsProvider
 
-class CloudSecretsProvider:
+
+class CloudSecretsProvider(ISecretsProvider):
     """
     Resolves secrets securely across environment variables, file mounts (Docker/K8s),
     and runtime in-memory stores with secure masking.

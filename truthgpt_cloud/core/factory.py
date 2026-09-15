@@ -172,6 +172,49 @@ class CloudFactory:
         return TruthGPTCloudClient(api_key=api_key, tier=resolved_tier)
 
     @classmethod
+    def create_health_checker(
+        cls,
+        context: Optional[Any] = None,
+    ) -> Any:
+        """Instantiate a CloudHealthChecker instance."""
+        from .health import CloudHealthChecker
+        return CloudHealthChecker(context=context)
+
+    @classmethod
+    def create_secrets_provider(
+        cls,
+        secrets_dir: Optional[str] = None,
+    ) -> Any:
+        """Instantiate a CloudSecretsProvider instance."""
+        from .secrets import CloudSecretsProvider
+        return CloudSecretsProvider(secrets_dir=secrets_dir)
+
+    @classmethod
+    def create_adaptive_limiter(
+        cls,
+        name: str = "default_limiter",
+        initial_limit: int = 16,
+        min_limit: int = 2,
+        max_limit: int = 128,
+        smoothing_factor: float = 0.2,
+        headroom: float = 1.0,
+        backoff_ratio: float = 0.8,
+        default_timeout: float = 0.05,
+    ) -> Any:
+        """Instantiate an AdaptiveConcurrencyLimiter instance."""
+        from ..resilience.adaptive_limiter import AdaptiveConcurrencyLimiter
+        return AdaptiveConcurrencyLimiter(
+            name=name,
+            initial_limit=initial_limit,
+            min_limit=min_limit,
+            max_limit=max_limit,
+            smoothing_factor=smoothing_factor,
+            headroom=headroom,
+            backoff_ratio=backoff_ratio,
+            default_timeout=default_timeout,
+        )
+
+    @classmethod
     def create_platform(
         cls,
         config: Optional[CloudPlatformConfig] = None,
@@ -185,8 +228,11 @@ class CloudFactory:
         verifier = cls.create_formal_verifier(cfg.verifier)
         router = cls.create_intelligence_router(cfg.routing)
         rate_limiter = cls.create_rate_limiter(cfg.rate_limiter)
+        adaptive_limiter = cls.create_adaptive_limiter()
         swarm = cls.create_swarm_orchestrator()
         subscription_mgr = cls.create_subscription_manager(cfg.storage.file_path)
+        health_checker = cls.create_health_checker()
+        secrets_provider = cls.create_secrets_provider()
 
         return {
             "config": cfg,
@@ -195,9 +241,51 @@ class CloudFactory:
             "verifier": verifier,
             "router": router,
             "rate_limiter": rate_limiter,
+            "adaptive_limiter": adaptive_limiter,
             "swarm": swarm,
             "subscription_manager": subscription_mgr,
+            "health_checker": health_checker,
+            "secrets_provider": secrets_provider,
         }
+
+    @classmethod
+    def create_platform_context(
+        cls,
+        config: Optional[CloudPlatformConfig] = None,
+    ) -> Any:
+        """
+        Assemble all core services and return an encapsulated, unified TruthGPTCloudContext.
+        """
+        from .context import TruthGPTCloudContext
+        from ..telemetry.collector import CloudTelemetryCollector
+        from ..papers.compiler import CloudPaperCompiler
+        from ..billing.webhooks import WebhookManager
+        from ..security.manager import CloudSecurityManager
+        from ..resilience.circuit_breaker import CircuitBreaker
+
+        platform = cls.create_platform(config)
+        cb = CircuitBreaker(name="factory_platform_circuit_breaker")
+        telemetry = CloudTelemetryCollector()
+        papers = CloudPaperCompiler()
+        webhooks = WebhookManager()
+        security = CloudSecurityManager()
+
+        return TruthGPTCloudContext(
+            subscription_manager=platform["subscription_manager"],
+            verifier=platform["verifier"],
+            swarm=platform["swarm"],
+            router=platform["router"],
+            telemetry=telemetry,
+            cache=platform["cache"],
+            security=security,
+            paper_compiler=papers,
+            webhooks=webhooks,
+            health_checker=platform.get("health_checker"),
+            secrets=platform.get("secrets_provider"),
+            rate_limiter=platform.get("rate_limiter"),
+            circuit_breaker=cb,
+            adaptive_limiter=platform.get("adaptive_limiter"),
+        )
 
 
 __all__ = ["CloudFactory"]

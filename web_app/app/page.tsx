@@ -492,6 +492,16 @@ export default function TruthGPTCloudPage() {
               </div>
             )}
 
+            <a
+              href="http://localhost:8080/dashboard"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold shadow-sm transition-all"
+            >
+              <Activity className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Dashboard de Cobros & Churn</span>
+            </a>
+
             <button
               onClick={() => {
                 setActiveTab('pricing');
@@ -1184,12 +1194,23 @@ print(f"Hash del Certificado: {response.proof_certificate['proof_tree_hash']}")`
                   <h2 className="text-xl font-bold text-white">Historial de Facturación & Suscripción</h2>
                   <p className="text-xs text-slate-400">Administra tus métodos de pago, ciclo de renovación y recibos.</p>
                 </div>
-                <button
-                  onClick={() => setActiveTab('pricing')}
-                  className="px-3.5 py-1.5 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-xs font-semibold"
-                >
-                  Cambiar Plan
-                </button>
+                <div className="flex items-center space-x-2">
+                  <a
+                    href="http://localhost:8080/dashboard"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3.5 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/20 text-xs font-semibold flex items-center space-x-1.5 transition-all"
+                  >
+                    <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Abrir Centro de Control & Cobros (/dashboard)</span>
+                  </a>
+                  <button
+                    onClick={() => setActiveTab('pricing')}
+                    className="px-3.5 py-1.5 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-xs font-semibold"
+                  >
+                    Cambiar Plan
+                  </button>
+                </div>
               </div>
 
               {/* Invoices Table */}

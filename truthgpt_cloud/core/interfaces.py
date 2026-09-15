@@ -345,6 +345,44 @@ class IPaperCompiler(ABC):
         pass
 
 
+class IHealthChecker(ABC):
+    """Abstract interface for platform health diagnostics and subsystem checks."""
+
+    @abstractmethod
+    def run_health_check(self) -> Any:
+        """Execute diagnostic checks across all registered subsystems."""
+        pass
+
+    @abstractmethod
+    def check_readiness(self) -> Dict[str, Any]:
+        """Check readiness for serving traffic."""
+        pass
+
+    @abstractmethod
+    def check_liveness(self) -> Union[bool, Dict[str, Any]]:
+        """Check liveness of cloud services."""
+        pass
+
+
+class ISecretsProvider(ABC):
+    """Abstract interface for secure secret retrieval, storage, and masking."""
+
+    @abstractmethod
+    def get_secret(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        """Retrieve a secret by key from environment, vault, or file."""
+        pass
+
+    @abstractmethod
+    def set_secret(self, key: str, value: str) -> None:
+        """Store a secret in the vault."""
+        pass
+
+    @abstractmethod
+    def audit_status(self, keys: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Audit configuration presence of sensitive credentials without leaking values."""
+        pass
+
+
 __all__ = [
     "IStorageBackend",
     "IProofCache",
@@ -358,4 +396,7 @@ __all__ = [
     "ICircuitBreaker",
     "IWebhookManager",
     "IPaperCompiler",
+    "IHealthChecker",
+    "ISecretsProvider",
 ]
+

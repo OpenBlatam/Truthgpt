@@ -154,6 +154,22 @@ class UserSubscription:
     billing_rate_per_1k_tokens_usd: float = 0.002
     billing_rate_per_verification_usd: float = 0.01
     billing_rate_per_swarm_agent_usd: float = 0.02
+    # Churn & Activity Analytics Tracking
+    last_active_at: Optional[float] = None
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    churn_date: Optional[str] = None
+    churn_reason: Optional[str] = None
+    churn_feedback: Optional[str] = None
+    churn_status: str = "active"  # "active", "at_risk", "churned"
+    total_requests: int = 0
+    stripe_customer_id: Optional[str] = None
+    stripe_subscription_id: Optional[str] = None
+
+    def __post_init__(self):
+        if self.last_active_at is None:
+            self.last_active_at = getattr(self.usage, "last_reset_timestamp", None) or time.time()
+        if self.status in ["canceled", "cancelled"]:
+            self.churn_status = "churned"
 
     @property
     def api_keys_detail(self) -> List[ApiKeyInfo]:

@@ -11,7 +11,6 @@ from typing import Dict, Deque, Tuple, Optional, Any, Union
 from ..core.tiers import CloudTier, get_tier_config
 from ..core.exceptions import (
     RateLimitExceededError,
-    QuotaExceededError,
     ConcurrencyLimitExceededError,
 )
 from ..core.interfaces import IRateLimiter
@@ -97,52 +96,6 @@ class SlidingWindowRateLimiter(IRateLimiter):
             # Record usage
             req_deque.append(now)
             tok_deque.append((now, estimated_tokens))
-            return True
-
-    def check_rate_limit(
-        self,
-        user_id: str,
-        tier_or_rpm: Union[str, CloudTier, int, None] = 60,
-        window_seconds: Optional[float] = None,
-        tier: Optional[Any] = None,
-        **kwargs: Any,
-    ) -> bool:
-        """
-        Check if user is within RPM limit (synchronous check with tier or explicit rpm).
-        Raises RateLimitExceededError if limit is breached.
-        """
-        target_tier = tier if tier is not None else tier_or_rpm
-        if target_tier is None:
-            max_rpm = 60
-        elif isinstance(target_tier, int):
-            max_rpm = target_tier
-        elif hasattr(target_tier, "requests_per_minute"):
-            max_rpm = int(target_tier.requests_per_minute)
-        else:
-            config = get_tier_config(target_tier)
-            max_rpm = int(config.requests_per_minute)
-
-        now = time.time()
-        w_size = window_seconds if window_seconds is not None else self.window_size
-        window_start = now - w_size
-
-        with self._lock:
-            if user_id not in self._request_windows:
-                self._request_windows[user_id] = deque()
-
-            req_deque = self._request_windows[user_id]
-            while req_deque and req_deque[0] < window_start:
-                req_deque.popleft()
-
-            if len(req_deque) >= max_rpm:
-                oldest = req_deque[0]
-                retry_after = max(0.5, round(w_size - (now - oldest), 1))
-                raise RateLimitExceededError(
-                    message=f"Límite de {max_rpm} peticiones por minuto (RPM) alcanzado para su nivel.",
-                    retry_after_seconds=retry_after,
-                )
-
-            req_deque.append(now)
             return True
 
     async def async_check_rate_limit(self, user_id: str, max_rpm: int) -> bool:
@@ -283,13 +236,23 @@ class SlidingWindowRateLimiter(IRateLimiter):
             if user_id in self._concurrency_counts:
                 del self._concurrency_counts[user_id]
 
-    def check_rate_limit(self, identifier: str, tier: Optional[Any] = None) -> bool:
+    def check_rate_limit(
+        self,
+        identifier: str,
+        tier_or_rpm: Union[str, CloudTier, int, None] = None,
+        tier: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> bool:
         """Check whether the identifier is within allowable rate limits."""
+        target_tier = tier if tier is not None else tier_or_rpm
         max_rpm = 60
-        if tier is not None:
-            cfg = get_tier_config(tier) if hasattr(tier, "value") or isinstance(tier, str) else tier
-            if hasattr(cfg, "requests_per_minute"):
-                max_rpm = cfg.requests_per_minute
+        if target_tier is not None:
+            if isinstance(target_tier, int):
+                max_rpm = target_tier
+            else:
+                cfg = get_tier_config(target_tier) if hasattr(target_tier, "value") or isinstance(target_tier, str) else target_tier
+                if hasattr(cfg, "requests_per_minute"):
+                    max_rpm = int(cfg.requests_per_minute)
         is_limited, _ = self.is_rate_limited(identifier, max_rpm=max_rpm)
         return not is_limited
 

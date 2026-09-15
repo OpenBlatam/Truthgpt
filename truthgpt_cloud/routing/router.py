@@ -9,13 +9,12 @@ import time
 import uuid
 import logging
 from dataclasses import asdict
-from typing import Dict, List, Optional, Any, AsyncGenerator, Iterator
+from typing import Dict, List, Optional, Any, AsyncGenerator
 
 from .models import CloudInferenceResponse, StreamChunk
 from ..core.tiers import CloudTier, get_tier_config
 from ..core.exceptions import TruthGPTCloudError
-from ..core.interfaces import IIntelligenceRouter
-from ..billing.subscription import subscription_manager
+from ..billing.subscription import subscription_manager as default_subscription_manager
 from ..verification.verifier import cloud_verifier
 from ..swarm.orchestrator import cloud_swarm
 from ..telemetry import cloud_telemetry
@@ -80,7 +79,7 @@ class CloudIntelligenceRouter:
         circuit_breaker: Optional[Any] = None,
         **kwargs: Any,
     ):
-        self.sub_manager = subscription_manager if subscription_manager is not None else globals().get("subscription_manager")
+        self.sub_manager = subscription_manager if subscription_manager is not None else default_subscription_manager
         self.verifier = verifier if verifier is not None else cloud_verifier
         self.swarm = swarm if swarm is not None else cloud_swarm
         self.telemetry = telemetry if telemetry is not None else cloud_telemetry
@@ -163,6 +162,9 @@ class CloudIntelligenceRouter:
             is_verification=bool(enable_formal_verification),
             is_swarm=bool(enable_swarm)
         )
+
+        if hasattr(self.sub_manager, "record_activity"):
+            self.sub_manager.record_activity(uid, tokens=total_estimated, operation="inference")
 
         # 5. Model Selection
         selected_model = model_override if (model_override and model_override in tier_cfg.available_models) else tier_cfg.default_model

@@ -11,7 +11,10 @@ import tempfile
 import threading
 import time
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+import uuid
+
+from .base import StorageBackend
 
 try:
     import orjson
@@ -22,7 +25,7 @@ except ImportError:
 logger = logging.getLogger("TruthGPT.CloudStorage")
 
 
-class AtomicJsonStorage:
+class AtomicJsonStorage(StorageBackend):
     """Thread-safe and process-safe atomic JSON file persistence with orjson acceleration."""
 
     def __init__(self, file_path: str):
@@ -110,6 +113,67 @@ class AtomicJsonStorage:
                     except Exception:
                         pass
                 return False
+
+    def get(self, collection: str, key: str) -> Optional[Dict[str, Any]]:
+        """Retrieve a record by key from a collection."""
+        data = self.load()
+        if collection in data and isinstance(data[collection], dict):
+            val = data[collection].get(key)
+            return dict(val) if isinstance(val, dict) else val
+        val = data.get(key)
+        return dict(val) if isinstance(val, dict) else val
+
+    def set(self, collection: str, key: str, value: Dict[str, Any]) -> None:
+        """Store or update a record by key in a collection."""
+        with self._lock:
+            data = self.load()
+            if collection in data and isinstance(data[collection], dict):
+                data[collection][key] = value
+            else:
+                data[key] = value
+            self.save(data)
+
+    def delete(self, collection: str, key: str) -> bool:
+        """Delete a record by key."""
+        with self._lock:
+            data = self.load()
+            deleted = False
+            if collection in data and isinstance(data[collection], dict) and key in data[collection]:
+                del data[collection][key]
+                deleted = True
+            elif key in data:
+                del data[key]
+                deleted = True
+            if deleted:
+                self.save(data)
+            return deleted
+
+    def get_all(self, collection: str) -> Dict[str, Dict[str, Any]]:
+        """Retrieve all records from a collection."""
+        data = self.load()
+        if collection in data and isinstance(data[collection], dict):
+            return dict(data[collection])
+        return dict(data)
+
+    def set_all(self, collection: str, data: Dict[str, Dict[str, Any]]) -> None:
+        """Overwrite entire collection atomically."""
+        with self._lock:
+            current = self.load()
+            if collection in current and isinstance(current[collection], dict):
+                current[collection] = data
+                self.save(current)
+            else:
+                self.save(data)
+
+    def create_snapshot(self) -> str:
+        """Create a point-in-time snapshot/backup of storage."""
+        with self._lock:
+            self._ensure_parent_dir()
+            ts = int(time.time())
+            snap_path = f"{self.file_path}.snapshot_{ts}.json"
+            if os.path.exists(self.file_path):
+                shutil.copy2(self.file_path, snap_path)
+            return snap_path
 
 
 __all__ = [

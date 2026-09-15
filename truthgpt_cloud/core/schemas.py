@@ -253,6 +253,14 @@ class UserSubscriptionSchema(BaseModel):
     api_key_details: List[ApiKeyInfoSchema] = Field(default_factory=list)
     webhooks: List[WebhookSubscriptionSchema] = Field(default_factory=list)
     custom_limits: Optional[Dict[str, Any]] = None
+    payment_method: str = "stripe_card"
+    payment_details: Optional[Dict[str, Any]] = None
+    balance_usd: float = 0.0
+    total_billed_usd: float = 0.0
+    auto_charge_enabled: bool = True
+    billing_rate_per_1k_tokens_usd: float = 0.002
+    billing_rate_per_verification_usd: float = 0.01
+    billing_rate_per_swarm_agent_usd: float = 0.02
 
     def to_domain(self) -> Any:
         from ..billing.models import UserSubscription, UsageRecord, Invoice, ApiKeyInfo, WebhookSubscription
@@ -277,6 +285,14 @@ class UserSubscriptionSchema(BaseModel):
             api_key_details=[ApiKeyInfo(**k.model_dump()) for k in self.api_key_details],
             webhooks=[WebhookSubscription(**w.model_dump()) for w in self.webhooks],
             custom_limits=self.custom_limits,
+            payment_method=self.payment_method,
+            payment_details=self.payment_details,
+            balance_usd=self.balance_usd,
+            total_billed_usd=self.total_billed_usd,
+            auto_charge_enabled=self.auto_charge_enabled,
+            billing_rate_per_1k_tokens_usd=self.billing_rate_per_1k_tokens_usd,
+            billing_rate_per_verification_usd=self.billing_rate_per_verification_usd,
+            billing_rate_per_swarm_agent_usd=self.billing_rate_per_swarm_agent_usd,
         )
 
     @classmethod

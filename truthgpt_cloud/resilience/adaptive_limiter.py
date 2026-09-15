@@ -119,18 +119,6 @@ class AdaptiveConcurrencyLimiter:
             self._total_requests += 1
             return True
 
-    def try_acquire(self) -> bool:
-        """
-        Attempt to immediately acquire a concurrency slot without blocking.
-        Returns True if acquired, False otherwise.
-        """
-        with self._condition:
-            if self._in_flight < int(round(self.current_limit)):
-                self._in_flight += 1
-                self._total_requests += 1
-                return True
-            return False
-
     def release(self, latency_ms: float, success: bool = True):
         """
         Release a slot and adapt the concurrency limit based on measured RTT latency and success status.

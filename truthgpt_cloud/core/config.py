@@ -143,6 +143,52 @@ class CloudResilienceConfig:
 
 
 @dataclass
+class CloudHealthConfig:
+    """Configuration for subsystem health diagnostics and probes."""
+    check_interval_seconds: float = 60.0
+    include_system_metrics: bool = True
+    auto_diagnostic: bool = True
+
+    def validate(self) -> None:
+        """Validate health check configuration."""
+        if self.check_interval_seconds <= 0:
+            raise CloudConfigValidationError("check_interval_seconds must be positive.")
+
+
+@dataclass
+class CloudSecretsConfig:
+    """Configuration for secrets provider and credential masking."""
+    secrets_dir: Optional[str] = None
+    mask_visible_prefix: int = 7
+    mask_visible_suffix: int = 4
+    audit_on_load: bool = True
+
+    def validate(self) -> None:
+        """Validate secrets configuration."""
+        if self.mask_visible_prefix < 0 or self.mask_visible_suffix < 0:
+            raise CloudConfigValidationError("mask_visible_prefix and mask_visible_suffix must be non-negative.")
+
+
+@dataclass
+class CloudAdaptiveConcurrencyConfig:
+    """Configuration for TCP Vegas / Little's Law adaptive concurrency limiter."""
+    initial_limit: int = 20
+    min_limit: int = 2
+    max_limit: int = 100
+    rtt_tolerance_factor: float = 1.3
+    smoothing_factor: float = 0.2
+
+    def validate(self) -> None:
+        """Validate adaptive concurrency configuration."""
+        if self.min_limit < 1:
+            raise CloudConfigValidationError("min_limit must be at least 1.")
+        if self.max_limit < self.min_limit:
+            raise CloudConfigValidationError("max_limit must be greater than or equal to min_limit.")
+        if not (self.min_limit <= self.initial_limit <= self.max_limit):
+            raise CloudConfigValidationError("initial_limit must be between min_limit and max_limit.")
+
+
+@dataclass
 class CloudPlatformConfig:
     """Master platform configuration for TruthGPT Cloud services."""
     storage: CloudStorageConfig = field(default_factory=CloudStorageConfig)
@@ -152,6 +198,9 @@ class CloudPlatformConfig:
     rate_limiter: CloudRateLimiterConfig = field(default_factory=CloudRateLimiterConfig)
     telemetry: CloudTelemetryConfig = field(default_factory=CloudTelemetryConfig)
     resilience: CloudResilienceConfig = field(default_factory=CloudResilienceConfig)
+    health: CloudHealthConfig = field(default_factory=CloudHealthConfig)
+    secrets: CloudSecretsConfig = field(default_factory=CloudSecretsConfig)
+    adaptive_concurrency: CloudAdaptiveConcurrencyConfig = field(default_factory=CloudAdaptiveConcurrencyConfig)
     environment: str = "development"
     default_tier: str = "pro"
     api_version: str = CLOUD_API_VERSION
@@ -166,6 +215,9 @@ class CloudPlatformConfig:
         self.rate_limiter.validate()
         self.telemetry.validate()
         self.resilience.validate()
+        self.health.validate()
+        self.secrets.validate()
+        self.adaptive_concurrency.validate()
         if self.environment.lower() not in ("development", "staging", "production", "test"):
             raise CloudConfigValidationError(
                 f"Invalid environment '{self.environment}'. Must be one of: development, staging, production, test."
@@ -189,6 +241,9 @@ class CloudPlatformConfig:
         rate_limiter_data = data.get("rate_limiter", {})
         telemetry_data = data.get("telemetry", {})
         resilience_data = data.get("resilience", {})
+        health_data = data.get("health", {})
+        secrets_data = data.get("secrets", {})
+        adaptive_data = data.get("adaptive_concurrency", {})
 
         config = cls(
             storage=CloudStorageConfig(**storage_data),
@@ -198,6 +253,9 @@ class CloudPlatformConfig:
             rate_limiter=CloudRateLimiterConfig(**rate_limiter_data),
             telemetry=CloudTelemetryConfig(**telemetry_data),
             resilience=CloudResilienceConfig(**resilience_data),
+            health=CloudHealthConfig(**health_data),
+            secrets=CloudSecretsConfig(**secrets_data),
+            adaptive_concurrency=CloudAdaptiveConcurrencyConfig(**adaptive_data),
             environment=data.get("environment", "development"),
             default_tier=data.get("default_tier", "pro"),
             api_version=data.get("api_version", CLOUD_API_VERSION),
@@ -272,5 +330,9 @@ __all__ = [
     "CloudRateLimiterConfig",
     "CloudTelemetryConfig",
     "CloudResilienceConfig",
+    "CloudHealthConfig",
+    "CloudSecretsConfig",
+    "CloudAdaptiveConcurrencyConfig",
     "CloudPlatformConfig",
 ]
+

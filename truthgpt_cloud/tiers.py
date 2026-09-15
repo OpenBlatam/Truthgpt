@@ -8,7 +8,8 @@ from .core.tiers import (
     TierConfig,
     TIER_CONFIGURATIONS,
     get_tier_config,
-    get_all_tiers
+    get_all_tiers,
+    calculate_request_cost,
 )
 
 __all__ = [
@@ -17,4 +18,5 @@ __all__ = [
     "TIER_CONFIGURATIONS",
     "get_tier_config",
     "get_all_tiers",
+    "calculate_request_cost",
 ]

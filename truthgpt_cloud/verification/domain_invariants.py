@@ -15,11 +15,6 @@ import math
 from typing import Dict, List, Any, Optional
 
 from .merkle import compute_merkle_root
-from .code_purity import (
-    verify_code_purity,
-    verify_code_purity_and_invariants,
-    CodePurityVerifier,
-)
 
 
 class InvariantsList(list):
@@ -788,7 +783,7 @@ def verify_lipschitz_constant(
     is_valid = composite_lipschitz <= target_lipschitz + tolerance
 
     invariants = [
-        f"Layer composition Lipschitz contract: L_f <= L_sigma * ||W||_2",
+        "Layer composition Lipschitz contract: L_f <= L_sigma * ||W||_2",
         f"Activation Lipschitz constant L_sigma({activation}) = {l_sigma}",
         f"Composite Lipschitz constant L = {composite_lipschitz:.4f} <= target {target_lipschitz}",
         "Output perturbation bound ||f(x) - f(y)|| <= L ||x - y|| formally certified"
@@ -1281,7 +1276,7 @@ def verify_flash_attention_tiling(
         f"FlashAttention SRAM tile budget contract: {total_sram_bytes:,} bytes <= {sram_budget_bytes:,} bytes ({sram_utilization_pct}% SRAM)",
         f"Tensor Core warp alignment: Br={block_m}, Bc={block_n}, d={head_dim} (all divisible by warp sub-tiles)",
         f"Causal block masking contract: {'Triangular lower-triangular invariant j <= i certified' if is_causal else 'Full bidirectional tile grid'}",
-        f"Online softmax stabilization: 2-pass online renormalization m_new = max(m_old, row_max) guaranteed",
+        "Online softmax stabilization: 2-pass online renormalization m_new = max(m_old, row_max) guaranteed",
         f"HBM IO reduction factor: ~{io_speedup_factor}x speedup vs standard attention memory bandwidth"
     ]
 

@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 class TruthGPTCloudContext:
     """
     Encapsulates all active TruthGPT Cloud subsystems.
-    Facilitates dependency injection, lifecycle control, and isolated testing.
+    Facilitates dependency injection, lifecycle control, and isolated testing across all 13 cloud modules.
     """
     subscription_manager: SubscriptionManager
     verifier: CloudFormalVerifier
@@ -42,9 +42,17 @@ class TruthGPTCloudContext:
     webhooks: WebhookManager
     health_checker: Optional[Any] = None
     secrets: Optional[Any] = None
+    rate_limiter: Optional[Any] = None
+    circuit_breaker: Optional[Any] = None
+    adaptive_limiter: Optional[Any] = None
 
     def get_status(self) -> dict[str, Any]:
         """Return diagnostic health and status dictionary for all subsystems in this context."""
+        cb_state = "disabled"
+        if self.circuit_breaker:
+            raw_state = getattr(self.circuit_breaker, "state", None)
+            cb_state = getattr(raw_state, "value", str(raw_state)) if raw_state is not None else "active"
+
         return {
             "subscriptions_active": len(getattr(self.subscription_manager, "_users", {})),
             "cached_proofs": len(self.cache),
@@ -52,6 +60,9 @@ class TruthGPTCloudContext:
             "telemetry_metrics_collected": len(getattr(self.telemetry, "_metrics_buffer", [])),
             "papers_catalog_size": len(getattr(self.paper_compiler, "get_all_papers", lambda: [])()),
             "health_status": getattr(self.health_checker, "check_liveness", lambda: True)() if self.health_checker else True,
+            "rate_limiter_active": self.rate_limiter is not None,
+            "circuit_breaker_state": cb_state,
+            "adaptive_limiter_active": self.adaptive_limiter is not None,
         }
 
 
@@ -77,6 +88,9 @@ def get_cloud_context() -> TruthGPTCloudContext:
         from ..papers.compiler import cloud_paper_compiler
         from .health import cloud_health_checker
         from .secrets import cloud_secrets_provider
+        from ..rate_limiting import cloud_rate_limiter
+        from ..resilience.circuit_breaker import CircuitBreaker
+        from ..resilience.adaptive_limiter import AdaptiveConcurrencyLimiter
 
         _GLOBAL_CLOUD_CONTEXT = TruthGPTCloudContext(
             subscription_manager=subscription_manager,
@@ -90,6 +104,9 @@ def get_cloud_context() -> TruthGPTCloudContext:
             webhooks=webhook_manager,
             health_checker=cloud_health_checker,
             secrets=cloud_secrets_provider,
+            rate_limiter=cloud_rate_limiter,
+            circuit_breaker=CircuitBreaker(name="global_cloud_circuit"),
+            adaptive_limiter=AdaptiveConcurrencyLimiter(name="global_cloud_concurrency"),
         )
     return _GLOBAL_CLOUD_CONTEXT
 
@@ -127,6 +144,9 @@ def create_isolated_context(
     from ..papers.compiler import CloudPaperCompiler
     from .health import CloudHealthChecker
     from .secrets import CloudSecretsProvider
+    from ..rate_limiting import TokenBucketRateLimiter
+    from ..resilience.circuit_breaker import CircuitBreaker
+    from ..resilience.adaptive_limiter import AdaptiveConcurrencyLimiter
 
     if storage_backend is None and custom_storage_path is None:
         test_dir = os.path.join(tempfile.gettempdir(), "truthgpt_context_isolated")
@@ -144,6 +164,9 @@ def create_isolated_context(
     webhooks = WebhookManager()
     health_checker = CloudHealthChecker()
     secrets = CloudSecretsProvider()
+    rate_limiter = TokenBucketRateLimiter()
+    circuit_breaker = CircuitBreaker(name="isolated_circuit_breaker")
+    adaptive_limiter = AdaptiveConcurrencyLimiter(name="isolated_concurrency_limiter")
 
     return TruthGPTCloudContext(
         subscription_manager=sub_mgr,
@@ -157,6 +180,9 @@ def create_isolated_context(
         webhooks=webhooks,
         health_checker=health_checker,
         secrets=secrets,
+        rate_limiter=rate_limiter,
+        circuit_breaker=circuit_breaker,
+        adaptive_limiter=adaptive_limiter,
     )
 
 

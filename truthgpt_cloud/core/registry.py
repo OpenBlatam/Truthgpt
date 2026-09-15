@@ -19,6 +19,8 @@ class CloudRegistry:
     _payment_gateways: Dict[str, Type[Any]] = {}
     _swarm_topologies: Dict[str, Any] = {}
     _routers: Dict[str, Type[Any]] = {}
+    _health_checkers: Dict[str, Type[Any]] = {}
+    _secrets_providers: Dict[str, Type[Any]] = {}
     _builtins_initialized: bool = False
 
     # -------------------------------------------------------------------------
@@ -204,6 +206,58 @@ class CloudRegistry:
             return sorted(list(cls._routers.keys()))
 
     # -------------------------------------------------------------------------
+    # Health Checkers
+    # -------------------------------------------------------------------------
+    @classmethod
+    def register_health_checker(cls, name: str) -> Callable[[Type[Any]], Type[Any]]:
+        """Decorator to register a custom Health Checker class."""
+        def decorator(subclass: Type[Any]) -> Type[Any]:
+            with cls._lock:
+                cls._health_checkers[name.lower()] = subclass
+            return subclass
+        return decorator
+
+    @classmethod
+    def get_health_checker(cls, name: str) -> Optional[Type[Any]]:
+        """Retrieve a registered health checker class by name."""
+        cls._ensure_builtins()
+        with cls._lock:
+            return cls._health_checkers.get(name.lower())
+
+    @classmethod
+    def list_health_checkers(cls) -> List[str]:
+        """List names of all registered health checkers."""
+        cls._ensure_builtins()
+        with cls._lock:
+            return sorted(list(cls._health_checkers.keys()))
+
+    # -------------------------------------------------------------------------
+    # Secrets Providers
+    # -------------------------------------------------------------------------
+    @classmethod
+    def register_secrets_provider(cls, name: str) -> Callable[[Type[Any]], Type[Any]]:
+        """Decorator to register a custom Secrets Provider class."""
+        def decorator(subclass: Type[Any]) -> Type[Any]:
+            with cls._lock:
+                cls._secrets_providers[name.lower()] = subclass
+            return subclass
+        return decorator
+
+    @classmethod
+    def get_secrets_provider(cls, name: str) -> Optional[Type[Any]]:
+        """Retrieve a registered secrets provider class by name."""
+        cls._ensure_builtins()
+        with cls._lock:
+            return cls._secrets_providers.get(name.lower())
+
+    @classmethod
+    def list_secrets_providers(cls) -> List[str]:
+        """List names of all registered secrets providers."""
+        cls._ensure_builtins()
+        with cls._lock:
+            return sorted(list(cls._secrets_providers.keys()))
+
+    # -------------------------------------------------------------------------
     # Lifecycle & Built-ins
     # -------------------------------------------------------------------------
     @classmethod
@@ -217,6 +271,8 @@ class CloudRegistry:
             cls._payment_gateways.clear()
             cls._swarm_topologies.clear()
             cls._routers.clear()
+            cls._health_checkers.clear()
+            cls._secrets_providers.clear()
             cls._builtins_initialized = False
 
     @classmethod
@@ -323,6 +379,47 @@ class CloudRegistry:
                 cls._swarm_topologies["hierarchical"] = CloudSwarmOrchestrator
                 cls._swarm_topologies["peer_to_peer"] = CloudSwarmOrchestrator
                 cls._swarm_topologies["adversarial"] = CloudSwarmOrchestrator
+            except ImportError:
+                pass
+
+            # Built-in Health Checkers
+            try:
+                from .health import CloudHealthChecker
+                cls._health_checkers["default"] = CloudHealthChecker
+                cls._health_checkers["health"] = CloudHealthChecker
+                cls._health_checkers["cloud_health"] = CloudHealthChecker
+            except ImportError:
+                pass
+
+            # Built-in Secrets Providers
+            try:
+                from .secrets import CloudSecretsProvider
+                cls._secrets_providers["default"] = CloudSecretsProvider
+                cls._secrets_providers["secrets"] = CloudSecretsProvider
+                cls._secrets_providers["vault"] = CloudSecretsProvider
+            except ImportError:
+                pass
+
+            # Additional Domain Verifiers
+            try:
+                from ..verification.domain_invariants import DomainInvariantsVerifier
+                cls._verifiers["domain_invariants"] = DomainInvariantsVerifier
+                cls._verifiers["invariants"] = DomainInvariantsVerifier
+            except ImportError:
+                pass
+            try:
+                from ..verification.code_purity import CodePurityVerifier
+                cls._verifiers["code_purity"] = CodePurityVerifier
+                cls._verifiers["purity"] = CodePurityVerifier
+            except ImportError:
+                pass
+
+            # Additional Adaptive Concurrency Limiter
+            try:
+                from ..resilience.adaptive_limiter import AdaptiveConcurrencyLimiter
+                cls._rate_limiters["adaptive"] = AdaptiveConcurrencyLimiter
+                cls._rate_limiters["aimd"] = AdaptiveConcurrencyLimiter
+                cls._rate_limiters["adaptive_concurrency"] = AdaptiveConcurrencyLimiter
             except ImportError:
                 pass
 

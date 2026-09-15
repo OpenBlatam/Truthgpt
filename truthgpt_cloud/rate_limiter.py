@@ -16,12 +16,14 @@ from .rate_limiting import (
     rate_limiter,
     _HAS_REDIS,
 )
+from .resilience import AdaptiveConcurrencyLimiter
 
 __all__ = [
     "TokenBucketRateLimiter",
     "SlidingWindowRateLimiter",
     "RedisSlidingWindowRateLimiter",
     "RedisTokenBucketRateLimiter",
+    "AdaptiveConcurrencyLimiter",
     "RateLimitExceeded",
     "RateLimitExceededError",
     "ConcurrencyLimitExceededError",

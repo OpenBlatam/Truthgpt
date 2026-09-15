@@ -190,6 +190,15 @@ class SubscriptionManager:
                     billing_rate_per_1k_tokens_usd=float(udata.get("billing_rate_per_1k_tokens_usd", 0.002)),
                     billing_rate_per_verification_usd=float(udata.get("billing_rate_per_verification_usd", 0.01)),
                     billing_rate_per_swarm_agent_usd=float(udata.get("billing_rate_per_swarm_agent_usd", 0.02)),
+                    last_active_at=float(udata.get("last_active_at")) if udata.get("last_active_at") is not None else getattr(usage, "last_reset_timestamp", time.time()),
+                    created_at=udata.get("created_at", udata.get("subscription_start_date", datetime.now(timezone.utc).isoformat())),
+                    churn_date=udata.get("churn_date"),
+                    churn_reason=udata.get("churn_reason"),
+                    churn_feedback=udata.get("churn_feedback"),
+                    churn_status=udata.get("churn_status", "churned" if udata.get("status") in ["canceled", "cancelled"] else "active"),
+                    total_requests=int(udata.get("total_requests", getattr(usage, "daily_request_count", 0))),
+                    stripe_customer_id=udata.get("stripe_customer_id", (udata.get("payment_details") or {}).get("stripe_customer_id")),
+                    stripe_subscription_id=udata.get("stripe_subscription_id"),
                 )
                 self._users[uid] = user
                 for key in user.api_keys:
@@ -243,6 +252,7 @@ class SubscriptionManager:
             ("usr_pro_sample", "researcher@frontier.ai", "Dr. Alexander Truth", CloudTier.PRO),
             ("usr_ultra_enterprise", "singularity@quantum.io", "Enterprise Sovereign", CloudTier.ULTRA),
             ("usr_enterprise_sample", "enterprise@truthgpt.ai", "TruthGPT Enterprise Corp", CloudTier.ENTERPRISE),
+            ("usr_truthgpt_user", "user@truthgpt.ai", "TruthGPT User", CloudTier.PRO),
         ]
         modified = False
         for uid, email, name, tier in demo_accounts:
@@ -263,7 +273,7 @@ class SubscriptionManager:
                         promo_code=None,
                         created_at=datetime.now(timezone.utc).isoformat()
                     ))
-                    user = UserSubscription(
+                user = UserSubscription(
                     user_id=uid,
                     email=email,
                     name=name,
@@ -273,7 +283,7 @@ class SubscriptionManager:
                     invoices=init_invoices,
                     payment_method="stripe_card",
                     payment_details={"card_brand": "Visa", "last4": "4242", "status": "active"},
-                    balance_usd=25.00 if uid == "usr_default_demo" else 0.0,
+                    balance_usd=25.00 if uid == "usr_default_demo" else (100.0 if uid == "usr_truthgpt_user" else 0.0),
                     total_billed_usd=sum(inv.amount_usd for inv in init_invoices),
                     auto_charge_enabled=True,
                 )
@@ -302,7 +312,13 @@ class SubscriptionManager:
 
     def cleanup_test_accounts(self) -> int:
         """Remove temporary test accounts (any user whose id is not a canonical seed account)."""
-        seed_uids = {"usr_default_demo", "usr_pro_sample", "usr_ultra_enterprise", "usr_enterprise_sample"}
+        seed_uids = {
+            "usr_default_demo",
+            "usr_pro_sample",
+            "usr_ultra_enterprise",
+            "usr_enterprise_sample",
+            "usr_truthgpt_user",
+        }
         with self._lock:
             to_remove = [uid for uid in list(self._users.keys()) if uid not in seed_uids]
             for uid in to_remove:
@@ -758,6 +774,7 @@ class SubscriptionManager:
 
         with self._lock:
             user.invoices.insert(0, invoice)
+            user.total_billed_usd = round(sum(inv.amount_usd for inv in user.invoices if inv.status == "paid"), 2)
             self._save_storage()
 
         try:
@@ -795,6 +812,7 @@ class SubscriptionManager:
             "amount_usd": amount_usd,
             "description": description,
             "payment_method": payment_method,
+            "invoice_id": invoice.invoice_id,
             "invoice": asdict(invoice),
             "payment_details": payment_res
         }
@@ -820,14 +838,13 @@ class SubscriptionManager:
             metadata={"tokens_consumed": tokens_consumed, "unit_price_per_1k": unit_price_per_1k_tokens}
         )
 
-    def get_user_invoices(self, user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
+    def get_user_invoices(self, user_id: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """Retrieve paid invoices and billing receipts for a user."""
-        user = self.get_user(user_id)
-        if not user:
-            user = self.get_user_by_api_key(user_id)
+        user = self.get_user(user_id) or self.get_user_by_api_key(user_id)
         if not user:
             return []
-        return [asdict(inv) for inv in user.invoices[:limit]]
+        invoices = [asdict(inv) for inv in user.invoices]
+        return invoices[:limit] if limit is not None else invoices
 
     def check_and_record_quota(
         self,
@@ -900,6 +917,10 @@ class SubscriptionManager:
 
                 user.usage.total_tokens_consumed += estimated_tokens
                 user.usage.daily_request_count += 1
+                user.total_requests = getattr(user, "total_requests", 0) + 1
+                user.last_active_at = now
+                if getattr(user, "churn_status", "active") == "at_risk":
+                    user.churn_status = "active"
                 new_pct = (user.usage.tokens_consumed_today / max(1, tier_cfg.daily_token_limit))
 
                 # Trigger warning event if 80% threshold crossed
@@ -1002,12 +1023,6 @@ class SubscriptionManager:
 
         return True
 
-    def get_user_invoices(self, user_id: str) -> List[Dict[str, Any]]:
-        """Retrieve all official invoices for user."""
-        user = self.get_user(user_id) or self.get_user_by_api_key(user_id)
-        if not user:
-            return []
-        return [asdict(inv) for inv in user.invoices]
 
     def get_invoice_receipt(self, user_id: str, invoice_id: str) -> Optional[str]:
         """Generate official ASCII receipt for specified invoice."""
@@ -1120,6 +1135,268 @@ class SubscriptionManager:
             "invoices_count": len(summary["invoices"])
         }
 
+    def record_activity(self, user_id: str, tokens: int = 0, operation: str = "api_request") -> None:
+        """Record real-time user activity, update last_active_at timestamp and reset at-risk churn status."""
+        with self._lock:
+            user = self.get_user(user_id) or self.get_user_by_api_key(user_id)
+            if not user:
+                return
+            now = time.time()
+            user.last_active_at = now
+            user.total_requests = getattr(user, "total_requests", 0) + 1
+            if getattr(user, "churn_status", "active") == "at_risk":
+                user.churn_status = "active"
+            if tokens > 0:
+                user.usage.total_tokens_consumed += tokens
+            self._save_storage()
+        try:
+            from ..telemetry import cloud_telemetry
+            cloud_telemetry.record_audit_event("user_activity", user.user_id, {"operation": operation, "tokens": tokens})
+        except Exception:
+            pass
+
+    def cancel_subscription(
+        self,
+        user_id: str,
+        reason: str = "Usuario canceló suscripción",
+        feedback: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Record subscription cancellation / churn event for a user.
+        Updates user status to 'canceled', records churn reason and date, and emits webhook.
+        """
+        user = self.get_user(user_id) or self.get_user_by_api_key(user_id)
+        if not user:
+            raise AuthenticationError(f"Usuario {user_id} no encontrado.")
+
+        with self._lock:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            user.status = "canceled"
+            user.churn_status = "churned"
+            user.churn_date = now_iso
+            user.churn_reason = reason
+            user.churn_feedback = feedback
+            self._save_storage()
+
+        try:
+            from ..telemetry import cloud_telemetry
+            cloud_telemetry.record_audit_event("subscription_canceled", user.user_id, {"reason": reason, "churn_date": now_iso})
+            from .webhooks import webhook_manager
+            webhook_manager.emit_event("subscription.canceled", user.user_id, {"tier": user.tier.value, "reason": reason, "churn_date": now_iso})
+        except Exception:
+            pass
+
+        return {
+            "success": True,
+            "message": f"Suscripción del usuario {user.name} ({user.email}) cancelada.",
+            "user_id": user.user_id,
+            "status": "canceled",
+            "churn_status": "churned",
+            "churn_date": now_iso,
+            "churn_reason": reason
+        }
+
+    def reactivate_subscription(
+        self,
+        user_id: str,
+        target_tier: Optional[Union[str, CloudTier]] = None
+    ) -> Dict[str, Any]:
+        """
+        Reactivate a canceled or churned user, clearing churn flags and restoring active status.
+        """
+        user = self.get_user(user_id) or self.get_user_by_api_key(user_id)
+        if not user:
+            raise AuthenticationError(f"Usuario {user_id} no encontrado.")
+
+        with self._lock:
+            user.status = "active"
+            user.churn_status = "active"
+            user.churn_date = None
+            user.churn_reason = None
+            user.churn_feedback = None
+            user.last_active_at = time.time()
+            if target_tier is not None:
+                if isinstance(target_tier, str):
+                    target_tier = CloudTier(target_tier.lower())
+                user.tier = target_tier
+            self._save_storage()
+
+        try:
+            from ..telemetry import cloud_telemetry
+            cloud_telemetry.record_audit_event("subscription_reactivated", user.user_id, {"tier": user.tier.value})
+            from .webhooks import webhook_manager
+            webhook_manager.emit_event("subscription.reactivated", user.user_id, {"tier": user.tier.value})
+        except Exception:
+            pass
+
+        return {
+            "success": True,
+            "message": f"¡Suscripción reactivada exitosamente para {user.name}!",
+            "user_id": user.user_id,
+            "status": "active",
+            "churn_status": "active",
+            "tier": user.tier.value
+        }
+
+    def get_churn_and_usage_dashboard(self) -> Dict[str, Any]:
+        """
+        Comprehensive executive analytics for who is using the platform and who stopped using it.
+        Computes MRR, ARR, DAU, WAU, MAU, Churn Rate, At-Risk users, and recent transaction log.
+        """
+        now = time.time()
+        active_users_list = []
+        churned_users_list = []
+        at_risk_users_list = []
+        all_invoices = []
+
+        total_revenue_usd = 0.0
+        mrr_usd = 0.0
+
+        dau_count = 0
+        wau_count = 0
+        mau_count = 0
+
+        with self._lock:
+            for uid, u in self._users.items():
+                tier_cfg = get_tier_config(u.tier)
+                u_invoices = [asdict(inv) for inv in u.invoices]
+                all_invoices.extend(u_invoices)
+
+                # Total billed
+                paid_invoices_sum = sum(inv.amount_usd for inv in u.invoices if inv.status == "paid")
+                user_billed = round(max(float(getattr(u, "total_billed_usd", 0.0)), paid_invoices_sum), 2)
+                total_revenue_usd += user_billed
+
+                # Activity calculation
+                last_act = getattr(u, "last_active_at", None) or getattr(u.usage, "last_reset_timestamp", 0.0)
+                sec_since_active = max(0.0, now - last_act) if last_act else 999999999.0
+                is_dau = sec_since_active <= 86400 or u.usage.tokens_consumed_today > 0
+                is_wau = sec_since_active <= 7 * 86400
+                is_mau = sec_since_active <= 30 * 86400
+
+                if is_dau:
+                    dau_count += 1
+                if is_wau:
+                    wau_count += 1
+                if is_mau:
+                    mau_count += 1
+
+                # Churn vs Active status
+                is_canceled = u.status in ["canceled", "cancelled"] or getattr(u, "churn_status", "") == "churned"
+                is_at_risk = (not is_canceled) and (sec_since_active > 7 * 86400) and (u.tier != CloudTier.FREE)
+
+                user_summary = {
+                    "user_id": u.user_id,
+                    "email": u.email,
+                    "name": u.name,
+                    "tier": u.tier.value,
+                    "tier_name": tier_cfg.name,
+                    "tier_badge": tier_cfg.badge,
+                    "status": u.status,
+                    "churn_status": "churned" if is_canceled else ("at_risk" if is_at_risk else "active"),
+                    "billing_cycle": u.billing_cycle,
+                    "last_active_at": last_act,
+                    "seconds_since_active": round(sec_since_active, 1),
+                    "days_inactive": round(sec_since_active / 86400.0, 1),
+                    "tokens_consumed_today": u.usage.tokens_consumed_today,
+                    "daily_token_limit": tier_cfg.daily_token_limit,
+                    "percent_quota_used": min(100.0, round((u.usage.tokens_consumed_today / max(1, tier_cfg.daily_token_limit)) * 100, 1)),
+                    "total_tokens_all_time": u.usage.total_tokens_consumed,
+                    "total_requests": getattr(u, "total_requests", 0) or u.usage.daily_request_count,
+                    "requests_today": u.usage.daily_request_count,
+                    "total_billed_usd": round(user_billed, 2),
+                    "balance_usd": float(getattr(u, "balance_usd", 0.0)),
+                    "api_keys_count": len(u.api_keys),
+                    "created_at": getattr(u, "created_at", u.subscription_start_date),
+                    "churn_date": getattr(u, "churn_date", None),
+                    "churn_reason": getattr(u, "churn_reason", None),
+                    "churn_feedback": getattr(u, "churn_feedback", None),
+                }
+
+                if is_canceled:
+                    churned_users_list.append(user_summary)
+                else:
+                    active_users_list.append(user_summary)
+                    if is_at_risk:
+                        at_risk_users_list.append(user_summary)
+
+                    # MRR calculation
+                    if u.tier != CloudTier.FREE:
+                        if u.billing_cycle == "yearly":
+                            mrr_usd += tier_cfg.price_yearly_usd / 12.0
+                        else:
+                            mrr_usd += tier_cfg.price_monthly_usd
+
+        # Sort lists
+        active_users_list.sort(key=lambda x: x["last_active_at"], reverse=True)
+        churned_users_list.sort(key=lambda x: x.get("churn_date") or "", reverse=True)
+        at_risk_users_list.sort(key=lambda x: x["days_inactive"], reverse=True)
+        all_invoices.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+
+        total_users = len(self._users)
+        churn_count = len(churned_users_list)
+        churn_rate_pct = round((churn_count / max(1, total_users)) * 100.0, 1)
+        retention_rate_pct = round(100.0 - churn_rate_pct, 1)
+
+        # Recent event logs
+        events_feed = []
+        for inv in all_invoices[:10]:
+            events_feed.append({
+                "type": "invoice_paid",
+                "title": f"Cobro exitoso: ${inv.get('amount_usd', 0):.2f} USD",
+                "user_id": inv.get("user_id"),
+                "timestamp": inv.get("created_at"),
+                "details": f"Plan {inv.get('tier_id', '').upper()} ({inv.get('billing_cycle')})"
+            })
+        for chu in churned_users_list[:5]:
+            events_feed.append({
+                "type": "churn",
+                "title": f"Baja de usuario: {chu['name']}",
+                "user_id": chu["user_id"],
+                "timestamp": chu.get("churn_date") or "",
+                "details": f"Motivo: {chu.get('churn_reason') or 'No especificado'}"
+            })
+        for act in active_users_list[:5]:
+            if act["requests_today"] > 0:
+                events_feed.append({
+                    "type": "activity",
+                    "title": f"Actividad en vivo: {act['name']}",
+                    "user_id": act["user_id"],
+                    "timestamp": datetime.fromtimestamp(act["last_active_at"], timezone.utc).isoformat() if act["last_active_at"] else "",
+                    "details": f"{act['requests_today']} peticiones hoy ({act['tokens_consumed_today']:,} tokens)"
+                })
+
+        events_feed.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+
+        from .gateways import PaymentGatewayService
+        gateway_status = PaymentGatewayService.get_gateway_status()
+
+        return {
+            "success": True,
+            "timestamp": now,
+            "kpis": {
+                "total_users": total_users,
+                "active_users_count": len(active_users_list),
+                "churned_users_count": churn_count,
+                "at_risk_users_count": len(at_risk_users_list),
+                "dau": dau_count,
+                "wau": wau_count,
+                "mau": mau_count,
+                "mrr_usd": round(mrr_usd, 2),
+                "arr_usd": round(mrr_usd * 12.0, 2),
+                "total_revenue_usd": round(total_revenue_usd, 2),
+                "churn_rate_pct": churn_rate_pct,
+                "retention_rate_pct": retention_rate_pct,
+                "total_invoices_count": len(all_invoices)
+            },
+            "active_users": active_users_list,
+            "churned_users": churned_users_list,
+            "at_risk_users": at_risk_users_list,
+            "recent_invoices": all_invoices[:20],
+            "recent_events": events_feed[:25],
+            "gateway_status": gateway_status
+        }
+
     @classmethod
     def create_isolated(cls, seed_demo_users: bool = True) -> "SubscriptionManager":
         """Factory method to instantiate a fully isolated in-memory SubscriptionManager instance."""
@@ -1179,7 +1456,24 @@ class SubscriptionManager:
                 usage=usage,
                 invoices=invoices,
                 api_key_details=api_details,
-                custom_limits=udata.get("custom_limits")
+                custom_limits=udata.get("custom_limits"),
+                payment_method=udata.get("payment_method", "stripe_card"),
+                payment_details=udata.get("payment_details"),
+                balance_usd=float(udata.get("balance_usd", 0.0)),
+                total_billed_usd=float(udata.get("total_billed_usd", 0.0)),
+                auto_charge_enabled=bool(udata.get("auto_charge_enabled", True)),
+                billing_rate_per_1k_tokens_usd=float(udata.get("billing_rate_per_1k_tokens_usd", 0.002)),
+                billing_rate_per_verification_usd=float(udata.get("billing_rate_per_verification_usd", 0.01)),
+                billing_rate_per_swarm_agent_usd=float(udata.get("billing_rate_per_swarm_agent_usd", 0.02)),
+                last_active_at=float(udata.get("last_active_at")) if udata.get("last_active_at") is not None else getattr(usage, "last_reset_timestamp", time.time()),
+                created_at=udata.get("created_at", udata.get("subscription_start_date", datetime.now(timezone.utc).isoformat())),
+                churn_date=udata.get("churn_date"),
+                churn_reason=udata.get("churn_reason"),
+                churn_feedback=udata.get("churn_feedback"),
+                churn_status=udata.get("churn_status", "churned" if udata.get("status") in ["canceled", "cancelled"] else "active"),
+                total_requests=int(udata.get("total_requests", getattr(usage, "daily_request_count", 0))),
+                stripe_customer_id=udata.get("stripe_customer_id", (udata.get("payment_details") or {}).get("stripe_customer_id")),
+                stripe_subscription_id=udata.get("stripe_subscription_id"),
             )
             self._users[uid] = user
             for key in user.api_keys:

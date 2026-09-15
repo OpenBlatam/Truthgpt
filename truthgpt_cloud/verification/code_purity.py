@@ -7,7 +7,7 @@ and guarantees pure mathematical computation.
 import ast
 import time
 import logging
-from typing import Dict, List, Any, Set, Tuple, Optional
+from typing import Dict, List, Any, Set, Optional
 
 logger = logging.getLogger("TruthGPT.CodePurity")
 

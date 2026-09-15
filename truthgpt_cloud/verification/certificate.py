@@ -126,7 +126,7 @@ class ProofCertificate:
         pub_obj = priv_obj.public_key()
         self.public_key_hex = pub_obj.public_bytes_raw().hex()
 
-        payload = f"{self.certificate_id}|{self.theorem_or_claim}|{self.status}|{self.proof_tree_hash}|{self.timestamp}".encode("utf-8")
+        payload = f"{self.certificate_id}|{self.theorem_or_claim}|{self.status}|{self.proof_tree_hash}|{self.timestamp}".encode()
         sig = priv_obj.sign(payload)
         self.asymmetric_signature = sig.hex()
         return self.asymmetric_signature
@@ -151,7 +151,7 @@ class ProofCertificate:
                 pub_bytes = target_pub
 
             pub_obj = ed25519.Ed25519PublicKey.from_public_bytes(pub_bytes)
-            payload = f"{self.certificate_id}|{self.theorem_or_claim}|{self.status}|{self.proof_tree_hash}|{self.timestamp}".encode("utf-8")
+            payload = f"{self.certificate_id}|{self.theorem_or_claim}|{self.status}|{self.proof_tree_hash}|{self.timestamp}".encode()
             sig_bytes = bytes.fromhex(self.asymmetric_signature)
             pub_obj.verify(sig_bytes, payload)
             return True

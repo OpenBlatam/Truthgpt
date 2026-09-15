@@ -19,9 +19,68 @@
       "last_reset_timestamp": 1787952726.0,
       "daily_request_count": 0,
       "purchased_tokens_balance": 0,
-      "total_purchased_tokens": 0
+      "total_purchased_tokens": 0,
+      "credit_balance_usd": 0.0,
+      "balance_usd": 0.0,
+      "total_spent_usd": 0.0
     },
     "invoices": [
+      {
+        "invoice_id": "inv_tgpt_a7f2950a40",
+        "user_id": "usr_default_demo",
+        "tier_id": "charge_pro",
+        "amount_usd": 25.0,
+        "billing_cycle": "metered",
+        "payment_method": "stripe_card",
+        "status": "paid",
+        "discount_applied_usd": 0.0,
+        "promo_code": null,
+        "created_at": "2026-09-14T20:28:10.285108+00:00",
+        "description": "TruthGPT Cloud Service Charge",
+        "items": []
+      },
+      {
+        "invoice_id": "inv_tgpt_de39b0168e",
+        "user_id": "usr_default_demo",
+        "tier_id": "charge_pro",
+        "amount_usd": 15.0,
+        "billing_cycle": "metered",
+        "payment_method": "stripe_card",
+        "status": "paid",
+        "discount_applied_usd": 0.0,
+        "promo_code": null,
+        "created_at": "2026-09-14T20:27:38.648389+00:00",
+        "description": "TruthGPT Cloud Service Charge",
+        "items": []
+      },
+      {
+        "invoice_id": "inv_tgpt_69d88b0915",
+        "user_id": "usr_default_demo",
+        "tier_id": "charge_pro",
+        "amount_usd": 10.0,
+        "billing_cycle": "metered",
+        "payment_method": "stripe_card",
+        "status": "paid",
+        "discount_applied_usd": 0.0,
+        "promo_code": null,
+        "created_at": "2026-09-14T20:26:00.638728+00:00",
+        "description": "TruthGPT Cloud Service Charge",
+        "items": []
+      },
+      {
+        "invoice_id": "inv_tgpt_e2b2c142f6",
+        "user_id": "usr_default_demo",
+        "tier_id": "charge_pro",
+        "amount_usd": 15.0,
+        "billing_cycle": "metered",
+        "payment_method": "stripe_card",
+        "status": "paid",
+        "discount_applied_usd": 0.0,
+        "promo_code": null,
+        "created_at": "2026-09-14T20:24:02.603248+00:00",
+        "description": "TruthGPT Cloud Service Charge",
+        "items": []
+      },
       {
         "invoice_id": "inv_demo_init_001",
         "user_id": "usr_default_demo",
@@ -32,7 +91,9 @@
         "status": "paid",
         "discount_applied_usd": 0.0,
         "promo_code": null,
-        "created_at": "2026-08-28T00:00:00+00:00"
+        "created_at": "2026-08-28T00:00:00+00:00",
+        "description": "TruthGPT Cloud Service Charge",
+        "items": []
       }
     ],
     "api_key_details": [
@@ -40,9 +101,12 @@
         "key": "tgpt_cloud_live_demo_free_key_001",
         "key_id": "key_demo_001",
         "key_prefix": "tgpt_cloud_live_...",
+        "key_hash": "97a7ba30abffa37d87e604286a98eafe95d2eadaf87503e3b98c4fd6059bc78c",
+        "key_version": 1,
         "label": "Demo Default Key",
         "name": "Demo Default Key",
         "created_at": 1787952726.0,
+        "expires_at": null,
         "last_used_at": null,
         "is_active": true,
         "scopes": [
@@ -59,11 +123,20 @@
       "stripe_customer_id": "cus_tgpt_demo_001"
     },
     "balance_usd": 50.0,
-    "total_billed_usd": 19.99,
+    "total_billed_usd": 84.99,
     "auto_charge_enabled": true,
     "billing_rate_per_1k_tokens_usd": 0.002,
     "billing_rate_per_verification_usd": 0.01,
-    "billing_rate_per_swarm_agent_usd": 0.02
+    "billing_rate_per_swarm_agent_usd": 0.02,
+    "last_active_at": 1789417658.6652126,
+    "created_at": "2026-08-28T00:00:00+00:00",
+    "churn_date": null,
+    "churn_reason": null,
+    "churn_feedback": null,
+    "churn_status": "active",
+    "total_requests": 0,
+    "stripe_customer_id": "cus_tgpt_demo_001",
+    "stripe_subscription_id": null
   },
   "usr_pro_sample": {
     "user_id": "usr_pro_sample",
@@ -85,9 +158,26 @@
       "last_reset_timestamp": 1787952726.0,
       "daily_request_count": 12,
       "purchased_tokens_balance": 0,
-      "total_purchased_tokens": 0
+      "total_purchased_tokens": 0,
+      "credit_balance_usd": 0.0,
+      "balance_usd": 0.0,
+      "total_spent_usd": 0.0
     },
     "invoices": [
+      {
+        "invoice_id": "inv_tgpt_517a1499b0",
+        "user_id": "usr_pro_sample",
+        "tier_id": "charge_pro",
+        "amount_usd": 29.5,
+        "billing_cycle": "metered",
+        "payment_method": "stripe_card",
+        "status": "paid",
+        "discount_applied_usd": 0.0,
+        "promo_code": null,
+        "created_at": "2026-09-14T20:26:31.721580+00:00",
+        "description": "TruthGPT Cloud Service Charge",
+        "items": []
+      },
       {
         "invoice_id": "inv_pro_init_001",
         "user_id": "usr_pro_sample",
@@ -98,7 +188,9 @@
         "status": "paid",
         "discount_applied_usd": 0.0,
         "promo_code": null,
-        "created_at": "2026-08-28T00:00:00+00:00"
+        "created_at": "2026-08-28T00:00:00+00:00",
+        "description": "TruthGPT Cloud Service Charge",
+        "items": []
       }
     ],
     "api_key_details": [
@@ -106,9 +198,12 @@
         "key": "tgpt_cloud_live_pro_sample_key_002",
         "key_id": "key_pro_002",
         "key_prefix": "tgpt_cloud_live_...",
+        "key_hash": "8f89be1853dc40f6a2bf20e7b90d7311ab8738233837608448a2ea059729b3a2",
+        "key_version": 1,
         "label": "Research Primary Key",
         "name": "Research Primary Key",
         "created_at": 1787952726.0,
+        "expires_at": null,
         "last_used_at": null,
         "is_active": true,
         "scopes": [
@@ -117,7 +212,24 @@
       }
     ],
     "webhooks": [],
-    "custom_limits": null
+    "custom_limits": null,
+    "payment_method": "stripe_card",
+    "payment_details": null,
+    "balance_usd": 0.0,
+    "total_billed_usd": 49.49,
+    "auto_charge_enabled": true,
+    "billing_rate_per_1k_tokens_usd": 0.002,
+    "billing_rate_per_verification_usd": 0.01,
+    "billing_rate_per_swarm_agent_usd": 0.02,
+    "last_active_at": 1789417591.7475345,
+    "created_at": "2026-08-28T00:00:00+00:00",
+    "churn_date": null,
+    "churn_reason": null,
+    "churn_feedback": null,
+    "churn_status": "active",
+    "total_requests": 12,
+    "stripe_customer_id": null,
+    "stripe_subscription_id": null
   },
   "usr_ultra_enterprise": {
     "user_id": "usr_ultra_enterprise",
@@ -139,7 +251,10 @@
       "last_reset_timestamp": 1787952726.0,
       "daily_request_count": 85,
       "purchased_tokens_balance": 0,
-      "total_purchased_tokens": 0
+      "total_purchased_tokens": 0,
+      "credit_balance_usd": 0.0,
+      "balance_usd": 0.0,
+      "total_spent_usd": 0.0
     },
     "invoices": [
       {
@@ -152,7 +267,9 @@
         "status": "paid",
         "discount_applied_usd": 0.0,
         "promo_code": null,
-        "created_at": "2026-08-28T00:00:00+00:00"
+        "created_at": "2026-08-28T00:00:00+00:00",
+        "description": "TruthGPT Cloud Service Charge",
+        "items": []
       }
     ],
     "api_key_details": [
@@ -160,9 +277,12 @@
         "key": "tgpt_cloud_live_ultra_sovereign_003",
         "key_id": "key_ultra_003",
         "key_prefix": "tgpt_cloud_live_...",
+        "key_hash": "0fa2fa29c1fdf015277e47fcfb803f4340fe2460c9c2ab9c389c57df251b64d0",
+        "key_version": 1,
         "label": "Quantum Ultra Master Key",
         "name": "Quantum Ultra Master Key",
         "created_at": 1787952726.0,
+        "expires_at": null,
         "last_used_at": null,
         "is_active": true,
         "scopes": [
@@ -171,7 +291,24 @@
       }
     ],
     "webhooks": [],
-    "custom_limits": null
+    "custom_limits": null,
+    "payment_method": "stripe_card",
+    "payment_details": null,
+    "balance_usd": 0.0,
+    "total_billed_usd": 0.0,
+    "auto_charge_enabled": true,
+    "billing_rate_per_1k_tokens_usd": 0.002,
+    "billing_rate_per_verification_usd": 0.01,
+    "billing_rate_per_swarm_agent_usd": 0.02,
+    "last_active_at": 1787952726.0,
+    "created_at": "2026-08-28T00:00:00+00:00",
+    "churn_date": null,
+    "churn_reason": null,
+    "churn_feedback": null,
+    "churn_status": "active",
+    "total_requests": 85,
+    "stripe_customer_id": null,
+    "stripe_subscription_id": null
   },
   "usr_enterprise_sample": {
     "user_id": "usr_enterprise_sample",
@@ -193,7 +330,10 @@
       "last_reset_timestamp": 1787952726.0,
       "daily_request_count": 36,
       "purchased_tokens_balance": 0,
-      "total_purchased_tokens": 0
+      "total_purchased_tokens": 0,
+      "credit_balance_usd": 0.0,
+      "balance_usd": 0.0,
+      "total_spent_usd": 0.0
     },
     "invoices": [
       {
@@ -206,7 +346,9 @@
         "status": "paid",
         "discount_applied_usd": 0.0,
         "promo_code": null,
-        "created_at": "2026-08-28T00:00:00+00:00"
+        "created_at": "2026-08-28T00:00:00+00:00",
+        "description": "TruthGPT Cloud Service Charge",
+        "items": []
       }
     ],
     "api_key_details": [
@@ -214,9 +356,12 @@
         "key": "tgpt_cloud_live_enterprise_sample_004",
         "key_id": "key_ent_004",
         "key_prefix": "tgpt_cloud_live_...",
+        "key_hash": "671f80892736d836d1706709769a8dd4dd32672aea8acac0ef457d8c3e8ce425",
+        "key_version": 1,
         "label": "Enterprise Master Key",
         "name": "Enterprise Master Key",
         "created_at": 1787952726.0,
+        "expires_at": null,
         "last_used_at": null,
         "is_active": true,
         "scopes": [
@@ -224,9 +369,25 @@
         ]
       }
     ],
-
     "webhooks": [],
-    "custom_limits": null
+    "custom_limits": null,
+    "payment_method": "stripe_card",
+    "payment_details": null,
+    "balance_usd": 0.0,
+    "total_billed_usd": 0.0,
+    "auto_charge_enabled": true,
+    "billing_rate_per_1k_tokens_usd": 0.002,
+    "billing_rate_per_verification_usd": 0.01,
+    "billing_rate_per_swarm_agent_usd": 0.02,
+    "last_active_at": 1787952726.0,
+    "created_at": "2026-08-28T00:00:00+00:00",
+    "churn_date": null,
+    "churn_reason": null,
+    "churn_feedback": null,
+    "churn_status": "active",
+    "total_requests": 36,
+    "stripe_customer_id": null,
+    "stripe_subscription_id": null
   },
   "usr_truthgpt_user": {
     "user_id": "usr_truthgpt_user",
@@ -248,7 +409,10 @@
       "last_reset_timestamp": 1787952726.0,
       "daily_request_count": 15,
       "purchased_tokens_balance": 500000,
-      "total_purchased_tokens": 500000
+      "total_purchased_tokens": 500000,
+      "credit_balance_usd": 0.0,
+      "balance_usd": 0.0,
+      "total_spent_usd": 0.0
     },
     "invoices": [
       {
@@ -261,7 +425,9 @@
         "status": "paid",
         "discount_applied_usd": 0.0,
         "promo_code": null,
-        "created_at": "2026-09-01T00:00:00+00:00"
+        "created_at": "2026-09-01T00:00:00+00:00",
+        "description": "TruthGPT Cloud Service Charge",
+        "items": []
       }
     ],
     "api_key_details": [
@@ -269,9 +435,12 @@
         "key": "tgpt_cloud_live_truthgpt_user_key_777",
         "key_id": "key_truthgpt_001",
         "key_prefix": "tgpt_cloud_live_...",
+        "key_hash": "de4cbedea43ef8f73ef0afd4dd780455073c794de91000c053137c908e21fa15",
+        "key_version": 1,
         "label": "TruthGPT User Master Key",
         "name": "TruthGPT User Master Key",
         "created_at": 1787952726.0,
+        "expires_at": null,
         "last_used_at": null,
         "is_active": true,
         "scopes": [
@@ -280,6 +449,207 @@
       }
     ],
     "webhooks": [],
-    "custom_limits": null
+    "custom_limits": null,
+    "payment_method": "stripe_card",
+    "payment_details": {
+      "card_brand": "Mastercard",
+      "last4": "7777",
+      "status": "active"
+    },
+    "balance_usd": 100.0,
+    "total_billed_usd": 19.99,
+    "auto_charge_enabled": true,
+    "billing_rate_per_1k_tokens_usd": 0.002,
+    "billing_rate_per_verification_usd": 0.01,
+    "billing_rate_per_swarm_agent_usd": 0.02,
+    "last_active_at": 1787952726.0,
+    "created_at": "2026-09-01T00:00:00+00:00",
+    "churn_date": null,
+    "churn_reason": null,
+    "churn_feedback": null,
+    "churn_status": "active",
+    "total_requests": 15,
+    "stripe_customer_id": null,
+    "stripe_subscription_id": null
+  },
+  "usr_churned_sample": {
+    "user_id": "usr_churned_sample",
+    "email": "churned@biolab-ai.com",
+    "name": "BioLab Research Ltd",
+    "tier": "pro",
+    "billing_cycle": "monthly",
+    "status": "canceled",
+    "api_keys": [
+      "tgpt_cloud_live_biolab_revoked_key_005"
+    ],
+    "subscription_start_date": "2026-07-01T00:00:00+00:00",
+    "next_billing_date": null,
+    "usage": {
+      "total_tokens_consumed": 38400,
+      "tokens_consumed_today": 0,
+      "verifications_run": 14,
+      "swarm_sessions_count": 2,
+      "last_reset_timestamp": 1787000000.0,
+      "daily_request_count": 0,
+      "purchased_tokens_balance": 0,
+      "total_purchased_tokens": 0,
+      "credit_balance_usd": 0.0,
+      "balance_usd": 0.0,
+      "total_spent_usd": 0.0
+    },
+    "invoices": [
+      {
+        "invoice_id": "inv_biolab_jul_001",
+        "user_id": "usr_churned_sample",
+        "tier_id": "pro",
+        "amount_usd": 19.99,
+        "billing_cycle": "monthly",
+        "payment_method": "stripe_card",
+        "status": "paid",
+        "discount_applied_usd": 0.0,
+        "promo_code": null,
+        "created_at": "2026-07-01T00:00:00+00:00",
+        "description": "TruthGPT Cloud Pro Subscription (July)",
+        "items": []
+      },
+      {
+        "invoice_id": "inv_biolab_aug_002",
+        "user_id": "usr_churned_sample",
+        "tier_id": "pro",
+        "amount_usd": 19.99,
+        "billing_cycle": "monthly",
+        "payment_method": "stripe_card",
+        "status": "paid",
+        "discount_applied_usd": 0.0,
+        "promo_code": null,
+        "created_at": "2026-08-01T00:00:00+00:00",
+        "description": "TruthGPT Cloud Pro Subscription (August)",
+        "items": []
+      }
+    ],
+    "api_key_details": [
+      {
+        "key": "tgpt_cloud_live_biolab_revoked_key_005",
+        "key_id": "key_biolab_005",
+        "key_prefix": "tgpt_cloud_live_...",
+        "key_hash": "c89b343ef8f73ef0afd4dd780455073c794de91000c053137c908e21fa150000",
+        "key_version": 1,
+        "label": "BioLab Key",
+        "name": "BioLab Key",
+        "created_at": 1787000000.0,
+        "expires_at": null,
+        "last_used_at": 1787000000.0,
+        "is_active": false,
+        "scopes": [
+          "all"
+        ]
+      }
+    ],
+    "webhooks": [],
+    "custom_limits": null,
+    "payment_method": "stripe_card",
+    "payment_details": {
+      "card_brand": "Visa",
+      "last4": "1122",
+      "status": "canceled"
+    },
+    "balance_usd": 0.0,
+    "total_billed_usd": 39.98,
+    "auto_charge_enabled": false,
+    "billing_rate_per_1k_tokens_usd": 0.002,
+    "billing_rate_per_verification_usd": 0.01,
+    "billing_rate_per_swarm_agent_usd": 0.02,
+    "last_active_at": 1787000000.0,
+    "created_at": "2026-07-01T00:00:00+00:00",
+    "churn_date": "2026-09-02T16:20:00+00:00",
+    "churn_reason": "Reducción de presupuesto y migración temporal de servidores",
+    "churn_feedback": "Excelente verificador SMT, volveremos en Q4.",
+    "churn_status": "churned",
+    "total_requests": 26,
+    "stripe_customer_id": "cus_biolab_005",
+    "stripe_subscription_id": null
+  },
+  "usr_at_risk_sample": {
+    "user_id": "usr_at_risk_sample",
+    "email": "devs@fintech-matrix.com",
+    "name": "Matrix FinTech Labs",
+    "tier": "pro",
+    "billing_cycle": "monthly",
+    "status": "active",
+    "api_keys": [
+      "tgpt_cloud_live_fintech_key_006"
+    ],
+    "subscription_start_date": "2026-08-15T00:00:00+00:00",
+    "next_billing_date": "2026-09-15T00:00:00+00:00",
+    "usage": {
+      "total_tokens_consumed": 12800,
+      "tokens_consumed_today": 0,
+      "verifications_run": 6,
+      "swarm_sessions_count": 0,
+      "last_reset_timestamp": 1787952726.0,
+      "daily_request_count": 0,
+      "purchased_tokens_balance": 0,
+      "total_purchased_tokens": 0,
+      "credit_balance_usd": 0.0,
+      "balance_usd": 0.0,
+      "total_spent_usd": 0.0
+    },
+    "invoices": [
+      {
+        "invoice_id": "inv_fintech_init_001",
+        "user_id": "usr_at_risk_sample",
+        "tier_id": "pro",
+        "amount_usd": 19.99,
+        "billing_cycle": "monthly",
+        "payment_method": "stripe_card",
+        "status": "paid",
+        "discount_applied_usd": 0.0,
+        "promo_code": null,
+        "created_at": "2026-08-15T00:00:00+00:00",
+        "description": "TruthGPT Cloud Pro Subscription",
+        "items": []
+      }
+    ],
+    "api_key_details": [
+      {
+        "key": "tgpt_cloud_live_fintech_key_006",
+        "key_id": "key_fintech_006",
+        "key_prefix": "tgpt_cloud_live_...",
+        "key_hash": "e12cbedea43ef8f73ef0afd4dd780455073c794de91000c053137c908e21fa15",
+        "key_version": 1,
+        "label": "FinTech Primary Key",
+        "name": "FinTech Primary Key",
+        "created_at": 1786916726.0,
+        "expires_at": null,
+        "last_used_at": 1786916726.0,
+        "is_active": true,
+        "scopes": [
+          "all"
+        ]
+      }
+    ],
+    "webhooks": [],
+    "custom_limits": null,
+    "payment_method": "stripe_card",
+    "payment_details": {
+      "card_brand": "Visa",
+      "last4": "8899",
+      "status": "active"
+    },
+    "balance_usd": 25.0,
+    "total_billed_usd": 19.99,
+    "auto_charge_enabled": true,
+    "billing_rate_per_1k_tokens_usd": 0.002,
+    "billing_rate_per_verification_usd": 0.01,
+    "billing_rate_per_swarm_agent_usd": 0.02,
+    "last_active_at": 1786916726.0,
+    "created_at": "2026-08-15T00:00:00+00:00",
+    "churn_date": null,
+    "churn_reason": null,
+    "churn_feedback": null,
+    "churn_status": "at_risk",
+    "total_requests": 9,
+    "stripe_customer_id": "cus_fintech_006",
+    "stripe_subscription_id": null
   }
 }

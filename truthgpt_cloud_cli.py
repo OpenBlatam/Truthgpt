@@ -128,6 +128,7 @@ async def main_cli():
         print(" [19] 🚨 Monitorear Reglas de Alerta & Error Budget Burndown (SRE)")
         print(" [20] 🧹 Gestionar & Purgar Caché Semántica con TTL")
         print(" [21] 🔒 Auditoría Criptográfica de Seguridad & Tokens de Sesión")
+        print(" [22] 📊 Panel Ejecutivo de Cobros, Churn y Usuarios Activos (Dashboard)")
         print(" [0]  🚪 Salir")
         
         choice = input("\nSeleccione una opción: ").strip()
@@ -467,7 +468,41 @@ async def main_cli():
                     print(f"✅ Token VÁLIDO. Usuario: {val_res.get('user_id')}, Tiempo restante: {val_res.get('time_remaining_seconds')}s")
                 else:
                     print(f"❌ Token INVÁLIDO. Razón: {val_res.get('reason')}")
-                    
+
+        elif choice == "22":
+            print("\n⏳ Consultando métricas ejecutivas, cobros y retención...")
+            data = client.get_churn_and_usage_dashboard()
+            k = data["kpis"]
+            g = data.get("gateway_status", {}).get("stripe", {})
+            if _HAS_RICH and _console:
+                table = Table(title="📊 TruthGPT Cloud — Panel Ejecutivo de Cobros y Churn", border_style="green")
+                table.add_column("Métrica KPI", style="bold cyan")
+                table.add_column("Valor Actual", style="bold yellow")
+                table.add_row("MRR (Ingreso Mensual Recurrente)", f"${k['mrr_usd']:,.2f} USD")
+                table.add_row("ARR (Ingreso Anual Proyectado)", f"${k['arr_usd']:,.2f} USD")
+                table.add_row("Facturación Total Histórica", f"${k['total_revenue_usd']:,.2f} USD")
+                table.add_row("Usuarios Activos", str(k['active_users_count']))
+                table.add_row("Usuarios que Dejaron de Usarlo (Churn)", str(k['churned_users_count']))
+                table.add_row("Tasa de Churn", f"{k['churn_rate_pct']}%")
+                table.add_row("Tasa de Retención", f"{k['retention_rate_pct']}%")
+                table.add_row("Usuarios en Riesgo (>7d inactivos)", str(k['at_risk_users_count']))
+                table.add_row("DAU / WAU / MAU", f"{k['dau']} / {k['wau']} / {k['mau']}")
+                table.add_row("Pasarela Stripe", f"{g.get('mode', 'sandbox').upper()} ({'Listo para Cobrar' if g.get('ready_to_charge') else 'Inactivo'})")
+                _console.print(table)
+            else:
+                print("\n" + "=" * 60)
+                print(" 📊 PANEL EJECUTIVO DE COBROS & CHURN (TRUTHGPT CLOUD)")
+                print("=" * 60)
+                print(f" • MRR: ${k['mrr_usd']:,.2f} USD | ARR: ${k['arr_usd']:,.2f} USD")
+                print(f" • Facturación Total: ${k['total_revenue_usd']:,.2f} USD ({k['total_invoices_count']} facturas)")
+                print(f" • Usuarios Activos: {k['active_users_count']} | DAU: {k['dau']} | WAU: {k['wau']} | MAU: {k['mau']}")
+                print(f" • Usuarios Churned (Bajas): {k['churned_users_count']} (Tasa Churn: {k['churn_rate_pct']}%)")
+                print(f" • Tasa de Retención: {k['retention_rate_pct']}%")
+                print(f" • Usuarios en Riesgo: {k['at_risk_users_count']}")
+                print(f" • Pasarela de Pagos: Stripe {g.get('mode', 'sandbox').upper()}")
+                print("=" * 60)
+            print("\n🌐 Dashboard Web Completo en Vivo: http://localhost:8080/dashboard")
+
         elif choice == "0":
             print("\n👋 ¡Gracias por usar TruthGPT Cloud!")
             break

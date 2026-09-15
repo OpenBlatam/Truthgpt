@@ -17,6 +17,37 @@ from typing import Dict, List, Any, Optional, Tuple, Callable, Union
 
 from .certificate import ProofCertificate, ContractVerificationResult
 from .merkle import MerkleTree
+from .domain_invariants import (
+    verify_tensor_shapes as _verify_tensor_shapes,
+    verify_numerical_stability as _verify_numerical_stability,
+    verify_attention_invariants as _verify_attention_invariants,
+    verify_quantization_safety as _verify_quantization_safety,
+    verify_optimizer_convergence as _verify_optimizer_convergence,
+    verify_matrix_invariants as _verify_matrix_invariants,
+    verify_ode_stability as _verify_ode_stability,
+    verify_loop_invariant as _verify_loop_invariant,
+    verify_differential_privacy as _verify_differential_privacy,
+    verify_spectral_norm as _verify_spectral_norm,
+    verify_lipschitz_constant as _verify_lipschitz_constant,
+    verify_gradient_clipping_bounds as _verify_gradient_clipping_bounds,
+    verify_loss_monotonicity as _verify_loss_monotonicity,
+    verify_lora_rank_safety as _verify_lora_rank_safety,
+    verify_kv_cache_memory_bound as _verify_kv_cache_memory_bound,
+    verify_moe_routing_invariants as _verify_moe_routing_invariants,
+    verify_rope_frequency_invariants as _verify_rope_frequency_invariants,
+    verify_flash_attention_tiling as _verify_flash_attention_tiling,
+    verify_microscaling_fp8_bounds as _verify_microscaling_fp8_bounds,
+    DomainInvariantsVerifier,
+)
+from .code_purity import (
+    verify_code_purity,
+    verify_code_purity_and_invariants as _verify_code_purity_and_invariants,
+    SecurityHazardVisitor,
+    CodePurityVerifier,
+)
+from ..core.interfaces import IFormalVerifier
+from ..cache import proof_cache
+from ..telemetry import cloud_telemetry
 
 
 @dataclass
@@ -102,37 +133,7 @@ class BatchVerificationResult:
 
     def __contains__(self, key: str) -> bool:
         return hasattr(self, key) or key in ("total", "passed", "failed", "skipped", "total_time_ms", "certificates", "errors")
-from .domain_invariants import (
-    verify_tensor_shapes as _verify_tensor_shapes,
-    verify_numerical_stability as _verify_numerical_stability,
-    verify_attention_invariants as _verify_attention_invariants,
-    verify_quantization_safety as _verify_quantization_safety,
-    verify_optimizer_convergence as _verify_optimizer_convergence,
-    verify_matrix_invariants as _verify_matrix_invariants,
-    verify_ode_stability as _verify_ode_stability,
-    verify_loop_invariant as _verify_loop_invariant,
-    verify_differential_privacy as _verify_differential_privacy,
-    verify_spectral_norm as _verify_spectral_norm,
-    verify_lipschitz_constant as _verify_lipschitz_constant,
-    verify_gradient_clipping_bounds as _verify_gradient_clipping_bounds,
-    verify_loss_monotonicity as _verify_loss_monotonicity,
-    verify_lora_rank_safety as _verify_lora_rank_safety,
-    verify_kv_cache_memory_bound as _verify_kv_cache_memory_bound,
-    verify_moe_routing_invariants as _verify_moe_routing_invariants,
-    verify_rope_frequency_invariants as _verify_rope_frequency_invariants,
-    verify_flash_attention_tiling as _verify_flash_attention_tiling,
-    verify_microscaling_fp8_bounds as _verify_microscaling_fp8_bounds,
-    DomainInvariantsVerifier,
-)
-from .code_purity import (
-    verify_code_purity,
-    verify_code_purity_and_invariants as _verify_code_purity_and_invariants,
-    SecurityHazardVisitor,
-    CodePurityVerifier,
-)
-from ..core.interfaces import IFormalVerifier
-from ..cache import proof_cache
-from ..telemetry import cloud_telemetry
+
 
 logger = logging.getLogger("TruthGPT.CloudVerifier")
 
@@ -1117,72 +1118,6 @@ class CloudFormalVerifier(IFormalVerifier):
         tasks = [loop.run_in_executor(None, self.verify_expression, c, None, tier_depth) for c in claims]
         return list(await asyncio.gather(*tasks))
 
-    def verify_batch_parallel(
-        self,
-        claims: List[str],
-        tier_depth: int = 2,
-        max_concurrency: int = 4,
-        on_progress: Optional[Callable[[int, int], None]] = None,
-    ) -> BatchVerificationResult:
-        """
-        Verify multiple mathematical claims in parallel using a thread pool worker queue.
-        Isolates Z3 contexts across worker threads, tracks per-claim latencies,
-        handles exceptions gracefully without aborting the batch, and emits progress callbacks.
-        """
-        import concurrent.futures
-        t0 = time.perf_counter()
-        total = len(claims)
-        if total == 0:
-            return BatchVerificationResult(
-                total_claims=0,
-                passed_count=0,
-                failed_count=0,
-                skipped_count=0,
-                total_duration_ms=0.0,
-                success_rate=0.0,
-                certificates=[],
-            )
-
-        results: List[Optional[ProofCertificate]] = [None] * total
-        completed_count = 0
-
-        def _worker(idx: int, claim_text: str):
-            return idx, self.verify_expression(claim_text, tier_depth=tier_depth)
-
-        workers = min(max_concurrency, max(1, total))
-        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
-            future_to_idx = {executor.submit(_worker, i, c): i for i, c in enumerate(claims)}
-            for future in concurrent.futures.as_completed(future_to_idx):
-                idx = future_to_idx[future]
-                try:
-                    res_idx, cert = future.result()
-                    results[res_idx] = cert
-                except Exception as exc:
-                    logger.error(f"Error in batch parallel verification for claim {idx}: {exc}")
-                completed_count += 1
-                if on_progress:
-                    try:
-                        on_progress(completed_count, total)
-                    except Exception:
-                        pass
-
-        total_ms = round((time.perf_counter() - t0) * 1000, 2)
-        valid_certs = [c for c in results if c is not None]
-        passed = sum(1 for c in valid_certs if any(kw in str(c.status).upper() for kw in ("PROVEN", "VERIFIED", "VALID")))
-        failed = len(valid_certs) - passed
-        skipped = total - len(valid_certs)
-        rate = round((passed / max(1, total)) * 100, 2)
-
-        return BatchVerificationResult(
-            total_claims=total,
-            passed_count=passed,
-            failed_count=failed,
-            skipped_count=skipped,
-            total_duration_ms=total_ms,
-            success_rate=rate,
-            certificates=valid_certs,
-        )
-
     async def verify_batch_parallel(
         self,
         claims: List[Union[str, Dict[str, Any]]],
@@ -1295,38 +1230,6 @@ class CloudFormalVerifier(IFormalVerifier):
         and absence of hazardous side effects using Python AST analysis and SymPy.
         """
         return _verify_code_purity_and_invariants(code_str)
-
-    def verify_moe_routing(self, *args, **kwargs) -> Dict[str, Any]:
-        """Verify Mixture of Experts (MoE) routing invariants."""
-        return _verify_moe_routing_invariants(*args, **kwargs)
-
-    def verify_rope_frequencies(self, *args, **kwargs) -> Dict[str, Any]:
-        """Verify Rotary Positional Embedding (RoPE) frequency invariants."""
-        return _verify_rope_frequency_invariants(*args, **kwargs)
-
-    def verify_flash_attention_tiling(self, *args, **kwargs) -> Dict[str, Any]:
-        """Verify FlashAttention SRAM tiling and memory bounds."""
-        return _verify_flash_attention_tiling(*args, **kwargs)
-
-    def verify_microscaling_fp8(self, *args, **kwargs) -> Dict[str, Any]:
-        """Verify OCP Microscaling FP8/FP4 quantization boundaries."""
-        return _verify_microscaling_fp8_bounds(*args, **kwargs)
-
-    def verify_lora_rank_safety(self, *args, **kwargs) -> Dict[str, Any]:
-        """Verify LoRA low-rank adaptation rank safety bounds."""
-        return _verify_lora_rank_safety(*args, **kwargs)
-
-    def verify_kv_cache_memory_bound(self, *args, **kwargs) -> Dict[str, Any]:
-        """Verify Transformer KV-cache memory footprint against VRAM budget."""
-        return _verify_kv_cache_memory_bound(*args, **kwargs)
-
-    def verify_spectral_norm(self, *args, **kwargs) -> Dict[str, Any]:
-        """Verify spectral norm boundary of weight matrix."""
-        return _verify_spectral_norm(*args, **kwargs)
-
-    def verify_lipschitz_constant(self, *args, **kwargs) -> Dict[str, Any]:
-        """Verify composite Lipschitz continuity constant of layer."""
-        return _verify_lipschitz_constant(*args, **kwargs)
 
 
 # Global singleton instance

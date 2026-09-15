@@ -37,6 +37,7 @@ class TestTruthGPTCloudRefactor:
             "truthgpt_cloud.security",
             "truthgpt_cloud.telemetry",
             "truthgpt_cloud.rate_limiting",
+            "truthgpt_cloud.server",
         ]
         
         for pkg_name in subpackages:
@@ -74,10 +75,11 @@ class TestTruthGPTCloudRefactor:
 
         # 4. tiers
         import truthgpt_cloud.tiers as tiers_bridge
-        from truthgpt_cloud.core.tiers import CloudTier, TierConfig, TIER_CONFIGURATIONS
+        from truthgpt_cloud.core.tiers import CloudTier, TierConfig, TIER_CONFIGURATIONS, calculate_request_cost
         assert tiers_bridge.CloudTier is CloudTier
         assert tiers_bridge.TierConfig is TierConfig
         assert tiers_bridge.TIER_CONFIGURATIONS is TIER_CONFIGURATIONS
+        assert tiers_bridge.calculate_request_cost is calculate_request_cost
 
         # 5. exceptions
         import truthgpt_cloud.exceptions as exc_bridge
@@ -95,8 +97,11 @@ class TestTruthGPTCloudRefactor:
         # 7. swarm_cloud
         import truthgpt_cloud.swarm_cloud as swarm_bridge
         from truthgpt_cloud.swarm.orchestrator import CloudSwarmOrchestrator, cloud_swarm
+        from truthgpt_cloud.swarm.models import ThoughtNode, TreeOfThoughtsTrace
         assert swarm_bridge.CloudSwarmOrchestrator is CloudSwarmOrchestrator
         assert swarm_bridge.cloud_swarm is cloud_swarm
+        assert swarm_bridge.ThoughtNode is ThoughtNode
+        assert swarm_bridge.TreeOfThoughtsTrace is TreeOfThoughtsTrace
 
         # 8. engine_router
         import truthgpt_cloud.engine_router as router_bridge
@@ -114,6 +119,11 @@ class TestTruthGPTCloudRefactor:
         import truthgpt_cloud.client as client_bridge
         from truthgpt_cloud.client.client import TruthGPTCloudClient
         assert client_bridge.TruthGPTCloudClient is TruthGPTCloudClient
+
+        # 11. rate_limiter bridge
+        import truthgpt_cloud.rate_limiter as limiter_bridge
+        from truthgpt_cloud.resilience.adaptive_limiter import AdaptiveConcurrencyLimiter
+        assert limiter_bridge.AdaptiveConcurrencyLimiter is AdaptiveConcurrencyLimiter
 
     def test_no_shadowed_modules_in_cloud_root(self):
         """Verify that no .py files exist in truthgpt_cloud that shadow subpackage directories."""
@@ -219,3 +229,39 @@ class TestTruthGPTCloudRefactor:
             epsilon=1e-8
         )
         assert s_res["stable"] is True
+
+        # Test calculate_cost and estimate_cost
+        cost = client.calculate_cost(input_tokens=1000, output_tokens=500, is_verification=True, swarm_agents=2)
+        assert cost > 0.0
+        assert client.estimate_cost(input_tokens=1000, output_tokens=500) > 0.0
+
+        # Test check_health through client
+        health_rep = client.check_health()
+        assert isinstance(health_rep, dict)
+        assert "overall_status" in health_rep
+
+    def test_cloud_factory_assembly_and_extensions(self):
+        """Verify CloudFactory instantiates health checker, secrets, adaptive limiter, and platform assembly."""
+        from truthgpt_cloud.core.factory import CloudFactory
+        from truthgpt_cloud.core.health import CloudHealthChecker
+        from truthgpt_cloud.core.secrets import CloudSecretsProvider
+        from truthgpt_cloud.resilience.adaptive_limiter import AdaptiveConcurrencyLimiter
+
+        hc = CloudFactory.create_health_checker()
+        assert isinstance(hc, CloudHealthChecker)
+
+        sp = CloudFactory.create_secrets_provider()
+        assert isinstance(sp, CloudSecretsProvider)
+
+        al = CloudFactory.create_adaptive_limiter()
+        assert isinstance(al, AdaptiveConcurrencyLimiter)
+
+        platform = CloudFactory.create_platform()
+        assert "health_checker" in platform
+        assert "secrets_provider" in platform
+        assert "adaptive_limiter" in platform
+        assert "storage" in platform
+        assert "verifier" in platform
+        assert "router" in platform
+        assert "rate_limiter" in platform
+        assert "swarm" in platform

@@ -13,6 +13,7 @@ from dataclasses import dataclass, field, asdict
 from typing import Dict, Any, Optional, List
 
 from .constants import CLOUD_PLATFORM_VERSION, CLOUD_API_VERSION
+from .interfaces import IHealthChecker
 
 
 class HealthStatusEnum(str, Enum):
@@ -33,8 +34,8 @@ class SubsystemHealth:
     error: Optional[str] = None
 
 
-# Semantic alias
-HealthStatus = SubsystemHealth
+# Semantic aliases
+SubsystemHealthStatus = SubsystemHealth
 
 
 @dataclass
@@ -56,7 +57,7 @@ class PlatformHealthReport:
         return d
 
 
-class CloudHealthChecker:
+class CloudHealthChecker(IHealthChecker):
     """
     Evaluates and aggregates operational health across all TruthGPT Cloud subsystems:
     Storage, Semantic Proof Cache, Z3 SMT Formal Verifier, Multi-Agent Swarm,
@@ -329,6 +330,7 @@ cloud_health_checker = CloudHealthChecker()
 __all__ = [
     "HealthStatusEnum",
     "SubsystemHealth",
+    "SubsystemHealthStatus",
     "PlatformHealthReport",
     "HealthStatus",
     "CloudHealthChecker",

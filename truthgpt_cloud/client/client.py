@@ -13,7 +13,8 @@ try:
 except ImportError:
     _HAS_HTTPX = False
 
-from ..core.tiers import CloudTier, TierConfig, get_tier_config, get_all_tiers
+from ..core.tiers import CloudTier, TierConfig, get_tier_config, calculate_request_cost
+from ..core.health import cloud_health_checker
 from ..core.context import TruthGPTCloudContext, get_cloud_context
 from ..billing.subscription import subscription_manager, UserSubscription
 from ..billing.webhooks import webhook_manager
@@ -76,6 +77,11 @@ class TruthGPTCloudClient:
             self.telemetry = context.telemetry
             self.cache = context.cache
             self.security = context.security
+            self.health_checker = getattr(context, "health_checker", cloud_health_checker)
+            self.secrets = getattr(context, "secrets", None)
+            self.rate_limiter = getattr(context, "rate_limiter", None)
+            self.circuit_breaker = getattr(context, "circuit_breaker", None)
+            self.adaptive_limiter = getattr(context, "adaptive_limiter", None)
         else:
             self.context = None
             self.sub_manager = subscription_manager
@@ -87,6 +93,11 @@ class TruthGPTCloudClient:
             self.telemetry = cloud_telemetry
             self.cache = proof_cache
             self.security = cloud_security
+            self.health_checker = cloud_health_checker
+            self.secrets = None
+            self.rate_limiter = None
+            self.circuit_breaker = None
+            self.adaptive_limiter = None
 
         self.base_url = base_url.rstrip("/") if base_url else None
         self.timeout = timeout
@@ -250,6 +261,39 @@ class TruthGPTCloudClient:
     def get_user_info(self) -> Dict[str, Any]:
         """Return structured summary of active user account, subscription tier, and quotas."""
         return self.sub_manager.get_user_status_summary(self.user_id)
+
+    def calculate_cost(
+        self,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        is_verification: bool = False,
+        swarm_agents: int = 0,
+        tier: Optional[Union[str, CloudTier, TierConfig]] = None,
+    ) -> float:
+        """
+        Calculate or estimate request expenditure in USD for this client's tier or a specified tier.
+        """
+        target_tier = tier if tier is not None else self.tier_config
+        return calculate_request_cost(
+            tier=target_tier,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            is_verification=is_verification,
+            swarm_agents=swarm_agents,
+        )
+
+    estimate_cost = calculate_cost
+
+    def check_health(self) -> Dict[str, Any]:
+        """
+        Run and return an aggregated platform health and diagnostic report.
+        """
+        if getattr(self, "is_remote", False):
+            try:
+                return self.http_get("/health/diagnostics")
+            except Exception:
+                pass
+        return cloud_health_checker.get_diagnostics().to_dict()
 
     # ---------------------------------------------------------------------------
     # 💬 Async & Sync Cloud Inference
@@ -1145,28 +1189,6 @@ class TruthGPTCloudClient:
     # 📐 Extended Formal Verification & Swarm Visualizers
     # ---------------------------------------------------------------------------
 
-    def verify_spectral_norm(
-        self,
-        matrix: List[List[float]],
-        max_norm: float = 1.0
-    ) -> Dict[str, Any]:
-        """Formally verify bounded spectral norm sigma_max(W) <= max_norm."""
-        return self.verifier.verify_spectral_norm(matrix, max_norm=max_norm)
-
-    def verify_lipschitz(
-        self,
-        layer_type: str = "dense",
-        weight_spectral_norm: float = 1.0,
-        activation: str = "relu",
-        target_lipschitz: float = 1.0
-    ) -> Dict[str, Any]:
-        """Formally verify composite Lipschitz constant of a neural network layer."""
-        return self.verifier.verify_lipschitz_constant(
-            layer_type=layer_type,
-            weight_spectral_norm=weight_spectral_norm,
-            activation=activation,
-            target_lipschitz=target_lipschitz
-        )
 
     def verify_gradient_clipping(
         self,
@@ -1212,24 +1234,6 @@ class TruthGPTCloudClient:
         """Validate database integrity and return diagnostic status."""
         return self.sub_manager.validate_database_integrity()
 
-    def verify_spectral_norm(self, matrix: List[List[float]], max_norm: float = 1.0) -> Dict[str, Any]:
-        """Formally verify bounded spectral norm sigma_max(W) <= max_norm."""
-        return self.verifier.verify_spectral_norm(matrix=matrix, max_norm=max_norm)
-
-    def verify_lipschitz(
-        self,
-        layer_type: str = "dense",
-        weight_spectral_norm: float = 1.0,
-        activation: str = "relu",
-        target_lipschitz: float = 1.0,
-    ) -> Dict[str, Any]:
-        """Formally verify composite Lipschitz constant of neural network layer."""
-        return self.verifier.verify_lipschitz_constant(
-            layer_type=layer_type,
-            weight_spectral_norm=weight_spectral_norm,
-            activation=activation,
-            target_lipschitz=target_lipschitz,
-        )
 
     def verify_lora_rank(
         self,
@@ -1269,84 +1273,6 @@ class TruthGPTCloudClient:
             vram_budget_gb=vram_budget_gb,
         )
 
-    def verify_moe_routing(
-        self,
-        num_experts: int,
-        top_k: int,
-        tokens_per_batch: int,
-        capacity_factor: float = 1.25,
-        gating_weights: Optional[List[float]] = None,
-        aux_loss_coeff: float = 0.01,
-        drop_tokens: bool = False,
-    ) -> Dict[str, Any]:
-        """Formally verify Mixture of Experts (MoE) routing invariants."""
-        return self.verifier.verify_moe_routing(
-            num_experts=num_experts,
-            top_k=top_k,
-            tokens_per_batch=tokens_per_batch,
-            capacity_factor=capacity_factor,
-            gating_weights=gating_weights,
-            aux_loss_coeff=aux_loss_coeff,
-            drop_tokens=drop_tokens,
-        )
-
-    def verify_rope_frequencies(
-        self,
-        head_dim: int,
-        max_position_embeddings: int = 8192,
-        base_theta: float = 10000.0,
-        scaling_factor: float = 1.0,
-        scaling_type: str = "linear",
-        low_freq_factor: float = 1.0,
-        high_freq_factor: float = 4.0,
-    ) -> Dict[str, Any]:
-        """Formally verify Rotary Position Embeddings (RoPE) frequency invariants."""
-        return self.verifier.verify_rope_frequencies(
-            head_dim=head_dim,
-            max_position_embeddings=max_position_embeddings,
-            base_theta=base_theta,
-            scaling_factor=scaling_factor,
-            scaling_type=scaling_type,
-            low_freq_factor=low_freq_factor,
-            high_freq_factor=high_freq_factor,
-        )
-
-    def verify_flash_attention_tiling(
-        self,
-        block_m: int = 128,
-        block_n: int = 64,
-        head_dim: int = 128,
-        is_causal: bool = True,
-        precision_bytes: int = 2,
-        sram_budget_bytes: int = 227328,
-    ) -> Dict[str, Any]:
-        """Formally verify FlashAttention-2/3 SRAM block tiling invariants."""
-        return self.verifier.verify_flash_attention_tiling(
-            block_m=block_m,
-            block_n=block_n,
-            head_dim=head_dim,
-            is_causal=is_causal,
-            precision_bytes=precision_bytes,
-            sram_budget_bytes=sram_budget_bytes,
-        )
-
-    def verify_microscaling_fp8(
-        self,
-        format: str = "e4m3",
-        block_size: int = 32,
-        scale_bias: int = 127,
-        values: Optional[List[float]] = None,
-        max_dynamic_range_db: float = 96.0,
-    ) -> Dict[str, Any]:
-        """Formally verify Microscaling (MXFP8 / NVFP4) block quantization invariants."""
-        return self.verifier.verify_microscaling_fp8(
-            format=format,
-            block_size=block_size,
-            scale_bias=scale_bias,
-            values=values,
-            max_dynamic_range_db=max_dynamic_range_db,
-        )
-
     def check_health(self) -> Dict[str, Any]:
         """Perform comprehensive readiness and subsystem health check."""
         from ..core.health import cloud_health_checker
@@ -1380,44 +1306,6 @@ class TruthGPTCloudClient:
         """Audit the configuration status of essential secrets without disclosing sensitive values."""
         from ..core.secrets import cloud_secrets
         return cloud_secrets.audit_secrets_presence(required_keys=required_keys)
-
-    # ---------------------------------------------------------------------------
-    # 🌳 Tree-of-Thoughts Reasoning Swarm
-    # ---------------------------------------------------------------------------
-
-    async def run_tree_of_thoughts_async(
-        self,
-        prompt: str,
-        max_depth: int = 3,
-        branching_factor: int = 3,
-        min_confidence_threshold: float = 0.70,
-    ) -> TreeOfThoughtsTrace:
-        """Asynchronously execute Tree-of-Thoughts multi-branch reasoning with SMT pruning."""
-        user_id = self.user.user_id if self.user else "usr_client_default"
-        return await self.swarm.run_tree_of_thoughts(
-            prompt=prompt,
-            max_depth=max_depth,
-            branching_factor=branching_factor,
-            min_confidence_threshold=min_confidence_threshold,
-            user_id=user_id,
-        )
-
-    def run_tree_of_thoughts(
-        self,
-        prompt: str,
-        max_depth: int = 3,
-        branching_factor: int = 3,
-        min_confidence_threshold: float = 0.70,
-    ) -> TreeOfThoughtsTrace:
-        """Synchronously execute Tree-of-Thoughts multi-branch reasoning with SMT pruning."""
-        return _run_sync(
-            self.run_tree_of_thoughts_async(
-                prompt=prompt,
-                max_depth=max_depth,
-                branching_factor=branching_factor,
-                min_confidence_threshold=min_confidence_threshold,
-            )
-        )
 
     # ---------------------------------------------------------------------------
     # 📬 Webhook Dead Letter Queue (DLQ)
@@ -1461,6 +1349,109 @@ class TruthGPTCloudClient:
         }
 
     # ---------------------------------------------------------------------------
+    # 💳 Monetization, Churn & Executive Dashboard APIs
+    # ---------------------------------------------------------------------------
+
+    def get_churn_and_usage_dashboard(self) -> Dict[str, Any]:
+        """
+        Retrieve complete monetization analytics: MRR, ARR, DAU, WAU, MAU,
+        churn rate, active users, churned users, at-risk users, and recent invoices.
+        """
+        return self.sub_manager.get_churn_and_usage_dashboard()
+
+    def get_payment_gateways_status(self) -> Dict[str, Any]:
+        """Check status of Stripe Live/Test/Sandbox, Crypto USDC/ETH, and Wire gateways."""
+        from ..billing.gateways import PaymentGatewayService
+        return PaymentGatewayService.get_gateway_status()
+
+    def create_checkout_session(
+        self,
+        tier_id: str = "pro",
+        amount_usd: Optional[float] = None,
+        billing_cycle: str = "monthly",
+        customer_email: Optional[str] = None,
+        success_url: Optional[str] = None,
+        cancel_url: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Create a Stripe Checkout Session or instant sandbox checkout session."""
+        from ..billing.gateways import PaymentGatewayService
+        if amount_usd is None or amount_usd <= 0:
+            try:
+                cfg = get_tier_config(CloudTier(tier_id.lower()))
+                amount_usd = cfg.price_yearly_usd if billing_cycle == "yearly" else cfg.price_monthly_usd
+            except Exception:
+                amount_usd = 19.99
+
+        target_uid = self.user.user_id if self.user else self.user_id
+        email = customer_email or (self.user.email if self.user else None)
+        return PaymentGatewayService.create_checkout_session(
+            user_id=target_uid,
+            tier_id=tier_id,
+            amount_usd=amount_usd,
+            billing_cycle=billing_cycle,
+            customer_email=email,
+            success_url=success_url,
+            cancel_url=cancel_url,
+        )
+
+    def create_payment_link(
+        self,
+        amount_usd: float = 19.99,
+        description: str = "TruthGPT Cloud Service Charge",
+        user_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Generate a shareable payment link for custom amounts or token packs."""
+        from ..billing.gateways import PaymentGatewayService
+        target_uid = user_id or (self.user.user_id if self.user else self.user_id)
+        return PaymentGatewayService.create_payment_link(
+            amount_usd=amount_usd,
+            description=description,
+            user_id=target_uid,
+        )
+
+    def charge_user(
+        self,
+        amount_usd: float,
+        user_id: Optional[str] = None,
+        description: str = "TruthGPT Cloud Usage Charge",
+        payment_method: str = "stripe_card",
+    ) -> Dict[str, Any]:
+        """Execute an immediate charge for on-demand cloud usage and generate an official invoice."""
+        target_uid = user_id or (self.user.user_id if self.user else self.user_id)
+        return self.sub_manager.charge_user(
+            user_id=target_uid,
+            amount_usd=amount_usd,
+            description=description,
+            payment_method=payment_method,
+        )
+
+    def cancel_subscription(
+        self,
+        user_id: Optional[str] = None,
+        reason: str = "Usuario canceló suscripción",
+        feedback: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Cancel subscription and record customer churn with reason and feedback."""
+        target_uid = user_id or (self.user.user_id if self.user else self.user_id)
+        return self.sub_manager.cancel_subscription(
+            user_id=target_uid,
+            reason=reason,
+            feedback=feedback,
+        )
+
+    def reactivate_subscription(
+        self,
+        user_id: Optional[str] = None,
+        target_tier: Optional[Union[str, CloudTier]] = None,
+    ) -> Dict[str, Any]:
+        """Reactivate a canceled or churned user, restoring active status."""
+        target_uid = user_id or (self.user.user_id if self.user else self.user_id)
+        return self.sub_manager.reactivate_subscription(
+            user_id=target_uid,
+            target_tier=target_tier,
+        )
+
+    # ---------------------------------------------------------------------------
     # Ergonomic Aliases
     # ---------------------------------------------------------------------------
     verify = verify_claim
@@ -1477,6 +1468,8 @@ class TruthGPTCloudClient:
     verify_fp8 = verify_microscaling_fp8
     tree_of_thoughts = run_tree_of_thoughts
     tot = run_tree_of_thoughts
+    dashboard = get_churn_and_usage_dashboard
+    charge = charge_user
 
 
 __all__ = ["TruthGPTCloudClient"]
