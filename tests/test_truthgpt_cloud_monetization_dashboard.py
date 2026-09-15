@@ -33,7 +33,7 @@ def test_dashboard_html_serves(client):
 def test_root_redirects_to_dashboard(client):
     """Test that root URL (/) redirects to /dashboard."""
     resp = client.get("/", follow_redirects=False)
-    assert resp.status_code == 302
+    assert resp.status_code in (302, 307)
     assert resp.headers["location"] == "/dashboard"
 
 

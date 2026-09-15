@@ -180,14 +180,23 @@ def __getattr__(name: str) -> Any:
 
         # 2. Check if name matches a subpackage directly
         if name in _SUBMODULE_NAMES:
+            if name == "utils_mod":
+                try:
+                    mod = importlib.import_module(f".utils", package=__name__)
+                    _import_cache[name] = mod
+                    globals()[name] = mod
+                    return mod
+                except Exception:
+                    pass
+            target = "utils" if name == "utils_mod" else name
             try:
-                mod = importlib.import_module(f".{name}", package=__name__)
+                mod = importlib.import_module(f".{target}", package=__name__)
                 _import_cache[name] = mod
                 globals()[name] = mod
                 return mod
             except Exception as e:
                 try:
-                    mod = importlib.import_module(f"truthgpt.{name}")
+                    mod = importlib.import_module(f"truthgpt.{target}")
                     _import_cache[name] = mod
                     globals()[name] = mod
                     return mod

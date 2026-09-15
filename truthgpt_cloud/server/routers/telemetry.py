@@ -27,9 +27,9 @@ router = APIRouter(tags=["Telemetry & Observability"])
 
 @router.get("/")
 async def root(request: Request):
-    """Root platform descriptor; redirects to /dashboard (302) by default, or returns JSON if explicitly requesting application/json."""
+    """Root platform descriptor; redirects to /dashboard (307 for browser HTML, 302 generic), or returns JSON if requesting application/json."""
     accept = request.headers.get("accept", "")
-    if "application/json" in accept and "text/html" not in accept and "*/*" not in accept:
+    if "application/json" in accept and "text/html" not in accept:
         return {
             "platform": "TruthGPT Cloud",
             "version": "2.2.0-cloud",
@@ -46,7 +46,8 @@ async def root(request: Request):
                 "Real-time Telemetry & Observability"
             ]
         }
-    return RedirectResponse(url="/dashboard", status_code=302)
+    status_code = 307 if "text/html" in accept else 302
+    return RedirectResponse(url="/dashboard", status_code=status_code)
 
 
 @router.get("/api/v1/health")
