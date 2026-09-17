@@ -13,7 +13,7 @@ try:
 except ImportError:
     _HAS_HTTPX = False
 
-from ..core.tiers import CloudTier, TierConfig, get_tier_config, calculate_request_cost
+from ..core.tiers import CloudTier, TierConfig, get_tier_config, calculate_request_cost, get_all_tiers
 from ..core.health import cloud_health_checker
 from ..core.context import TruthGPTCloudContext, get_cloud_context
 from ..billing.subscription import subscription_manager, UserSubscription

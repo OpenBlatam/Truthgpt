@@ -240,6 +240,11 @@ class TestTruthGPTCloudRefactor:
         assert isinstance(health_rep, dict)
         assert "overall_status" in health_rep
 
+        # Test list_available_tiers static/instance method
+        tiers = client.list_available_tiers()
+        assert isinstance(tiers, list)
+        assert len(tiers) >= 4
+
     def test_cloud_factory_assembly_and_extensions(self):
         """Verify CloudFactory instantiates health checker, secrets, adaptive limiter, and platform assembly."""
         from truthgpt_cloud.core.factory import CloudFactory

@@ -93,7 +93,11 @@ async def get_choice(
     options: Dict[str, str],
     style_name: str = "plum1",
 ) -> str:
-    """Displays a full-screen interactive choice menu with mouse and hotkey support."""
+    """Displays a full-screen interactive choice menu with mouse and hotkey support.
+
+    Adapts dynamically to terminal size: uses compact layouts for small
+    terminals and falls back to a plain Rich prompt on extremely tiny windows.
+    """
     if not _check_prompt_toolkit():
         from rich.prompt import Prompt
         from rich.table import Table
@@ -104,15 +108,35 @@ async def get_choice(
         console.print(table)
         return Prompt.ask("Select", choices=list(options.keys()))
 
+    import shutil
+
     from prompt_toolkit.application import Application, get_app
     from prompt_toolkit.formatted_text import ANSI
     from prompt_toolkit.key_binding import KeyBindings
-    from prompt_toolkit.layout.containers import HSplit, Window, WindowAlign
+    from prompt_toolkit.layout.containers import HSplit, Window, WindowAlign, ScrollablePane
     from prompt_toolkit.layout.controls import FormattedTextControl
     from prompt_toolkit.layout.layout import Layout
     from prompt_toolkit.styles import Style
     from prompt_toolkit.widgets import Box, Button, Label, Shadow
     from rich.console import Console as RichConsole
+
+    # Get current terminal dimensions
+    term_size = shutil.get_terminal_size(fallback=(80, 24))
+    term_w = max(20, term_size.columns or 80)
+    term_h = max(5, term_size.lines or 24)
+    compact = term_h < 20 or term_w < 60
+    ultra_compact = term_h < 10 or term_w < 40
+
+    # On extremely tiny terminals, fall back to simple prompt
+    if ultra_compact:
+        from rich.prompt import Prompt
+        from rich.table import Table
+
+        table = Table(title=title, width=min(term_w - 2, 60))
+        for k, v in options.items():
+            table.add_row(k, v)
+        console.print(table)
+        return Prompt.ask("Select", choices=list(options.keys()))
 
     class SimpleMenuApp:
         def __init__(self):
@@ -122,6 +146,10 @@ async def get_choice(
             @self.kb.add("q")
             @self.kb.add("c-c")
             def _(event):
+                event.app.exit()
+
+            @self.kb.add("escape")
+            def _esc(event):
                 event.app.exit()
 
             for k in options.keys():
@@ -137,47 +165,82 @@ async def get_choice(
                 self.result = val
                 get_app().exit(result=val)
 
+            # Dynamic button width based on terminal width
+            btn_width = max(20, min(50, term_w - 10))
+
             buttons = []
             for k, v in options.items():
-                label = f" < {k:>8}: {v:<25} > "
+                # Truncate label if needed for narrow terminals
+                max_label_len = btn_width - 10
+                display_v = v[:max_label_len] if len(v) > max_label_len else v
+                label = f" < {k:>8}: {display_v:<{max_label_len}} > "
                 buttons.append(
                     Button(
                         label,
                         handler=lambda val=k: set_choice(val),
-                        width=50,
+                        width=btn_width,
                     )
                 )
 
+            # Use actual terminal width for header console
+            header_width = max(40, term_w - 4)
             header_console = RichConsole(
-                file=io.StringIO(), force_terminal=True, width=100
+                file=io.StringIO(), force_terminal=True, width=header_width
             )
             header_console.print(get_header())
             header_content = ANSI(header_console.file.getvalue())
 
-            root = HSplit(
-                [
-                    Window(
-                        content=FormattedTextControl(header_content),
-                        ignore_content_height=True,
-                    ),
-                    Window(height=1),
-                    Label(
-                        f"  [bold {style_name}] {title.upper()} [/bold {style_name}]",
-                        style="bold white",
-                    ),
-                    Window(height=1),
-                    HSplit(buttons, padding=1),
+            # Truncate title to available width
+            display_title = title[:term_w - 10] if len(title) > term_w - 10 else title
+
+            content_parts = [
+                Window(
+                    content=FormattedTextControl(header_content),
+                    ignore_content_height=True,
+                    wrap_lines=True,
+                ),
+            ]
+
+            if not compact:
+                content_parts.append(Window(height=1))
+
+            content_parts.extend([
+                Label(
+                    f"  [bold {style_name}] {display_title.upper()} [/bold {style_name}]",
+                    style="bold white",
+                ),
+            ])
+
+            if not compact:
+                content_parts.append(Window(height=1))
+
+            content_parts.extend([
+                HSplit(buttons, padding=0 if compact else 1),
+            ])
+
+            if not compact:
+                content_parts.extend([
                     Window(height=1),
                     Label(
                         "   [dim]Click or press key to select[/dim]",
                         style="italic",
                     ),
                     Window(height=1),
-                ],
-                align=WindowAlign.CENTER,
-            )
+                ])
 
-            return Layout(Shadow(Box(root, padding=2)))
+            if compact:
+                # On compact terminals, wrap everything in a scrollable pane
+                root = ScrollablePane(
+                    HSplit(content_parts, align=WindowAlign.CENTER)
+                )
+            else:
+                root = HSplit(content_parts, align=WindowAlign.CENTER)
+
+            # Only add Shadow and Box padding on large terminals
+            if not compact:
+                return Layout(Shadow(Box(root, padding=2)))
+            else:
+                return Layout(root)
 
         async def run(self) -> Optional[str]:
             pt_style = style_name
@@ -190,15 +253,25 @@ async def get_choice(
             elif pt_style == "red":
                 pt_style = "ansired"
 
-            app = Application(
-                layout=self.get_layout(),
-                key_bindings=self.kb,
-                style=Style.from_dict({"button.focused": f"bg:{pt_style} white"}),
-                mouse_support=True,
-                full_screen=True,
-            )
-            await app.run_async()
+            try:
+                app = Application(
+                    layout=self.get_layout(),
+                    key_bindings=self.kb,
+                    style=Style.from_dict({"button.focused": f"bg:{pt_style} white"}),
+                    mouse_support=True,
+                    full_screen=True,
+                    min_redraw_interval=0.3 if compact else 0.1,
+                )
+                await app.run_async()
+            except Exception:
+                # Fallback on rendering failure
+                from rich.prompt import Prompt
+                self.result = Prompt.ask(
+                    "[bold cyan]Select[/bold cyan]",
+                    choices=list(options.keys()),
+                )
             return self.result
 
     app = SimpleMenuApp()
     return await app.run()
+

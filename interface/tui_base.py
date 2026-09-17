@@ -24,6 +24,11 @@ from interface.interfaces import BaseTUIAppInterface
 class BaseTUIApp(BaseTUIAppInterface):
     """Base class for interactive TUI screens using prompt_toolkit + Rich."""
 
+    # Minimum dimensions below which we switch to ultra-compact rendering
+    MIN_COMPACT_HEIGHT: int = 20
+    MIN_COMPACT_WIDTH: int = 60
+    MIN_NARROW_WIDTH: int = 40
+
     def __init__(self) -> None:
         self.result: Optional[str] = None
         self.kb: KeyBindings = KeyBindings()
@@ -31,12 +36,34 @@ class BaseTUIApp(BaseTUIAppInterface):
         self.selected_index: int = 0
         self._setup_base_keybindings()
 
+    # ── Terminal Dimension Helpers ─────────────────────────────────
+
+    @staticmethod
+    def get_terminal_dims() -> tuple:
+        """Return (width, height) of the current terminal, with safe fallbacks."""
+        size = shutil.get_terminal_size(fallback=(80, 24))
+        w = max(20, size.columns or 80)
+        h = max(5, size.lines or 24)
+        return (w, h)
+
+    @classmethod
+    def is_compact_mode(cls) -> bool:
+        """True when the terminal is too short for full-size UI elements."""
+        w, h = cls.get_terminal_dims()
+        return h < cls.MIN_COMPACT_HEIGHT or w < cls.MIN_COMPACT_WIDTH
+
+    @classmethod
+    def is_narrow(cls) -> bool:
+        """True when terminal width is very constrained."""
+        w, _ = cls.get_terminal_dims()
+        return w < cls.MIN_NARROW_WIDTH
+
     # ── Rich Console ──────────────────────────────────────────────
 
     @property
     def console(self) -> Console:
         """Lazily create a Rich Console sized to the current terminal."""
-        width = shutil.get_terminal_size().columns or 100
+        width = self.get_terminal_dims()[0]
         if self._console is None or self._console.width != width:
             self._console = Console(
                 file=io.StringIO(), force_terminal=True, width=width
@@ -45,7 +72,7 @@ class BaseTUIApp(BaseTUIAppInterface):
 
     def reset_console(self) -> Console:
         """Reset the internal StringIO buffer and return the fresh console."""
-        width = shutil.get_terminal_size().columns or 100
+        width = self.get_terminal_dims()[0]
         self._console = Console(
             file=io.StringIO(), force_terminal=True, width=width
         )
@@ -145,16 +172,31 @@ class BaseTUIApp(BaseTUIAppInterface):
     # ── Application Runner ────────────────────────────────────────
 
     async def run(self) -> Optional[str]:
-        """Build and run the prompt_toolkit Application. Subclasses must implement `get_layout()`."""
-        app = Application(
-            layout=self.get_layout(),
-            key_bindings=self.kb,
-            style=self.build_style(),
-            mouse_support=True,
-            full_screen=True,
-            refresh_interval=0.5,
-        )
-        await app.run_async()
+        """Build and run the prompt_toolkit Application. Subclasses must implement `get_layout()`.
+
+        Adapts to terminal size: uses a longer refresh interval on compact
+        terminals and wraps the execution in a try/except so that rendering
+        errors on very small windows fall back gracefully.
+        """
+        compact = self.is_compact_mode()
+        refresh = 1.0 if compact else 0.5
+
+        try:
+            app = Application(
+                layout=self.get_layout(),
+                key_bindings=self.kb,
+                style=self.build_style(),
+                mouse_support=True,
+                full_screen=True,
+                refresh_interval=refresh,
+                min_redraw_interval=0.3 if compact else 0.1,
+            )
+            await app.run_async()
+        except Exception:
+            # Fallback: if full_screen fails (e.g. extremely tiny terminal),
+            # try to collect input via a simple Rich prompt instead.
+            from rich.prompt import Prompt
+            self.result = Prompt.ask("[bold cyan]Command[/bold cyan]")
         return self.result
 
     def get_layout(self) -> Any:

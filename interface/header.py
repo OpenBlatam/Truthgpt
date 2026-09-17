@@ -32,12 +32,22 @@ from interface.telemetry import (
 
 
 def get_header(updates: Optional[List[str]] = None) -> Union[Panel, Text]:
-    """Dynamically construct and return the top-level terminal banner based on current theme."""
+    """Dynamically construct and return the top-level terminal banner based on current theme.
+
+    Adapts to terminal size: ultra-compact (< 15 lines), compact (< 30 lines),
+    and full-size modes.
+    """
     theme = USER_PREFS.get("theme", "industrial")
     if theme in ["claude", "anthropic", "minimalist"]:
         return get_claude_header(updates=updates)
 
-    terminal_lines = shutil.get_terminal_size().lines or 24
+    terminal_size = shutil.get_terminal_size(fallback=(80, 24))
+    terminal_lines = terminal_size.lines or 24
+    terminal_cols = max(20, terminal_size.columns or 80)
+
+    if terminal_lines < 15:
+        # Ultra-compact: single line, no panel border
+        return Text("🚀 TruthGPT OS | [R] Reboot", style="bold orange3")
 
     if terminal_lines < 30:
         return Panel(
@@ -52,11 +62,16 @@ def get_header(updates: Optional[List[str]] = None) -> Union[Panel, Text]:
         subtitle="[bold orange3] truthgpt@kernel [/bold orange3]  [bold red][R] Reboot[/bold red]",
         border_style="orange3",
         padding=(1, 2),
+        width=min(terminal_cols, 120),
     )
 
 
 def get_claude_header(updates: Optional[List[str]] = None) -> Text:
-    """Sentient Cyber-Industrial Header: REAL API TELEMETRY & HUD."""
+    """Sentient Cyber-Industrial Header: REAL API TELEMETRY & HUD.
+
+    Dynamically adapts to terminal size with three rendering tiers:
+    ultra-compact (< 15 lines), compact (< 30 lines), and full.
+    """
     theme_color = "plum1"
     version = SYSTEM_VERSION_BANNER
     user_name = USER_PREFS.get("user_name", "Explorer")
@@ -70,18 +85,30 @@ def get_claude_header(updates: Optional[List[str]] = None) -> Text:
     budget_stats = get_real_budget_stats()
     cost_str = f"${budget_stats['total_usd']:.4f}"
 
-    terminal_size = shutil.get_terminal_size()
-    w = max(80, terminal_size.columns or 100)
-    h = terminal_size.lines or 24
+    terminal_size = shutil.get_terminal_size(fallback=(80, 24))
+    w = max(40, terminal_size.columns or 80)
+    h = max(5, terminal_size.lines or 24)
+
+    if h < 15:
+        # Ultra-compact: minimal single-line header
+        final_header = Text()
+        final_header.append(f" {timestamp} ", style="bold white bg:black")
+        final_header.append(f" TruthGPT {version} ", style=f"bold {theme_color}")
+        final_header.append(f" COST:{cost_str} ", style="dim")
+        final_header.append("\n")
+        return final_header
 
     if h < 30:
         telemetry = Text()
         telemetry.append(f" {timestamp} ", style="bold white bg:black")
-        telemetry.append(" █▓▒░ TRUTHGPT CORE ░▒▓█ ", style="bold black bg:white")
+        if w >= 60:
+            telemetry.append(" █▓▒░ TRUTHGPT CORE ░▒▓█ ", style="bold black bg:white")
         telemetry.append(f"  COST:[{cost_str}]  ", style="dim")
         stats = TelemetryProvider.get_stats()
-        telemetry.append(f" CPU: {stats['load']:.0f}% | RAM: {stats['mem']:.0f}% ", style="white")
-        header_line = Text(f"\n── TruthGPT OS {version} ──────────────────────────────────────", style=f"bold {theme_color}")
+        if w >= 70:
+            telemetry.append(f" CPU: {stats['load']:.0f}% | RAM: {stats['mem']:.0f}% ", style="white")
+        divider_len = min(w - 20, 40)
+        header_line = Text(f"\n── TruthGPT OS {version} {'─' * divider_len}", style=f"bold {theme_color}")
         final_header = Text()
         final_header.append(telemetry)
         final_header.append(header_line)
@@ -108,8 +135,9 @@ def get_claude_header(updates: Optional[List[str]] = None) -> Text:
     telemetry.append("● NEURAL LINK: ESTABLISHED ", style="bold green")
 
     # Top Divider with Version (Pure Claude Style)
+    divider_len = max(10, min(60, w - 30))
     header_line = Text(f"\n── TruthGPT OS {version} ", style=f"bold {theme_color}")
-    header_line.append("─" * 60, style="dim")
+    header_line.append("─" * divider_len, style="dim")
 
     # Dynamic column widths based on current console width to prevent clutter/wrapping
     left_w = max(42, int(w * 0.35))
@@ -212,7 +240,7 @@ def get_claude_header(updates: Optional[List[str]] = None) -> Text:
         console.print(table)
 
     final_header.append(Text.from_ansi(capture.get()))
-    final_header.append("─" * 80 + "\n", style="dim")
+    final_header.append("─" * min(w, 80) + "\n", style="dim")
 
     return final_header
 
