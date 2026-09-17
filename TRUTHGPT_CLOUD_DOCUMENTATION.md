@@ -44,6 +44,19 @@ truthgpt_cloud/
 │   ├── registry.py           # Registro de componentes y plugins
 │   ├── schemas.py            # Esquemas Pydantic v2
 │   └── __init__.py
+├── server/                   # Servidor FastAPI Modular & Panel de Control de Cobros
+│   ├── __init__.py           # Fábrica create_app(), lifespan, inyección de dependencias
+│   ├── dashboard_html.py     # Panel Ejecutivo HTML/CSS/JS de Monetización y Churn (/dashboard)
+│   ├── dependencies.py       # Autenticación, resolución de usuario y verificación RBAC de tiers
+│   ├── models.py             # Modelos de petición y respuesta Pydantic v2 para la API REST
+│   └── routers/              # Enrutadores APIRouter desacoplados por dominio
+│       ├── billing.py        # Pasarelas de pago, checkout, webhooks Stripe y churn
+│       ├── cache.py          # Inspección y purga de caché semántica
+│       ├── inference.py      # Inferencia, streaming SSE y OpenAI completions
+│       ├── papers.py         # Catálogo ArXiv y compilación JIT
+│       ├── swarm.py          # Swarms multi-agente y análisis de grafos
+│       ├── telemetry.py      # Métricas Prometheus, SRE alertas y negociación de contenido raíz
+│       └── verification.py   # Verificación Z3 SMT, AST purity y exportación a Lean4/Coq
 ├── billing/                  # Motor de suscripciones, límites y pagos
 │   ├── models.py             # UserSubscription, Invoice, UsageRecord
 │   ├── subscription.py       # SubscriptionManager con soporte concurrente y rotación de claves
@@ -76,6 +89,7 @@ truthgpt_cloud/
 │   ├── circuit_breaker.py    # CircuitBreaker de 3 estados (CLOSED, OPEN, HALF_OPEN)
 │   ├── retry.py              # retry_with_backoff decorador síncrono y asíncrono
 │   ├── adaptive_limiter.py   # AdaptiveConcurrencyLimiter (control AIMD dinámico de concurrencia)
+│   ├── pipeline.py           # Pipeline unificado de resiliencia con breakers y rate limiters
 │   └── __init__.py
 ├── rate_limiting/            # Controladores de tasa en memoria y Redis
 │   ├── sliding_window.py     # SlidingWindowRateLimiter y cloud_rate_limiter
@@ -102,6 +116,8 @@ truthgpt_cloud/
 │   └── __init__.py
 ├── client/                   # SDK Cliente
 │   ├── client.py             # TruthGPTCloudClient con sync, async, streaming SSE y SRE APIs
+│   ├── billing_client.py     # TruthGPTCloudBillingClient para Stripe, checkout y churn
+│   ├── http_layer.py         # Capa de transporte HTTP resiliente con reintentos
 │   └── __init__.py
 ├── storage/                  # Capa de persistencia
 │   ├── base.py               # Protocolo StorageBackend
@@ -109,6 +125,7 @@ truthgpt_cloud/
 │   ├── atomic.py             # AtomicJsonStorage transaccional
 │   ├── sqlite_storage.py     # SqliteStorageBackend para alta concurrencia
 │   ├── memory_storage.py     # MemoryStorageBackend para pruebas y ejecución volátil
+│   ├── migrator.py           # Migrador bidireccional JSON <-> SQLite
 │   └── __init__.py
 ├── papers/                   # Catálogo y compilador JIT de investigación SOTA
 │   ├── registry.py           # SOTA_PAPERS_CATALOG (FlashAttention-3, DeepSeek, etc.)
@@ -126,11 +143,13 @@ truthgpt_cloud/
 
 ## 🚀 Guía de Inicio Rápido
 
-### 1. Iniciar el Servidor FastAPI de TruthGPT Cloud
+### 1. Iniciar el Servidor FastAPI y Panel de Control
 ```bash
 python truthgpt_cloud_server.py
+# O ejecute el script por lotes:
+start_truthgpt_dashboard.bat
 ```
-*El servidor iniciará en `http://localhost:8000` con documentación OpenAPI interactiva en `http://localhost:8000/docs`.*
+*El servidor iniciará en `http://localhost:8080` con el Panel de Control Ejecutivo en `http://localhost:8080/dashboard` y la documentación OpenAPI en `http://localhost:8080/docs`.*
 
 ### 2. Uso mediante el SDK de Python
 ```python
@@ -256,9 +275,10 @@ El CLI interactivo ofrece 21 opciones operativas para desarrolladores e ingenier
 - `[16]` Verificación de estabilidad numérica y mitigación de explosión de gradientes
 - `[17]` Ejecución de Swarm con topologías avanzadas (Star, Hierarchical, Mesh, Ring)
 - `[18]` Inspección operativa de Circuit Breakers y reinicio manual de resiliencia
-- `[19]` Monitoreo SRE: Reglas de alerta, histórico de eventos y Error Budget Burndown
-- `[20]` Inspección y purga bajo demanda de entradas expiradas de la caché semántica
-- `[21]` Auditoría criptográfica del Ledger SHA-256 y tokens de sesión temporales
+- [19] Monitoreo SRE: Reglas de alerta, histórico de eventos y Error Budget Burndown
+- [20] Inspección y purga bajo demanda de entradas expiradas de la caché semántica
+- [21] Auditoría criptográfica del Ledger SHA-256 y tokens de sesión temporales
+- [22] Panel Ejecutivo de Cobros, Churn y Usuarios Activos (Dashboard)
 
 ---
 
@@ -266,6 +286,17 @@ El CLI interactivo ofrece 21 opciones operativas para desarrolladores e ingenier
 
 | Categoría | Método | Endpoint | Descripción |
 | :--- | :--- | :--- | :--- |
+| **Dashboard** | `GET` | `/dashboard` | Panel HTML interactivo de monetización, MRR, churn y gestión |
+| | `GET` | `/api/v1/cloud/dashboard/overview` | KPIs financieros (MRR, ARR, Churn Rate, LTV, Active Users) |
+| **Monetización & Pagos** | `GET` | `/api/v1/cloud/billing/gateway/status` | Estado y modos de pasarelas de pago (Stripe, Crypto USDC, Mock) |
+| | `POST` | `/api/v1/cloud/billing/checkout/session` | Creación de sesiones de pago Stripe Checkout con URLs de retorno |
+| | `POST` | `/api/v1/cloud/billing/payment-link` | Enlaces directos de pago con expiración configurable |
+| | `POST` | `/api/v1/cloud/billing/charge` | Cobro directo contra tarjeta o balance con emisión de factura |
+| | `POST` | `/api/v1/cloud/billing/portal/session` | Creación de sesión de Customer Portal para gestión de tarjetas |
+| | `POST` | `/api/v1/cloud/billing/cancel` | Cancelación de suscripción con registro de feedback de churn |
+| | `POST` | `/api/v1/cloud/billing/reactivate` | Reactivación inmediata de usuario churned |
+| | `POST` | `/api/v1/cloud/billing/activity` | Registro de actividad para cálculo predictivo de riesgo de churn |
+| | `POST` | `/api/v1/cloud/billing/stripe/webhook` | Procesamiento idempotente de webhooks de Stripe (invoices, subs) |
 | **Inferencia** | `POST` | `/api/v1/cloud/chat/completions` | Endpoint compatible con especificación OpenAI |
 | | `POST` | `/api/v1/cloud/infer` | Inferencia con demostración formal Z3 opcional |
 | | `GET` | `/api/v1/cloud/stream` | Streaming de tokens en tiempo real (SSE) |
@@ -311,7 +342,7 @@ El CLI interactivo ofrece 21 opciones operativas para desarrolladores e ingenier
 
 ## 🧪 Validación y Tests Automatizados
 
-La plataforma cuenta con **más de 125 tests automatizados** distribuidos en 10 suites integrales que garantizan 100% de confiabilidad, resiliencia y conformidad formal:
+La plataforma cuenta con **más de 250 tests automatizados** distribuidos en suites unitarias y de integración que garantizan 100% de confiabilidad, resiliencia, cobros y conformidad formal:
 
 ```bash
 # Ejecución completa de suites de pruebas unitarias y de integración
@@ -320,10 +351,18 @@ pytest tests/unit/test_truthgpt_cloud_resilience_and_alerts.py \
        tests/unit/test_truthgpt_cloud_enhancements.py \
        tests/unit/test_truthgpt_cloud_comprehensive_enhancements.py \
        tests/unit/test_truthgpt_cloud_full_platform_enhancements.py \
+       tests/unit/test_truthgpt_cloud_storage_and_schemas.py \
+       tests/unit/test_truthgpt_cloud_redis_and_logging.py \
+       tests/unit/test_truthgpt_cloud_nextgen_libraries.py \
        tests/test_truthgpt_cloud.py \
        tests/test_truthgpt_cloud_enhanced.py \
        tests/test_truthgpt_cloud_enhancements.py \
        tests/test_truthgpt_cloud_refactor.py \
+       tests/test_truthgpt_cloud_monetization_dashboard.py \
+       tests/test_monetization_and_dashboard.py \
+       tests/test_monetization_churn_dashboard.py \
+       test_truthgpt_dashboard_billing.py \
+       test_truthgpt_cloud_monetization_churn.py \
        test_truthgpt_cloud_complete.py \
        test_truthgpt_cloud_comprehensive.py \
        test_truthgpt_cloud_suite.py -v

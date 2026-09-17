@@ -182,21 +182,26 @@ def __getattr__(name: str) -> Any:
         if name in _SUBMODULE_NAMES:
             if name == "utils_mod":
                 try:
-                    mod = importlib.import_module(f".utils", package=__name__)
+                    mod = importlib.import_module(".utils", package=__name__)
                     _import_cache[name] = mod
                     globals()[name] = mod
                     return mod
                 except Exception:
-                    pass
-            target = "utils" if name == "utils_mod" else name
+                    try:
+                        import utils_mod as _um
+                        _import_cache[name] = _um
+                        globals()[name] = _um
+                        return _um
+                    except Exception:
+                        pass
             try:
-                mod = importlib.import_module(f".{target}", package=__name__)
+                mod = importlib.import_module(f".{name}", package=__name__)
                 _import_cache[name] = mod
                 globals()[name] = mod
                 return mod
             except Exception as e:
                 try:
-                    mod = importlib.import_module(f"truthgpt.{target}")
+                    mod = importlib.import_module(f"truthgpt.{name}")
                     _import_cache[name] = mod
                     globals()[name] = mod
                     return mod
