@@ -11,7 +11,7 @@ import shutil
 
 from rich.console import Console
 from prompt_toolkit.application import get_app
-from prompt_toolkit.layout.containers import VSplit, HSplit, Window, WindowAlign, ScrollablePane
+from prompt_toolkit.layout.containers import VSplit, HSplit, Window, WindowAlign, ScrollOffsets
 from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.layout.layout import Layout
 from prompt_toolkit.widgets import Button, Box, Shadow, TextArea
@@ -92,12 +92,10 @@ class InteractiveDashboardApp(BaseTUIApp):
 
         if compact:
             # Compact layout: minimize decorative elements, make content scrollable
-            scrollable_body = ScrollablePane(
-                HSplit([
+            scrollable_body = HSplit([
                     Window(content=static_content, wrap_lines=True),
                     main_content,
                 ])
-            )
             root_container = HSplit([
                 scrollable_body,
                 Window(height=1, char="─", style="class:dim"),
