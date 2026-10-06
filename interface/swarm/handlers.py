@@ -6,6 +6,7 @@ Contains: ask, telemetry, persona tuning, expert matrix, MCP, math, composer.
 """
 
 import time
+import asyncio
 import inspect
 import logging
 from pathlib import Path
@@ -28,13 +29,22 @@ logger = logging.getLogger(__name__)
 
 @cc_step("Swarm Router")
 async def handle_swarm_ask():
-    prompt = get_input("Enter your question for the swarm")
+    prompt = get_input("Enter your question for the swarm (0 to cancel)")
+    if not prompt or prompt in ("0", "exit", "back"):
+        return
     engine = USER_PREFS["preferred_engine"]
     log_activity("Swarm Ask", prompt)
     with console.status(f"[bold blue]Routing to expert agents using {engine}...[/bold blue]"):
         try:
             import cli
-            await cli.async_swarm_ask(prompt=prompt, user_id="cli_user", stream=False, engine=engine)
+            await asyncio.wait_for(
+                cli.async_swarm_ask(prompt=prompt, user_id="cli_user", stream=False, engine=engine),
+                timeout=120,
+            )
+        except asyncio.TimeoutError:
+            console.print("[bold yellow]⌛ Request timed out after 120s. Returning to menu.[/bold yellow]")
+        except KeyboardInterrupt:
+            console.print("\n[bold yellow]↩ Interrupted. Returning to menu.[/bold yellow]")
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
     wait_for_user(force=True)

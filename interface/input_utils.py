@@ -77,6 +77,8 @@ def get_input(
                 ).strip()
                 if not result and default:
                     return default
+                if not result:
+                    return "0"
                 return result
             except (EOFError, KeyboardInterrupt):
                 return "0"
@@ -85,7 +87,11 @@ def get_input(
 
     from rich.prompt import Prompt
 
-    return Prompt.ask(message, choices=choices, default=default, password=password)
+    try:
+        result = Prompt.ask(message, choices=choices, default=default, password=password)
+    except (EOFError, KeyboardInterrupt):
+        return default or "0"
+    return result
 
 
 async def get_choice(
@@ -113,7 +119,7 @@ async def get_choice(
     from prompt_toolkit.application import Application, get_app
     from prompt_toolkit.formatted_text import ANSI
     from prompt_toolkit.key_binding import KeyBindings
-    from prompt_toolkit.layout.containers import HSplit, Window, WindowAlign, ScrollablePane
+    from prompt_toolkit.layout.containers import HSplit, Window, WindowAlign
     from prompt_toolkit.layout.controls import FormattedTextControl
     from prompt_toolkit.layout.layout import Layout
     from prompt_toolkit.styles import Style
@@ -229,10 +235,8 @@ async def get_choice(
                 ])
 
             if compact:
-                # On compact terminals, wrap everything in a scrollable pane
-                root = ScrollablePane(
-                    HSplit(content_parts, align=WindowAlign.CENTER)
-                )
+                # On compact terminals, use plain HSplit (ScrollablePane not available in pt 3.0.x)
+                root = HSplit(content_parts, align=WindowAlign.CENTER)
             else:
                 root = HSplit(content_parts, align=WindowAlign.CENTER)
 

@@ -18,6 +18,8 @@ class TestTruthGPTCloudRefactor:
         
         assert hasattr(truthgpt_cloud, "__version__")
         assert truthgpt_cloud.__version__ == "2.2.0-cloud"
+        assert hasattr(truthgpt_cloud, "create_app")
+        assert hasattr(truthgpt_cloud, "app")
         
         for export_name in truthgpt_cloud.__all__:
             assert hasattr(truthgpt_cloud, export_name), f"Missing export '{export_name}' in truthgpt_cloud"
@@ -37,6 +39,7 @@ class TestTruthGPTCloudRefactor:
             "truthgpt_cloud.security",
             "truthgpt_cloud.telemetry",
             "truthgpt_cloud.rate_limiting",
+            "truthgpt_cloud.resilience",
             "truthgpt_cloud.server",
         ]
         
@@ -270,3 +273,154 @@ class TestTruthGPTCloudRefactor:
         assert "router" in platform
         assert "rate_limiter" in platform
         assert "swarm" in platform
+
+    def test_client_mixins_composition(self):
+        """Verify TruthGPTCloudClient composition with ClientHttpMixin and ClientBillingMixin."""
+        from truthgpt_cloud import TruthGPTCloudClient, ClientBillingMixin, ClientHttpMixin, CloudTier
+        
+        assert issubclass(TruthGPTCloudClient, ClientHttpMixin)
+        assert issubclass(TruthGPTCloudClient, ClientBillingMixin)
+
+        client = TruthGPTCloudClient(tier=CloudTier.PRO)
+        assert client.is_authenticated is True
+        assert client.tier == CloudTier.PRO
+        assert client.whoami()["tier"] == "pro"
+        assert client.profile()["tier"] == "pro"
+        assert hasattr(client, "http_get")
+        assert hasattr(client, "http_post")
+        assert hasattr(client, "charge_user")
+        assert hasattr(client, "charge_service")
+        assert hasattr(client, "dashboard")
+
+    def test_billing_modular_subsystem_delegation(self):
+        """Verify subscription_manager cleanly delegates to token_packs, promo, invoicing, and churn_lifecycle."""
+        from truthgpt_cloud import (
+            subscription_manager,
+            get_token_pack_catalog,
+            get_token_pack,
+            validate_token_pack_id,
+            calculate_promo_discount,
+            VALID_PROMO_CODES,
+            compute_churn_and_usage_dashboard,
+            calculate_user_activity_metrics,
+            charge_user_handler,
+            CloudTier,
+        )
+
+        # 1. Token packs
+        catalog = get_token_pack_catalog()
+        assert len(catalog) >= 4
+        pack = get_token_pack("pack_starter")
+        assert pack is not None
+        assert pack["tokens"] == 500_000
+        validated = validate_token_pack_id("pack_pro")
+        assert validated["pack_id"] == "pack_pro"
+        assert subscription_manager.get_token_pack_catalog() == catalog
+
+        # 2. Promo discount
+        assert "TRUTH2026" in VALID_PROMO_CODES
+        final, discount, promo = calculate_promo_discount(100.0, "TRUTH2026")
+        assert discount == 20.0
+        assert final == 80.0
+        assert promo == "TRUTH2026"
+
+        # 3. User activity & churn dashboard
+        user = subscription_manager.get_user("usr_default_demo")
+        if user:
+            sec_inactive, days_inactive, is_dau, is_wau, is_mau = calculate_user_activity_metrics(user, 1000000000.0)
+            assert isinstance(days_inactive, float)
+
+        dash = subscription_manager.get_churn_and_usage_dashboard()
+        assert dash["success"] is True
+        assert "kpis" in dash
+        assert "mrr_usd" in dash["kpis"]
+
+        # 4. Invoicing
+        charge_res = charge_user_handler(
+            subscription_manager=subscription_manager,
+            user_id="usr_default_demo",
+            amount_usd=2.50,
+            description="Modular charge test",
+        )
+        assert charge_res["success"] is True
+        assert charge_res["amount_usd"] == 2.50
+
+    def test_resilience_and_storage_exports(self):
+        """Verify top-level exports for ResiliencePipeline and StorageMigrator."""
+        from truthgpt_cloud import (
+            ResiliencePipeline,
+            ResiliencePipelineMetrics,
+            resilience_pipeline,
+            execute_with_resilience,
+            StorageMigrator,
+            StorageMigrationError,
+            sync_storage_backends,
+        )
+
+        assert callable(execute_with_resilience)
+        assert isinstance(resilience_pipeline, ResiliencePipeline)
+
+        # Pipeline test
+        res = execute_with_resilience(lambda: 42)
+        assert res == 42
+
+        # Storage migrator
+        assert StorageMigrator is not None
+        assert callable(sync_storage_backends)
+
+    def test_subscription_manager_interface_conformance_and_registry(self):
+        """Verify SubscriptionManager conforms to ISubscriptionManager and is registered in CloudRegistry."""
+        from truthgpt_cloud.core.interfaces import ISubscriptionManager
+        from truthgpt_cloud.billing.subscription import SubscriptionManager, subscription_manager
+        from truthgpt_cloud.core.registry import CloudRegistry
+        from truthgpt_cloud import CloudTier
+
+        # 1. Interface conformance
+        assert issubclass(SubscriptionManager, ISubscriptionManager)
+        assert isinstance(subscription_manager, ISubscriptionManager)
+
+        # Test interface methods
+        user = subscription_manager.get_user("usr_default_demo")
+        if user:
+            # get_user_subscription
+            sub = subscription_manager.get_user_subscription(user.user_id)
+            assert sub is not None
+            assert sub.user_id == user.user_id
+
+            # authenticate_api_key
+            if user.api_keys:
+                auth_user = subscription_manager.authenticate_api_key(user.api_keys[0])
+                assert auth_user is not None
+                assert auth_user.user_id == user.user_id
+
+            # record_usage
+            subscription_manager.record_usage(user.user_id, tokens=50, verifications=1)
+
+            # upgrade_subscription with new_tier parameter
+            res = subscription_manager.upgrade_subscription(
+                user_id=user.user_id,
+                new_tier=CloudTier.PRO,
+                billing_cycle="monthly"
+            )
+            assert res["success"] is True
+            assert res["tier"] == "pro"
+
+        # 2. CloudRegistry integration
+        sub_cls = CloudRegistry.get_subscription_manager("default")
+        assert sub_cls is SubscriptionManager
+        assert "default" in CloudRegistry.list_subscription_managers()
+        assert "subscription_manager" in CloudRegistry.list_subscription_managers()
+
+    def test_extended_verification_exports(self):
+        """Verify extended verification tools, certificate ledger, and Isabelle exporter."""
+        import truthgpt_cloud
+        import truthgpt_cloud.verifier as verifier_bridge
+
+        for sym in [
+            "verify_certificate_chain",
+            "ProofCertificateLedger",
+            "generate_isabelle_theorem",
+            "SecurityHazardVisitor",
+        ]:
+            assert hasattr(truthgpt_cloud, sym), f"Missing export '{sym}' in truthgpt_cloud"
+            assert hasattr(verifier_bridge, sym), f"Missing export '{sym}' in truthgpt_cloud.verifier"

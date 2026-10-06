@@ -23,6 +23,17 @@ from .billing import (
     webhook_manager,
     hash_api_key,
     mask_api_key,
+    get_token_pack_catalog,
+    get_token_pack,
+    validate_token_pack_id,
+    VALID_PROMO_CODES,
+    calculate_promo_discount,
+    calculate_user_activity_metrics,
+    compute_churn_and_usage_dashboard,
+    charge_user_handler,
+    charge_usage_tokens_handler,
+    get_user_invoices_handler,
+    get_invoice_receipt_handler,
 )
 from .cache import (
     _HAS_SIMSIMD,
@@ -32,7 +43,12 @@ from .cache import (
     RedisProofCacheBackend,
     proof_cache,
 )
-from .client import TruthGPTCloudClient
+from .client import (
+    TruthGPTCloudClient,
+    ClientBillingMixin,
+    ClientHttpMixin,
+    _run_sync,
+)
 from .core import (
     CLOUD_API_VERSION,
     CLOUD_PLATFORM_VERSION,
@@ -145,6 +161,10 @@ from .resilience import (
     RetryConfig,
     retry_with_backoff,
     AdaptiveConcurrencyLimiter,
+    ResiliencePipeline,
+    ResiliencePipelineMetrics,
+    resilience_pipeline,
+    execute_with_resilience,
 )
 from .routing import (
     _HAS_TIKTOKEN,
@@ -171,6 +191,9 @@ from .storage import (
     SqliteStorageBackend,
     MemoryStorageBackend,
     StorageBackend,
+    StorageMigrator,
+    StorageMigrationError,
+    sync_storage_backends,
 )
 from .swarm import (
     _HAS_NETWORKX,
@@ -230,8 +253,11 @@ from .verification import (
     generate_coq_theorem,
     generate_ed25519_keypair,
     generate_lean4_theorem,
+    generate_isabelle_theorem,
     verify_merkle_inclusion,
     verify_proof_certificate,
+    verify_certificate_chain,
+    ProofCertificateLedger,
     z3_solver_engine,
     verify_attention_invariants,
     verify_quantization_safety,
@@ -255,8 +281,13 @@ from .verification import (
     verify_numerical_stability,
     verify_code_purity,
     verify_code_purity_and_invariants,
+    SecurityHazardVisitor,
     DomainInvariantsVerifier,
     CodePurityVerifier,
+)
+from .server import (
+    create_app,
+    app,
 )
 
 __version__ = CLOUD_PLATFORM_VERSION
@@ -266,6 +297,8 @@ __all__ = [
     "__version__",
     "CLOUD_PLATFORM_VERSION",
     "CLOUD_API_VERSION",
+    "create_app",
+    "app",
     "CloudTier",
     "TierConfig",
     "TIER_CONFIGURATIONS",
@@ -337,6 +370,17 @@ __all__ = [
     "SubscriptionManager",
     "subscription_manager",
     "TOKEN_PACK_CATALOG",
+    "get_token_pack_catalog",
+    "get_token_pack",
+    "validate_token_pack_id",
+    "VALID_PROMO_CODES",
+    "calculate_promo_discount",
+    "calculate_user_activity_metrics",
+    "compute_churn_and_usage_dashboard",
+    "charge_user_handler",
+    "charge_usage_tokens_handler",
+    "get_user_invoices_handler",
+    "get_invoice_receipt_handler",
     "PaymentGatewayService",
     "validate_subscription_db",
 
@@ -359,6 +403,9 @@ __all__ = [
     "SqliteStorageBackend",
     "MemoryStorageBackend",
     "AtomicJsonStorage",
+    "StorageMigrator",
+    "StorageMigrationError",
+    "sync_storage_backends",
 
     # 6. Formal Verification, SMT Engine & Domain Invariants
     "ProofStep",
@@ -368,10 +415,13 @@ __all__ = [
     "MerkleTree",
     "compute_merkle_root",
     "verify_proof_certificate",
+    "verify_certificate_chain",
+    "ProofCertificateLedger",
     "verify_merkle_inclusion",
     "generate_ed25519_keypair",
     "generate_lean4_theorem",
     "generate_coq_theorem",
+    "generate_isabelle_theorem",
     "CloudFormalVerifier",
     "cloud_verifier",
     "Z3TheoremSolver",
@@ -400,6 +450,7 @@ __all__ = [
     "verify_tensor_shapes",
     "verify_numerical_stability",
     "verify_code_purity",
+    "SecurityHazardVisitor",
     "DomainInvariantsVerifier",
     "CodePurityVerifier",
 
@@ -474,6 +525,10 @@ __all__ = [
     "retry_with_backoff",
     "RetryConfig",
     "AdaptiveConcurrencyLimiter",
+    "ResiliencePipeline",
+    "ResiliencePipelineMetrics",
+    "resilience_pipeline",
+    "execute_with_resilience",
 
     # 12. Domain Exceptions
     "TruthGPTCloudError",
@@ -501,6 +556,9 @@ __all__ = [
 
     # 14. Client SDK
     "TruthGPTCloudClient",
+    "ClientBillingMixin",
+    "ClientHttpMixin",
+    "_run_sync",
 
     # 15. Platform Context, Health & Secrets
     "TruthGPTCloudContext",

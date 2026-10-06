@@ -257,7 +257,9 @@ async def swarm_menu() -> None:
             idx = int(choice)
             if 1 <= idx <= len(active_agents):
                 target = active_agents[idx - 1]
-                prompt = get_input(f"Query {target.name}")
+                prompt = get_input(f"Query {target.name} (0 to cancel)")
+                if not prompt or prompt in ("0", "exit", "back"):
+                    continue
                 console.print(
                     Panel(
                         "[italic dim]Thinking... selecting optimal tools and context.[/italic dim]",
@@ -265,15 +267,24 @@ async def swarm_menu() -> None:
                         border_style="plum1",
                     )
                 )
-                response = await target.process(
-                    prompt, context={"user_id": "cli"}
-                )
-                content = (
-                    response.content
-                    if hasattr(response, "content")
-                    else str(response)
-                )
-                console.print(
-                    get_theme_panel(content, title=f"🤖 {target.name} Response")
-                )
+                try:
+                    import asyncio as _aio
+                    response = await _aio.wait_for(
+                        target.process(prompt, context={"user_id": "cli"}),
+                        timeout=120,
+                    )
+                    content = (
+                        response.content
+                        if hasattr(response, "content")
+                        else str(response)
+                    )
+                    console.print(
+                        get_theme_panel(content, title=f"🤖 {target.name} Response")
+                    )
+                except _aio.TimeoutError:
+                    console.print("[bold yellow]⌛ Request timed out. Returning to menu.[/bold yellow]")
+                except KeyboardInterrupt:
+                    console.print("\n[bold yellow]↩ Interrupted. Returning to menu.[/bold yellow]")
+                except Exception as e:
+                    console.print(f"[red]Error: {e}[/red]")
                 wait_for_user(force=True)

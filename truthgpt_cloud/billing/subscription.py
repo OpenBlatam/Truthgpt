@@ -23,6 +23,7 @@ from ..core.exceptions import (
     AuthenticationError,
     TruthGPTCloudError,
 )
+from ..core.interfaces import ISubscriptionManager
 from .models import UsageRecord, Invoice, ApiKeyInfo, WebhookSubscription, UserSubscription
 from ..storage import StorageBackend, AtomicJsonStorage, SqliteStorageBackend, MemoryStorageBackend
 from .gateways import PaymentGatewayService
@@ -45,42 +46,33 @@ def hash_api_key(raw_key: str) -> str:
         return ""
     return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
 
-TOKEN_PACK_CATALOG: List[Dict[str, Any]] = [
-    {
-        "pack_id": "pack_starter",
-        "name": "Starter Boost Pack",
-        "tokens": 500_000,
-        "price_usd": 5.00,
-        "description": "500,000 tokens adicionales para picos de inferencia y verificación SMT."
-    },
-    {
-        "pack_id": "pack_pro",
-        "name": "Pro Research Pack",
-        "tokens": 2_500_000,
-        "price_usd": 19.00,
-        "description": "2,500,000 tokens adicionales con prioridad de cómputo."
-    },
-    {
-        "pack_id": "pack_scale",
-        "name": "Scale Enterprise Pack",
-        "tokens": 10_000_000,
-        "price_usd": 65.00,
-        "description": "10,000,000 tokens para despliegues a gran escala y swarms paralelos."
-    },
-    {
-        "pack_id": "pack_enterprise",
-        "name": "Frontier Ultra Pack",
-        "tokens": 50_000_000,
-        "price_usd": 250.00,
-        "description": "50,000,000 tokens para cargas masivas con SLA dedicado."
-    }
-]
+from .token_packs import (
+    TOKEN_PACK_CATALOG,
+    get_token_pack_catalog,
+    get_token_pack,
+    validate_token_pack_id,
+)
+from .promo import (
+    VALID_PROMO_CODES,
+    calculate_promo_discount,
+)
+from .invoicing import (
+    charge_user_handler,
+    charge_usage_tokens_handler,
+    get_user_invoices_handler,
+    get_invoice_receipt_handler,
+)
+from .churn_lifecycle import (
+    calculate_user_activity_metrics,
+    compute_churn_and_usage_dashboard,
+)
 
 
-class SubscriptionManager:
+class SubscriptionManager(ISubscriptionManager):
     """
     Centralized subscription, accounting, and quota manager for TruthGPT Cloud.
     Persists data in pluggable storage backends (Atomic JSON, SQLite, In-Memory) for reliability across worker processes.
+    Implements the canonical ISubscriptionManager interface contract.
     """
 
     def __init__(
@@ -516,48 +508,65 @@ class SubscriptionManager:
     # Ergonomic alias
     generate_api_key = generate_new_api_key
 
+    # ---------------------------------------------------------------------------
+    # ISubscriptionManager Interface Implementations
+    # ---------------------------------------------------------------------------
+
+    def get_user_subscription(self, user_id: str) -> Optional[UserSubscription]:
+        """Retrieve user subscription state (implements ISubscriptionManager)."""
+        return self.get_user(user_id)
+
+    def authenticate_api_key(self, api_key: str) -> Optional[UserSubscription]:
+        """Validate API key and return authenticated user subscription (implements ISubscriptionManager)."""
+        return self.get_user_by_api_key(api_key)
+
+    def record_usage(
+        self,
+        user_id: str,
+        tokens: int,
+        verifications: int = 0,
+    ) -> None:
+        """Record token consumption and verification metrics (implements ISubscriptionManager)."""
+        self.record_activity(
+            user_id=user_id,
+            tokens=tokens,
+            operation="record_usage",
+        )
+
+    record_user_activity = record_usage
 
     def upgrade_subscription(
         self,
         user_id: str,
-        target_tier: Union[CloudTier, str],
+        target_tier: Optional[Union[CloudTier, str]] = None,
         billing_cycle: str = "monthly",
         payment_method: str = "stripe_card",
-        promo_code: Optional[str] = None
+        promo_code: Optional[str] = None,
+        new_tier: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """Upgrade or modify subscription tier, applying optional promo codes, and create invoice."""
+        tier_to_apply = target_tier if target_tier is not None else new_tier
+        if tier_to_apply is None:
+            raise ValueError("target_tier or new_tier must be provided.")
+
         user = self.get_user(user_id)
         if not user:
             raise AuthenticationError(f"Usuario {user_id} no encontrado.")
 
-        if isinstance(target_tier, str):
-            target_tier = CloudTier(target_tier.lower())
+        if isinstance(tier_to_apply, str):
+            tier_to_apply = CloudTier(tier_to_apply.lower())
 
-        target_cfg = get_tier_config(target_tier)
+        target_cfg = get_tier_config(tier_to_apply)
         base_amount = target_cfg.price_yearly_usd if billing_cycle == "yearly" else target_cfg.price_monthly_usd
 
         # Apply promo code discount if provided
-        discount_usd = 0.0
-        applied_promo = None
-        if promo_code:
-            code_clean = promo_code.strip().upper()
-            if code_clean == "TRUTH2026":
-                discount_usd = round(base_amount * 0.20, 2)
-                applied_promo = code_clean
-            elif code_clean == "DEV50":
-                discount_usd = round(base_amount * 0.50, 2)
-                applied_promo = code_clean
-            elif code_clean in ["SINGULARITY100", "FREE100"]:
-                discount_usd = base_amount
-                applied_promo = code_clean
-
-        final_amount = max(0.0, round(base_amount - discount_usd, 2))
+        final_amount, discount_usd, applied_promo = calculate_promo_discount(base_amount, promo_code)
 
         # Process payment gateway
         payment_res = PaymentGatewayService.process_payment(
             user_id=user_id,
             amount_usd=final_amount,
-            tier_id=target_tier.value,
+            tier_id=tier_to_apply.value,
             billing_cycle=billing_cycle,
             payment_method=payment_method
         )
@@ -566,7 +575,7 @@ class SubscriptionManager:
         invoice = Invoice(
             invoice_id=payment_res["invoice_id"],
             user_id=user_id,
-            tier_id=target_tier.value,
+            tier_id=tier_to_apply.value,
             amount_usd=final_amount,
             billing_cycle=billing_cycle,
             payment_method=payment_method,
@@ -577,7 +586,7 @@ class SubscriptionManager:
         )
 
         # Update user tier & reset daily limit
-        user.tier = target_tier
+        user.tier = tier_to_apply
         user.billing_cycle = billing_cycle
         user.status = "active"
         user.invoices.insert(0, invoice)
@@ -589,13 +598,13 @@ class SubscriptionManager:
             cloud_telemetry.record_audit_event(
                 "subscription_upgraded",
                 user_id,
-                {"tier": target_tier.value, "amount_usd": final_amount, "discount_usd": discount_usd, "billing_cycle": billing_cycle}
+                {"tier": tier_to_apply.value, "amount_usd": final_amount, "discount_usd": discount_usd, "billing_cycle": billing_cycle}
             )
             from .webhooks import webhook_manager
             webhook_manager.emit_event(
                 "subscription.upgraded",
                 user_id,
-                {"new_tier": target_tier.value, "amount_usd": final_amount, "invoice_id": invoice.invoice_id}
+                {"new_tier": tier_to_apply.value, "amount_usd": final_amount, "invoice_id": invoice.invoice_id}
             )
         except Exception:
             pass
@@ -604,8 +613,8 @@ class SubscriptionManager:
             "success": True,
             "message": f"¡Suscripción actualizada exitosamente a {target_cfg.name}!",
             "user_id": user_id,
-            "tier": target_tier.value,
-            "new_tier": target_tier.value,
+            "tier": tier_to_apply.value,
+            "new_tier": tier_to_apply.value,
             "tier_name": target_cfg.name,
             "invoice": asdict(invoice),
             "payment_details": payment_res,
@@ -638,31 +647,9 @@ class SubscriptionManager:
         if not user:
             raise AuthenticationError(f"Usuario {user_id} no encontrado.")
 
-        pack = next((p for p in TOKEN_PACK_CATALOG if p["pack_id"] == pack_id), None)
-        if not pack:
-            valid_ids = [p["pack_id"] for p in TOKEN_PACK_CATALOG]
-            raise TruthGPTCloudError(
-                f"Paquete de tokens '{pack_id}' no válido. Opciones: {', '.join(valid_ids)}",
-                code="INVALID_PACK",
-                status_code=400
-            )
-
+        pack = validate_token_pack_id(pack_id)
         base_amount = pack["price_usd"]
-        discount_usd = 0.0
-        applied_promo = None
-        if promo_code:
-            code_clean = promo_code.strip().upper()
-            if code_clean == "TRUTH2026":
-                discount_usd = round(base_amount * 0.20, 2)
-                applied_promo = code_clean
-            elif code_clean == "DEV50":
-                discount_usd = round(base_amount * 0.50, 2)
-                applied_promo = code_clean
-            elif code_clean in ["SINGULARITY100", "FREE100"]:
-                discount_usd = base_amount
-                applied_promo = code_clean
-
-        final_amount = max(0.0, round(base_amount - discount_usd, 2))
+        final_amount, discount_usd, applied_promo = calculate_promo_discount(base_amount, promo_code)
 
         # Process payment gateway
         payment_res = PaymentGatewayService.process_payment(
@@ -730,92 +717,20 @@ class SubscriptionManager:
         amount_usd: float,
         description: str = "TruthGPT Cloud Service Charge",
         payment_method: str = "stripe_card",
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Directly charge a TruthGPT user for cloud service compute, inference, or custom features.
         Processes transaction through PaymentGatewayService and records an official invoice.
         """
-        user = self.get_user(user_id)
-        if not user:
-            user = self.get_user_by_api_key(user_id)
-        if not user:
-            raise AuthenticationError(f"Usuario {user_id} no encontrado.")
-
-        if amount_usd <= 0:
-            raise TruthGPTCloudError(
-                f"El monto a cobrar debe ser mayor que 0 (recibido: {amount_usd})",
-                code="INVALID_AMOUNT",
-                status_code=400
-            )
-
-        # Process payment gateway
-        payment_res = PaymentGatewayService.process_payment(
-            user_id=user.user_id,
+        return charge_user_handler(
+            subscription_manager=self,
+            user_id=user_id,
             amount_usd=amount_usd,
-            tier_id=f"service_charge_{user.tier.value}",
-            billing_cycle="metered",
-            payment_method=payment_method
-        )
-
-        # Create invoice record
-        invoice = Invoice(
-            invoice_id=payment_res["invoice_id"],
-            user_id=user.user_id,
-            tier_id=f"charge_{user.tier.value}",
-            amount_usd=amount_usd,
-            billing_cycle="metered",
+            description=description,
             payment_method=payment_method,
-            status="paid",
-            discount_applied_usd=0.0,
-            promo_code=None,
-            created_at=datetime.now(timezone.utc).isoformat()
+            metadata=metadata,
         )
-
-        with self._lock:
-            user.invoices.insert(0, invoice)
-            user.total_billed_usd = round(sum(inv.amount_usd for inv in user.invoices if inv.status == "paid"), 2)
-            self._save_storage()
-
-        try:
-            from ..telemetry import cloud_telemetry
-            cloud_telemetry.record_audit_event(
-                "user_charged",
-                user.user_id,
-                {
-                    "amount_usd": amount_usd,
-                    "description": description,
-                    "payment_method": payment_method,
-                    "invoice_id": invoice.invoice_id,
-                    "metadata": metadata or {}
-                }
-            )
-            from .webhooks import webhook_manager
-            webhook_manager.emit_event(
-                "invoice.paid",
-                user.user_id,
-                {
-                    "invoice_id": invoice.invoice_id,
-                    "amount_usd": amount_usd,
-                    "description": description,
-                    "payment_method": payment_method,
-                    "tier": user.tier.value
-                }
-            )
-        except Exception:
-            pass
-
-        return {
-            "success": True,
-            "message": f"Cobro de ${amount_usd:.2f} USD procesado exitosamente para el usuario {user.name}.",
-            "user_id": user.user_id,
-            "amount_usd": amount_usd,
-            "description": description,
-            "payment_method": payment_method,
-            "invoice_id": invoice.invoice_id,
-            "invoice": asdict(invoice),
-            "payment_details": payment_res
-        }
 
     def charge_usage_tokens(
         self,
@@ -823,28 +738,35 @@ class SubscriptionManager:
         tokens_consumed: int,
         unit_price_per_1k_tokens: float = 0.002,
         description: Optional[str] = None,
-        payment_method: str = "stripe_card"
+        payment_method: str = "stripe_card",
     ) -> Dict[str, Any]:
         """
         Calculate cost for consumed tokens and execute an immediate metered charge for the TruthGPT user.
         """
-        amount_usd = max(0.01, round((tokens_consumed / 1000.0) * unit_price_per_1k_tokens, 4))
-        desc = description or f"Cobro por consumo de {tokens_consumed:,} tokens en TruthGPT Cloud"
-        return self.charge_user(
+        return charge_usage_tokens_handler(
+            subscription_manager=self,
             user_id=user_id,
-            amount_usd=amount_usd,
-            description=desc,
+            tokens_consumed=tokens_consumed,
+            unit_price_per_1k_tokens=unit_price_per_1k_tokens,
+            description=description,
             payment_method=payment_method,
-            metadata={"tokens_consumed": tokens_consumed, "unit_price_per_1k": unit_price_per_1k_tokens}
         )
 
     def get_user_invoices(self, user_id: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """Retrieve paid invoices and billing receipts for a user."""
-        user = self.get_user(user_id) or self.get_user_by_api_key(user_id)
-        if not user:
-            return []
-        invoices = [asdict(inv) for inv in user.invoices]
-        return invoices[:limit] if limit is not None else invoices
+        return get_user_invoices_handler(
+            subscription_manager=self,
+            user_id=user_id,
+            limit=limit,
+        )
+
+    def get_invoice_receipt(self, user_id: str, invoice_id: str) -> Optional[str]:
+        """Generate official ASCII receipt for specified invoice."""
+        return get_invoice_receipt_handler(
+            subscription_manager=self,
+            user_id=user_id,
+            invoice_id=invoice_id,
+        )
 
     def check_and_record_quota(
         self,
@@ -1243,159 +1165,11 @@ class SubscriptionManager:
         Comprehensive executive analytics for who is using the platform and who stopped using it.
         Computes MRR, ARR, DAU, WAU, MAU, Churn Rate, At-Risk users, and recent transaction log.
         """
-        now = time.time()
-        active_users_list = []
-        churned_users_list = []
-        at_risk_users_list = []
-        all_invoices = []
-
-        total_revenue_usd = 0.0
-        mrr_usd = 0.0
-
-        dau_count = 0
-        wau_count = 0
-        mau_count = 0
-
-        with self._lock:
-            for uid, u in self._users.items():
-                tier_cfg = get_tier_config(u.tier)
-                u_invoices = [asdict(inv) for inv in u.invoices]
-                all_invoices.extend(u_invoices)
-
-                # Total billed
-                paid_invoices_sum = sum(inv.amount_usd for inv in u.invoices if inv.status == "paid")
-                user_billed = round(max(float(getattr(u, "total_billed_usd", 0.0)), paid_invoices_sum), 2)
-                total_revenue_usd += user_billed
-
-                # Activity calculation
-                last_act = getattr(u, "last_active_at", None) or getattr(u.usage, "last_reset_timestamp", 0.0)
-                sec_since_active = max(0.0, now - last_act) if last_act else 999999999.0
-                is_dau = sec_since_active <= 86400 or u.usage.tokens_consumed_today > 0
-                is_wau = sec_since_active <= 7 * 86400
-                is_mau = sec_since_active <= 30 * 86400
-
-                if is_dau:
-                    dau_count += 1
-                if is_wau:
-                    wau_count += 1
-                if is_mau:
-                    mau_count += 1
-
-                # Churn vs Active status
-                is_canceled = u.status in ["canceled", "cancelled"] or getattr(u, "churn_status", "") == "churned"
-                is_at_risk = (not is_canceled) and (sec_since_active > 7 * 86400) and (u.tier != CloudTier.FREE)
-
-                user_summary = {
-                    "user_id": u.user_id,
-                    "email": u.email,
-                    "name": u.name,
-                    "tier": u.tier.value,
-                    "tier_name": tier_cfg.name,
-                    "tier_badge": tier_cfg.badge,
-                    "status": u.status,
-                    "churn_status": "churned" if is_canceled else ("at_risk" if is_at_risk else "active"),
-                    "billing_cycle": u.billing_cycle,
-                    "last_active_at": last_act,
-                    "seconds_since_active": round(sec_since_active, 1),
-                    "days_inactive": round(sec_since_active / 86400.0, 1),
-                    "tokens_consumed_today": u.usage.tokens_consumed_today,
-                    "daily_token_limit": tier_cfg.daily_token_limit,
-                    "percent_quota_used": min(100.0, round((u.usage.tokens_consumed_today / max(1, tier_cfg.daily_token_limit)) * 100, 1)),
-                    "total_tokens_all_time": u.usage.total_tokens_consumed,
-                    "total_requests": getattr(u, "total_requests", 0) or u.usage.daily_request_count,
-                    "requests_today": u.usage.daily_request_count,
-                    "total_billed_usd": round(user_billed, 2),
-                    "balance_usd": float(getattr(u, "balance_usd", 0.0)),
-                    "api_keys_count": len(u.api_keys),
-                    "created_at": getattr(u, "created_at", u.subscription_start_date),
-                    "churn_date": getattr(u, "churn_date", None),
-                    "churn_reason": getattr(u, "churn_reason", None),
-                    "churn_feedback": getattr(u, "churn_feedback", None),
-                }
-
-                if is_canceled:
-                    churned_users_list.append(user_summary)
-                else:
-                    active_users_list.append(user_summary)
-                    if is_at_risk:
-                        at_risk_users_list.append(user_summary)
-
-                    # MRR calculation
-                    if u.tier != CloudTier.FREE:
-                        if u.billing_cycle == "yearly":
-                            mrr_usd += tier_cfg.price_yearly_usd / 12.0
-                        else:
-                            mrr_usd += tier_cfg.price_monthly_usd
-
-        # Sort lists
-        active_users_list.sort(key=lambda x: x["last_active_at"], reverse=True)
-        churned_users_list.sort(key=lambda x: x.get("churn_date") or "", reverse=True)
-        at_risk_users_list.sort(key=lambda x: x["days_inactive"], reverse=True)
-        all_invoices.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-
-        total_users = len(self._users)
-        churn_count = len(churned_users_list)
-        churn_rate_pct = round((churn_count / max(1, total_users)) * 100.0, 1)
-        retention_rate_pct = round(100.0 - churn_rate_pct, 1)
-
-        # Recent event logs
-        events_feed = []
-        for inv in all_invoices[:10]:
-            events_feed.append({
-                "type": "invoice_paid",
-                "title": f"Cobro exitoso: ${inv.get('amount_usd', 0):.2f} USD",
-                "user_id": inv.get("user_id"),
-                "timestamp": inv.get("created_at"),
-                "details": f"Plan {inv.get('tier_id', '').upper()} ({inv.get('billing_cycle')})"
-            })
-        for chu in churned_users_list[:5]:
-            events_feed.append({
-                "type": "churn",
-                "title": f"Baja de usuario: {chu['name']}",
-                "user_id": chu["user_id"],
-                "timestamp": chu.get("churn_date") or "",
-                "details": f"Motivo: {chu.get('churn_reason') or 'No especificado'}"
-            })
-        for act in active_users_list[:5]:
-            if act["requests_today"] > 0:
-                events_feed.append({
-                    "type": "activity",
-                    "title": f"Actividad en vivo: {act['name']}",
-                    "user_id": act["user_id"],
-                    "timestamp": datetime.fromtimestamp(act["last_active_at"], timezone.utc).isoformat() if act["last_active_at"] else "",
-                    "details": f"{act['requests_today']} peticiones hoy ({act['tokens_consumed_today']:,} tokens)"
-                })
-
-        events_feed.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-
-        from .gateways import PaymentGatewayService
-        gateway_status = PaymentGatewayService.get_gateway_status()
-
-        return {
-            "success": True,
-            "timestamp": now,
-            "kpis": {
-                "total_users": total_users,
-                "active_users_count": len(active_users_list),
-                "churned_users_count": churn_count,
-                "at_risk_users_count": len(at_risk_users_list),
-                "dau": dau_count,
-                "wau": wau_count,
-                "mau": mau_count,
-                "mrr_usd": round(mrr_usd, 2),
-                "arr_usd": round(mrr_usd * 12.0, 2),
-                "total_revenue_usd": round(total_revenue_usd, 2),
-                "churn_rate_pct": churn_rate_pct,
-                "retention_rate_pct": retention_rate_pct,
-                "total_invoices_count": len(all_invoices)
-            },
-            "active_users": active_users_list,
-            "churned_users": churned_users_list,
-            "at_risk_users": at_risk_users_list,
-            "recent_invoices": all_invoices[:20],
-            "recent_events": events_feed[:25],
-            "gateway_status": gateway_status
-        }
+        return compute_churn_and_usage_dashboard(
+            users=self._users,
+            lock=self._lock,
+            gateway_status=PaymentGatewayService.get_gateway_status(),
+        )
 
     @classmethod
     def create_isolated(cls, seed_demo_users: bool = True) -> "SubscriptionManager":
@@ -1530,4 +1304,5 @@ __all__ = [
     "subscription_manager",
     "mask_api_key",
     "hash_api_key",
+    "TOKEN_PACK_CATALOG",
 ]

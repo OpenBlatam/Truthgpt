@@ -108,25 +108,33 @@ class ClientBillingMixin:
             promo_code=promo_code
         )
 
-    def charge_service(
+    def charge_user(
         self,
         amount_usd: float,
-        description: str = "TruthGPT Cloud Service Compute",
-        payment_method: str = "stripe_card"
+        user_id: Optional[str] = None,
+        description: str = "TruthGPT Cloud Service Charge",
+        payment_method: str = "stripe_card",
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Directly charge the TruthGPT user for cloud service operations, emitting an official invoice receipt.
         """
+        target_uid = user_id or (self.user.user_id if getattr(self, "user", None) else self.user_id)
         return self.sub_manager.charge_user(
-            user_id=self.user_id,
+            user_id=target_uid,
             amount_usd=amount_usd,
             description=description,
-            payment_method=payment_method
+            payment_method=payment_method,
+            metadata=metadata,
         )
+
+    charge_service = charge_user
+    charge = charge_user
 
     def charge_usage_tokens(
         self,
         tokens_consumed: int,
+        user_id: Optional[str] = None,
         unit_price_per_1k_tokens: float = 0.002,
         description: Optional[str] = None,
         payment_method: str = "stripe_card"
@@ -134,17 +142,19 @@ class ClientBillingMixin:
         """
         Charge user for metered token consumption.
         """
+        target_uid = user_id or (self.user.user_id if getattr(self, "user", None) else self.user_id)
         return self.sub_manager.charge_usage_tokens(
-            user_id=self.user_id,
+            user_id=target_uid,
             tokens_consumed=tokens_consumed,
             unit_price_per_1k_tokens=unit_price_per_1k_tokens,
             description=description,
             payment_method=payment_method
         )
 
-    def get_invoices(self, limit: int = 10) -> List[Dict[str, Any]]:
+    def get_invoices(self, user_id: Optional[str] = None, limit: int = 10) -> List[Dict[str, Any]]:
         """Retrieve billing invoices and receipts for the current TruthGPT user."""
-        return self.sub_manager.get_user_invoices(self.user_id, limit=limit)
+        target_uid = user_id or (self.user.user_id if getattr(self, "user", None) else self.user_id)
+        return self.sub_manager.get_user_invoices(target_uid, limit=limit)
 
     # ---------------------------------------------------------------------------
     # API Key Lifecycle
@@ -152,11 +162,13 @@ class ClientBillingMixin:
 
     def generate_api_key(self, label: str = "Default Key", scopes: Optional[List[str]] = None) -> str:
         """Generate a new dedicated API key."""
-        return self.sub_manager.generate_new_api_key(self.user_id, label=label, scopes=scopes)
+        target_uid = self.user.user_id if getattr(self, "user", None) else self.user_id
+        return self.sub_manager.generate_new_api_key(target_uid, label=label, scopes=scopes)
 
     def revoke_api_key(self, api_key: str) -> bool:
         """Revoke an active API key."""
-        return self.sub_manager.revoke_api_key(self.user_id, api_key)
+        target_uid = self.user.user_id if getattr(self, "user", None) else self.user_id
+        return self.sub_manager.revoke_api_key(target_uid, api_key)
 
     def rotate_api_key(
         self,
@@ -165,7 +177,7 @@ class ClientBillingMixin:
         label: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Atomically rotate an existing API key for current user."""
-        target_uid = user_id or (self.user.user_id if self.user else "usr_client_default")
+        target_uid = user_id or (self.user.user_id if getattr(self, "user", None) else self.user_id)
         new_key, key_detail = self.sub_manager.rotate_api_key(
             user_id=target_uid,
             old_api_key=old_api_key,
@@ -198,26 +210,30 @@ class ClientBillingMixin:
         """Retrieve high-level monetization KPIs, churn rates, active and churned users."""
         return self.sub_manager.get_churn_and_usage_dashboard()
 
+    get_churn_and_usage_dashboard = get_dashboard_analytics
+
     def create_checkout_session(
         self,
         tier_id: str = "pro",
-        billing_cycle: str = "monthly",
         amount_usd: Optional[float] = None,
+        billing_cycle: str = "monthly",
+        customer_email: Optional[str] = None,
         success_url: Optional[str] = None,
         cancel_url: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Generate a Stripe Checkout session or sandbox link for payment."""
         from ..billing.gateways import PaymentGatewayService
-        user = self.sub_manager.get_user(self.user_id)
-        email = user.email if user else None
-        if amount_usd is None:
+        if amount_usd is None or amount_usd <= 0:
             try:
                 cfg = get_tier_config(CloudTier(tier_id.lower()))
                 amount_usd = cfg.price_yearly_usd if billing_cycle == "yearly" else cfg.price_monthly_usd
             except Exception:
                 amount_usd = 19.99
+
+        target_uid = self.user.user_id if getattr(self, "user", None) else self.user_id
+        email = customer_email or (self.user.email if getattr(self, "user", None) else None)
         return PaymentGatewayService.create_checkout_session(
-            user_id=self.user_id,
+            user_id=target_uid,
             tier_id=tier_id,
             amount_usd=amount_usd,
             billing_cycle=billing_cycle,
@@ -228,36 +244,42 @@ class ClientBillingMixin:
 
     def create_payment_link(
         self,
-        amount_usd: float,
-        description: str = "TruthGPT Cloud Service Charge"
+        amount_usd: float = 19.99,
+        description: str = "TruthGPT Cloud Service Charge",
+        user_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Generate an immediate shareable payment link."""
         from ..billing.gateways import PaymentGatewayService
+        target_uid = user_id or (self.user.user_id if getattr(self, "user", None) else self.user_id)
         return PaymentGatewayService.create_payment_link(
             amount_usd=amount_usd,
             description=description,
-            user_id=self.user_id
+            user_id=target_uid
         )
 
     def cancel_subscription(
         self,
+        user_id: Optional[str] = None,
         reason: str = "Usuario canceló suscripción",
         feedback: Optional[str] = None
     ) -> Dict[str, Any]:
         """Cancel subscription, recording churn reason and status."""
+        target_uid = user_id or (self.user.user_id if getattr(self, "user", None) else self.user_id)
         return self.sub_manager.cancel_subscription(
-            user_id=self.user_id,
+            user_id=target_uid,
             reason=reason,
             feedback=feedback
         )
 
     def reactivate_subscription(
         self,
+        user_id: Optional[str] = None,
         target_tier: Optional[Union[str, CloudTier]] = None
     ) -> Dict[str, Any]:
         """Reactivate canceled/churned user back to active status."""
+        target_uid = user_id or (self.user.user_id if getattr(self, "user", None) else self.user_id)
         return self.sub_manager.reactivate_subscription(
-            user_id=self.user_id,
+            user_id=target_uid,
             target_tier=target_tier
         )
 
@@ -265,3 +287,8 @@ class ClientBillingMixin:
         """Check payment gateway configuration (Stripe, Crypto, Wire)."""
         from ..billing.gateways import PaymentGatewayService
         return PaymentGatewayService.get_gateway_status()
+
+    get_payment_gateways_status = get_payment_gateway_status
+    churn_analytics = get_dashboard_analytics
+    dashboard = get_dashboard_analytics
+    charge = charge_user

@@ -21,6 +21,7 @@ class CloudRegistry:
     _routers: Dict[str, Type[Any]] = {}
     _health_checkers: Dict[str, Type[Any]] = {}
     _secrets_providers: Dict[str, Type[Any]] = {}
+    _subscription_managers: Dict[str, Type[Any]] = {}
     _builtins_initialized: bool = False
 
     # -------------------------------------------------------------------------
@@ -258,6 +259,32 @@ class CloudRegistry:
             return sorted(list(cls._secrets_providers.keys()))
 
     # -------------------------------------------------------------------------
+    # Subscription Managers
+    # -------------------------------------------------------------------------
+    @classmethod
+    def register_subscription_manager(cls, name: str) -> Callable[[Type[Any]], Type[Any]]:
+        """Decorator to register a custom Subscription Manager class."""
+        def decorator(subclass: Type[Any]) -> Type[Any]:
+            with cls._lock:
+                cls._subscription_managers[name.lower()] = subclass
+            return subclass
+        return decorator
+
+    @classmethod
+    def get_subscription_manager(cls, name: str = "default") -> Optional[Type[Any]]:
+        """Retrieve a registered subscription manager class by name."""
+        cls._ensure_builtins()
+        with cls._lock:
+            return cls._subscription_managers.get(name.lower())
+
+    @classmethod
+    def list_subscription_managers(cls) -> List[str]:
+        """List names of all registered subscription managers."""
+        cls._ensure_builtins()
+        with cls._lock:
+            return sorted(list(cls._subscription_managers.keys()))
+
+    # -------------------------------------------------------------------------
     # Lifecycle & Built-ins
     # -------------------------------------------------------------------------
     @classmethod
@@ -273,6 +300,7 @@ class CloudRegistry:
             cls._routers.clear()
             cls._health_checkers.clear()
             cls._secrets_providers.clear()
+            cls._subscription_managers.clear()
             cls._builtins_initialized = False
 
     @classmethod
@@ -420,6 +448,14 @@ class CloudRegistry:
                 cls._rate_limiters["adaptive"] = AdaptiveConcurrencyLimiter
                 cls._rate_limiters["aimd"] = AdaptiveConcurrencyLimiter
                 cls._rate_limiters["adaptive_concurrency"] = AdaptiveConcurrencyLimiter
+            except ImportError:
+                pass
+
+            # Built-in Subscription Managers
+            try:
+                from ..billing.subscription import SubscriptionManager
+                cls._subscription_managers["default"] = SubscriptionManager
+                cls._subscription_managers["subscription_manager"] = SubscriptionManager
             except ImportError:
                 pass
 

@@ -47,6 +47,27 @@ from ..core.exceptions import (
     AuthenticationError,
 )
 
+from .token_packs import (
+    TOKEN_PACK_CATALOG,
+    get_token_pack_catalog,
+    get_token_pack,
+    validate_token_pack_id,
+)
+from .promo import (
+    VALID_PROMO_CODES,
+    calculate_promo_discount,
+)
+from .churn_lifecycle import (
+    calculate_user_activity_metrics,
+    compute_churn_and_usage_dashboard,
+)
+from .invoicing import (
+    charge_user_handler,
+    charge_usage_tokens_handler,
+    get_user_invoices_handler,
+    get_invoice_receipt_handler,
+)
+
 __all__ = [
     # Domain Models
     "UsageRecord",
@@ -61,6 +82,17 @@ __all__ = [
     "SubscriptionManager",
     "subscription_manager",
     "TOKEN_PACK_CATALOG",
+    "get_token_pack_catalog",
+    "get_token_pack",
+    "validate_token_pack_id",
+    "VALID_PROMO_CODES",
+    "calculate_promo_discount",
+    "calculate_user_activity_metrics",
+    "compute_churn_and_usage_dashboard",
+    "charge_user_handler",
+    "charge_usage_tokens_handler",
+    "get_user_invoices_handler",
+    "get_invoice_receipt_handler",
     "mask_api_key",
     "hash_api_key",
     "PaymentGatewayService",

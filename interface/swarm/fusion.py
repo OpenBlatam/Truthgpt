@@ -382,7 +382,9 @@ async def handle_swarm_fusion(initial_prompt: Optional[str] = None):
     prompt = initial_prompt
 
     if mode == "1":
-        prompt = initial_prompt or get_input("Enter task for the Autonomous Swarm")
+        prompt = initial_prompt or get_input("Enter task for the Autonomous Swarm (0 to cancel)")
+        if not prompt or prompt in ("0", "exit", "back"):
+            return
         selected_keys = await _auto_select_agents(llm, agents_map, prompt)
     else:
         table = Table(title="Available Experts & Specialized Phases")
@@ -396,10 +398,14 @@ async def handle_swarm_fusion(initial_prompt: Optional[str] = None):
             expertise = "Research Discovery (ArXiv/Internet)" if k == "arxiv_discovery_scout" else "Specialized Agent"
             table.add_row(str(i), k, expertise)
         console.print(table)
-        selection = get_input("Design your sequence (e.g. 5,1,2)")
+        selection = get_input("Design your sequence (e.g. 5,1,2 or 0 to cancel)")
+        if not selection or selection in ("0", "exit", "back"):
+            return
         indices = [int(i.strip()) for i in selection.split(",") if i.strip().isdigit()]
         selected_keys = [display_keys[i - 1] for i in indices if 1 <= i <= len(display_keys)]
-        prompt = initial_prompt or get_input("Enter the initial task/seed for this custom swarm")
+        prompt = initial_prompt or get_input("Enter the initial task/seed for this custom swarm (0 to cancel)")
+        if not prompt or prompt in ("0", "exit", "back"):
+            return
 
     if not selected_keys:
         console.print("[red]No agents selected for orchestration.[/red]")
