@@ -1,0 +1,46 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "TruthGPTResponse",
+    "description": "Rigid structured output schema for TruthGPT fact-checking verdicts enforced by DeepInfer EBNF/JSON grammar.",
+    "type": "object",
+    "properties": {
+        "verdict": {
+            "type": "string",
+            "enum": ["VERDADERO", "FALSO", "ENGANOSO", "NO_VERIFICABLE"],
+            "description": "Final truthfulness verdict for the analyzed claim."
+        },
+        "confidence_score": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "description": "Calibrated confidence score between 0.0 and 1.0."
+        },
+        "claims_analysis": {
+            "type": "array",
+            "description": "Breakdown and evidence verification for each sub-claim.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "claim": {
+                        "type": "string",
+                        "description": "The specific atomic claim evaluated."
+                    },
+                    "is_supported": {
+                        "type": "boolean",
+                        "description": "Whether the claim is substantiated by the verified sources."
+                    },
+                    "source_id": {
+                        "type": "string",
+                        "description": "The identifier of the source document supporting or refuting this claim."
+                    }
+                },
+                "required": ["claim", "is_supported"]
+            }
+        },
+        "final_explanation": {
+            "type": "string",
+            "description": "Comprehensive evidence-grounded synthesis explaining the verdict."
+        }
+    },
+    "required": ["verdict", "confidence_score", "claims_analysis", "final_explanation"]
+}

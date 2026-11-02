@@ -14,6 +14,7 @@ from .engine_providers import (
     OpenAIProvider,
     AnthropicProvider,
     OpenRouterProvider,
+    CodexProvider,
     AsyncLLMEngine,
     DummyAsyncLLM
 )
@@ -54,7 +55,9 @@ class EngineRegistry:
                         "openai": OpenAIProvider,
                         "claude": AnthropicProvider,
                         "anthropic": AnthropicProvider,
-                        "openrouter": OpenRouterProvider
+                        "openrouter": OpenRouterProvider,
+                        "codex": CodexProvider,
+                        "openai_codex": CodexProvider,
                     }
                     cls._instance = inst
         return cls._instance

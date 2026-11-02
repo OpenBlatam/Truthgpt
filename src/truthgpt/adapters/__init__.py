@@ -46,6 +46,13 @@ try:
 except ImportError:
     EnterpriseTruthGPTAdapter = None
 
+try:
+    from .deepseek_deepinfer_adapter import (
+        DeepSeekDeepInferAdapter,
+    )
+except ImportError:
+    DeepSeekDeepInferAdapter = None
+
 
 # Unified adapter factory
 def create_adapter(
@@ -98,6 +105,9 @@ def create_adapter(
         },
         "training": {
             "default": lambda cfg: TrainingAdapter(**cfg),
+        },
+        "deepseek": {
+            "deepinfer": lambda cfg: DeepSeekDeepInferAdapter(**cfg) if DeepSeekDeepInferAdapter else None,
         },
     }
     
@@ -180,6 +190,13 @@ ADAPTER_REGISTRY = {
             "class": EnterpriseTruthGPTAdapter,
             "module": "utils.enterprise_truthgpt_adapter",
             "description": "Enterprise TruthGPT adapter",
+        },
+    },
+    "deepseek": {
+        "deepinfer": {
+            "class": DeepSeekDeepInferAdapter,
+            "module": "adapters.deepseek_deepinfer_adapter",
+            "description": "DeepSeek V4.1 with DeepInfer MTP & RAG Reranking adapter",
         },
     },
 }
@@ -274,6 +291,7 @@ __all__ = [
     # TruthGPT adapters
     "TruthGPTAdapter",
     "EnterpriseTruthGPTAdapter",
+    "DeepSeekDeepInferAdapter",
     # Unified factory
     "create_adapter",
     # Registry

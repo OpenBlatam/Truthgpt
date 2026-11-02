@@ -130,6 +130,8 @@ class AgentRegistry:
             ("research", "optimization_core.agents.domains.system_intelligence.research_agent", "ResearchAgent"),
             ("system", "optimization_core.agents.domains.system_intelligence.system_agent", "SystemAgent"),
             ("blockchain", "optimization_core.agents.domains.blockchain.blockchain_agent", "BlockchainAgent"),
+            ("codex", "agents.domains.codex.codex_agent", "OpenAICodexAgent"),
+            ("openai_codex", "agents.domains.codex.codex_agent", "OpenAICodexAgent"),
         ]
 
         import importlib

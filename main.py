@@ -22,6 +22,18 @@ import os
 kernel = TruthGPTKernel()
 
 async def main_loop():
+    # Initialize OpenAI Codex integration if flag is present
+    if "--codex" in sys.argv or os.environ.get("TRUTHGPT_USE_CODEX") == "1":
+        os.environ["TRUTHGPT_USE_CODEX"] = "1"
+        try:
+            from agents.framework.engines.engine_registry import EngineRegistry
+            from agents.framework.engines.engine_providers import CodexProvider
+            EngineRegistry().register("codex", CodexProvider)
+            EngineRegistry().register("openai_codex", CodexProvider)
+            print("[INFO] OpenAI Codex Orchestration Engine Activated.")
+        except Exception:
+            pass
+
     # 1. Boot Kernel 2.0
     await kernel.start()
     

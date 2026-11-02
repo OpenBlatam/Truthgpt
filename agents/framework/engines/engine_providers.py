@@ -211,6 +211,70 @@ class OpenAIProvider(BaseProvider):
             logger.warning(f"OpenAI API Error {resp.status_code}: {err_msg}")
             raise InferenceError(f"OpenAI API Error {resp.status_code}: {err_msg}")
 
+
+class CodexProvider(BaseProvider):
+    """
+    OpenAI Codex LLM Provider.
+    Integrates the OpenAI Codex CLI and Python SDK into TruthGPT.
+    Executes reasoning, code generation, and agentic workflows using OpenAI Codex.
+    """
+    def __init__(self, model: str = "codex", api_key: Optional[str] = None, force_model: bool = False):
+        super().__init__(model, api_key, env_var="OPENAI_API_KEY", force_model=force_model)
+        self.model = model or "codex"
+
+    async def generate(self, prompt: str, **kwargs) -> str:
+        # 1. Try using the openai_codex Python SDK
+        try:
+            import openai_codex
+            if hasattr(openai_codex, "AsyncCodex"):
+                async with openai_codex.AsyncCodex() as codex:
+                    thread = await codex.thread_start()
+                    turn = await thread.run(prompt)
+                    if hasattr(turn, "final_response") and turn.final_response:
+                        return turn.final_response
+            elif hasattr(openai_codex, "Codex"):
+                import asyncio
+                loop = asyncio.get_event_loop()
+                def _sync_call():
+                    with openai_codex.Codex() as codex:
+                        thread = codex.thread_start()
+                        res = thread.run(prompt)
+                        return getattr(res, "final_response", str(res))
+                return await loop.run_in_executor(None, _sync_call)
+        except Exception as sdk_err:
+            logger.debug(f"openai_codex SDK execution bypassed: {sdk_err}. Trying CLI fallback...")
+
+        # 2. Try using the codex CLI
+        try:
+            import asyncio
+            import shutil
+            codex_bin = shutil.which("codex") or shutil.which("codex.cmd")
+            if codex_bin:
+                proc = await asyncio.create_subprocess_exec(
+                    codex_bin, "exec", "--skip-git-repo-check", prompt,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, stderr = await proc.communicate()
+                if proc.returncode == 0 and stdout:
+                    return stdout.decode("utf-8", errors="replace").strip()
+        except Exception as cli_err:
+            logger.debug(f"codex CLI execution failed: {cli_err}")
+
+        # 3. Fallback to OpenAI API if api_key is available
+        if self.api_key:
+            try:
+                openai_provider = OpenAIProvider(model="gpt-4o", api_key=self.api_key)
+                return await openai_provider.generate(prompt, **kwargs)
+            except Exception as e:
+                logger.error(f"OpenAI fallback error: {e}")
+
+        return self._safe_fallback(
+            "OpenAI Codex is not yet authenticated.",
+            "Para autenticar OpenAI Codex, ejecuta 'codex login' en la terminal o configura OPENAI_API_KEY en user_preferences.json."
+        )
+
+
 class OpenRouterProvider(BaseProvider):
     def __init__(self, model: str = "~anthropic/claude-sonnet-latest", api_key: Optional[str] = None,
                  force_model: bool = False):

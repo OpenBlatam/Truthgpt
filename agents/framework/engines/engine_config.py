@@ -7,6 +7,7 @@ from loguru import logger
 _ENGINE_ALIASES = {
     "anthropic": "claude",
     "openai": "chatgpt",
+    "openai_codex": "codex",
 }
 
 def _normalize_engine_key(name: str) -> str:

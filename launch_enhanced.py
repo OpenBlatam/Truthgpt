@@ -75,6 +75,7 @@ class TruthGPTLauncher:
             ("5", "⚙️ Optimization Suite", "Performance tuning and monitoring"),
             ("6", "📊 System Dashboard", "Full system monitoring and control"),
             ("7", "🖥️ Terminal Integration", "Direct terminal access with AI assistance"),
+            ("8", "🤖 OpenAI Codex Orchestrated TruthGPT", "Launch TruthGPT powered by OpenAI Codex"),
             ("0", "❌ Exit", "Close TruthGPT")
         ]
         
@@ -112,7 +113,7 @@ class TruthGPTLauncher:
                 # Get choice
                 choice = Prompt.ask(
                     "\n[bold cyan]Select option[/bold cyan]",
-                    choices=["0", "1", "2", "3", "4", "5", "6", "7"],
+                    choices=["0", "1", "2", "3", "4", "5", "6", "7", "8"],
                     default="1"
                 )
                 
@@ -133,6 +134,8 @@ class TruthGPTLauncher:
                     self.launch_dashboard()
                 elif choice == "7":
                     self.launch_terminal_integration()
+                elif choice == "8":
+                    self.launch_codex_orchestrated()
                 
                 console.clear()
                 
@@ -325,6 +328,18 @@ class TruthGPTLauncher:
                 console.print("[red]Command timed out[/red]")
             except Exception as e:
                 console.print(f"[red]Error: {e}[/red]")
+
+    def launch_codex_orchestrated(self):
+        """Launch TruthGPT orchestrated with OpenAI Codex"""
+        console.print("[cyan]🤖 Launching TruthGPT with OpenAI Codex Orchestration...[/cyan]")
+        try:
+            from launch_with_codex import run_truthgpt_with_codex
+            run_truthgpt_with_codex()
+        except ImportError:
+            subprocess.run([sys.executable, "launch_with_codex.py"], check=False)
+        except Exception as e:
+            console.print(f"[red]Codex Launch Error: {e}[/red]")
+            Prompt.ask("Press Enter to continue")
 
 def main():
     """Main entry point"""

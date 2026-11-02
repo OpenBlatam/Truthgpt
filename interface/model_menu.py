@@ -50,7 +50,7 @@ class ModelMenuApp(BaseTUIApp):
         self.selected_index = 0
 
         # Numeric hotkeys
-        for key in ["1", "2", "3", "7", "8", "9"]:
+        for key in ["1", "2", "3", "4", "7", "8", "9"]:
             @self.kb.add(key)
             def _(event: Any, k: str = key) -> None:
                 self.set_choice(k)
@@ -64,7 +64,7 @@ class ModelMenuApp(BaseTUIApp):
         model_updates = [
             "Inference Engine v5.9 Optimized",
             "MCTS Training Pipeline Ready",
-            "HF Downloader Resiliency Hub",
+            "OpenAI Codex Engine Integrated",
             "Model Architect: SOTA Synth",
         ]
         header_console.print(get_claude_header(updates=model_updates))
@@ -97,11 +97,12 @@ class ModelMenuApp(BaseTUIApp):
         list_items.append(make_item("1", "Inference", "Run model on local prompt", "1", 0))
         list_items.append(make_item("2", "Fast Train", "Train with default HF engine", "2", 1))
         list_items.append(make_item("3", "SOTA Train", "GRPO/MCTS Advanced Training", "3", 2))
-        list_items.append(make_item("7", "Model Architect", "🛠️ Build & Inject Custom Model", "7", 3))
-        list_items.append(make_item("8", "Code Injector", "💉 Upgrade & Inject SOTA Logic", "8", 4))
-        list_items.append(make_item("9", "HF Downloader", "📥 Pull any model from HF", "9", 5))
+        list_items.append(make_item("4", "OpenAI Codex", "⚡ Run with OpenAI Codex Engine", "4", 3))
+        list_items.append(make_item("7", "Model Architect", "🛠️ Build & Inject Custom Model", "7", 4))
+        list_items.append(make_item("8", "Code Injector", "💉 Upgrade & Inject SOTA Logic", "8", 5))
+        list_items.append(make_item("9", "HF Downloader", "📥 Pull any model from HF", "9", 6))
         list_items.append(Window(height=1))
-        list_items.append(make_item("0", "Back", "Return to Kernel Dashboard", "0", 6))
+        list_items.append(make_item("0", "Back", "Return to Kernel Dashboard", "0", 7))
 
         main_content = HSplit(list_items)
 
@@ -168,6 +169,16 @@ async def models_menu() -> None:
             cli.train()
         elif choice == "3":
             cli.train(override=["training.method=grpo"])
+        elif choice == "4":
+            text = Prompt.ask("Enter prompt for OpenAI Codex")
+            if text:
+                try:
+                    from agents.framework.engines.engine_registry import EngineRegistry
+                    codex_engine = EngineRegistry().get_engine("codex")
+                    res = await codex_engine(text)
+                    console.print(Panel(str(res), title="[bold green]OpenAI Codex Output[/bold green]", border_style="green"))
+                except Exception as e:
+                    console.print(f"[bold red]OpenAI Codex Error: {e}[/bold red]")
         elif choice == "7":
             await handle_model_architect()
         elif choice == "8":

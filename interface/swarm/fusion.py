@@ -301,12 +301,57 @@ async def _dispatch_mcp(content: str):
         await run_mcp_simulation(selected_url, f"Error: {e}")
 
 
+async def _dispatch_codex(content: str):
+    """Dispatch swarm code blocks to OpenAI Codex for review, optimization, or test generation."""
+    console.print("\n[bold cyan]🤖 Target 4: OpenAI Codex Autonomous Code Synthesis & Audit[/bold cyan]")
+    code_blocks = re.findall(r"```([a-zA-Z0-9+#_ -]*)\n(.*?)\n```", content, re.DOTALL)
+    if not code_blocks:
+        console.print("[yellow]No fenced code blocks found in swarm output to process with Codex.[/yellow]")
+        return
+
+    console.print(f"[green]✓ Found {len(code_blocks)} code block(s) ready for Codex analysis.[/green]")
+    console.print("  [1] Security & Forensic Code Review (Codex Review)")
+    console.print("  [2] Automated Pytest Test Suite Generation")
+    console.print("  [3] Code Optimization & Refactoring")
+    console.print("  [0] Skip Codex processing")
+
+    codex_opt = get_input("Select Codex action [0-3]", choices=["0", "1", "2", "3"], default="1")
+    if codex_opt == "0":
+        return
+
+    from agents.domains.codex.codex_agent import OpenAICodexAgent
+    agent = OpenAICodexAgent()
+
+    all_code = "\n\n".join([cb[1] for cb in code_blocks])
+
+    if codex_opt == "1":
+        with console.status("[cyan]OpenAI Codex is conducting security and quality review...", spinner="dots"):
+            rev = await agent.review_code(all_code)
+        console.print(Panel(rev["review"], title="[bold green]OpenAI Codex Forensic Review[/bold green]", border_style="green"))
+    elif codex_opt == "2":
+        with console.status("[cyan]OpenAI Codex is generating unit tests...", spinner="dots"):
+            tests = await agent.generate_tests(all_code)
+        console.print(Panel(tests, title="[bold green]OpenAI Codex Generated Test Suite[/bold green]", border_style="green"))
+        test_dir = Path("tests") / "swarm_generated"
+        test_dir.mkdir(parents=True, exist_ok=True)
+        test_path = test_dir / f"test_swarm_{int(time.time())}.py"
+        with open(test_path, "w", encoding="utf-8") as tf:
+            tf.write(tests)
+        console.print(f"[bold green]✓ Tests saved to {test_path}[/bold green]")
+    elif codex_opt == "3":
+        refactor_prompt = f"Refactor and optimize this code for maximum performance and readability:\n\n```python\n{all_code}\n```"
+        with console.status("[cyan]OpenAI Codex is refactoring code...", spinner="dots"):
+            refactored = await agent._call_codex(refactor_prompt)
+        console.print(Panel(refactored, title="[bold green]OpenAI Codex Refactored Code[/bold green]", border_style="green"))
+
+
 # ── Agent Alias Resolution ────────────────────────────────────────
 
 _AGENT_ALIASES = {
     "code_interpreter": "code_architect", "interpreter": "code_architect",
     "interpreter_agent": "code_architect", "coder": "code_architect",
     "coder_agent": "code_architect", "architect": "code_architect",
+    "codex": "code_architect", "openai_codex": "code_architect",
     "researcher": "research_agent", "researcher_agent": "research_agent",
     "academic_agent": "research_agent",
     "system_expert": "system_agent", "system_analyst": "system_agent",

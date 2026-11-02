@@ -363,12 +363,23 @@ def create_prompt_toolkit_app() -> Application:
     )
 
 
+def create_modern_claude_app() -> Application:
+    return create_prompt_toolkit_app()
+
+
+def main() -> int:
+    ui = ModernTruthGPTInterface()
+    ui.run_interactive_session()
+    return 0
+
+
 ModernClaudeUI = ModernTruthGPTInterface
 
 __all__ = [
     "ModernTruthGPTInterface",
     "ModernClaudeUI",
     "create_modern_claude_app",
+    "create_prompt_toolkit_app",
     "main",
 ]
 
