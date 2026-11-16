@@ -1,15 +1,21 @@
 """
 Google ADK Domain — Native Gemini agents via google-adk.
 
-Exposes:
+Agents:
   - ADKGeminiAgent        : General-purpose Gemini 2.5 Pro agent
   - ADKResearchAgent      : Deep research / fact-checking agent
   - ADKCodeAgent          : Code generation & review agent
-  - ADKOrchestratorAgent  : Multi-agent coordinator
-  - adk_tool              : Decorator to register TruthGPT tools for ADK
+  - ADKOrchestratorAgent  : Multi-agent coordinator with routing
+
+Tool Registry:
+  - adk_tool              : Decorator to register tools for ADK
   - get_adk_tools         : Retrieve all registered tool callables
   - get_tools_by_category : Filter tools by category tag
   - list_tool_manifest    : Structured manifest for introspection / UI
+
+Utilities:
+  - classify_task         : Heuristic task classifier (code / research / general)
+  - classify_task_detailed: Detailed classifier with scores and matched keywords
 
 Install requirement:
     pip install google-adk>=1.0.0
@@ -26,15 +32,24 @@ from agents.domains.google_adk.adk_tools import (
 from agents.domains.google_adk.adk_gemini_agent import ADKGeminiAgent
 from agents.domains.google_adk.adk_research_agent import ADKResearchAgent
 from agents.domains.google_adk.adk_code_agent import ADKCodeAgent
-from agents.domains.google_adk.adk_orchestrator import ADKOrchestratorAgent
+from agents.domains.google_adk.adk_orchestrator import (
+    ADKOrchestratorAgent,
+    classify_task,
+    classify_task_detailed,
+)
 
 __all__ = [
+    # Tools
     "adk_tool",
     "get_adk_tools",
     "get_tools_by_category",
     "list_tool_manifest",
+    # Agents
     "ADKGeminiAgent",
     "ADKResearchAgent",
     "ADKCodeAgent",
     "ADKOrchestratorAgent",
+    # Utilities
+    "classify_task",
+    "classify_task_detailed",
 ]

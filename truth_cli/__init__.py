@@ -24,7 +24,7 @@ from .core import setup_paths
 setup_paths()
 
 app = typer.Typer(
-    name="truth",
+    name="truthgpt",
     help="🚀 TruthGPT CLI - Enterprise ML & Optimization Platform",
     add_completion=True,
     no_args_is_help=False
@@ -86,11 +86,29 @@ def main_callback(ctx: typer.Context):
         # can never accidentally import a stray "main" module from another clone
         # on sys.path (the cause of "cannot import name 'main_loop' from 'main'").
         import importlib.util
-        from pathlib import Path
+        main_candidates = [
+            Path(__file__).resolve().parent.parent / "main.py",
+            Path.cwd() / "main.py",
+        ]
+        if "TRUTHGPT_HOME" in os.environ:
+            main_candidates.append(Path(os.environ["TRUTHGPT_HOME"]) / "main.py")
+            main_candidates.append(Path(os.environ["TRUTHGPT_HOME"]) / "optimization_core" / "main.py")
+        main_candidates.extend([
+            Path.home() / ".truthgpt" / "main.py",
+            Path.home() / ".truthgpt" / "optimization_core" / "main.py",
+        ])
 
-        main_path = Path(__file__).resolve().parent.parent / "main.py"
-        if not main_path.exists():
-            raise SystemExit(f"Entry point not found: {main_path}")
+        main_path = None
+        for cand in main_candidates:
+            if cand.exists():
+                main_path = cand
+                break
+
+        if not main_path:
+            raise SystemExit(
+                "Entry point 'main.py' not found. Checked:\n  - "
+                + "\n  - ".join(str(p) for p in main_candidates)
+            )
 
         spec = importlib.util.spec_from_file_location("main", main_path)
         main_mod = importlib.util.module_from_spec(spec)

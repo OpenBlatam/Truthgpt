@@ -75,7 +75,7 @@ Write-Host "Running pip install (this may take a few minutes)..."
 python -m pip install --upgrade pip
 python -m pip install -e .
 
-# 5. Verify 'truth' command
+# 5. Verify 'truthgpt' and 'truth' commands
 Write-Header "Verification"
 $scriptsPath = python -c "import sysconfig; print(sysconfig.get_path('scripts'))"
 Write-Host "Python Scripts directory: $scriptsPath"
@@ -93,15 +93,15 @@ if ($currentPath -notlike "*$scriptsPath*") {
 }
 
 # Final check
-if (Get-Command truth -ErrorAction SilentlyContinue) {
-    Write-Success "The 'truth' command is now available!"
+if ((Get-Command truthgpt -ErrorAction SilentlyContinue) -or (Get-Command truth -ErrorAction SilentlyContinue)) {
+    Write-Success "The 'truthgpt' and 'truth' commands are now available!"
 } else {
-    Write-Warning "The 'truth' command was installed but is not yet in the current session's PATH. Please restart your terminal."
+    Write-Warning "The commands were installed but are not yet in the current session's PATH. Please restart your terminal."
 }
 
 Pop-Location # Back from $projectDir
 Pop-Location # Back from $installDir
 
 Write-Header "Installation Complete"
-Write-Host "You can now use the 'truth' command from any terminal." -ForegroundColor Green
-Write-Host "Try: truth --help"
+Write-Host "You can now use either 'truthgpt' or 'truth' from any terminal." -ForegroundColor Green
+Write-Host "Try: truthgpt --help"

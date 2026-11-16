@@ -62,25 +62,36 @@ python install_extras.py all
 python install_extras.py --check
 ```
 
-### Instalación Automática
+### Instalación Automática y Comando Global
 
-**Linux/Mac:**
+**macOS & Linux (Recomendado - Activa el comando global `truthgpt`):**
+```bash
+# Instalador automático oficial
+chmod +x install_truth.sh
+./install_truth.sh
+```
+> Una vez instalado, puedes ejecutar `truthgpt` o `truth` desde cualquier terminal.
+
+**macOS (Desarrollo local):**
 ```bash
 cd optimization_core
 chmod +x setup_dev.sh
 ./setup_dev.sh
 ```
 
-**Windows (PowerShell):**
+**Windows (PowerShell Administrador o Usuario):**
 ```powershell
-cd optimization_core
-.\setup_dev.ps1
+# Instalación global de comandos truthgpt y truth
+.\install_truth.ps1
 ```
 
-**Manual:**
+**Ejecución Rápida:**
 ```bash
-cd optimization_core
-pip install -r requirements_advanced.txt
+# Lanzar panel interactivo TUI:
+truthgpt
+
+# Ver todos los subcomandos:
+truthgpt --help
 ```
 
 ### Entrenamiento Básico

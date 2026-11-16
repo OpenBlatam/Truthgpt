@@ -39,8 +39,8 @@ dependencies = [
     "peft>=0.6.0",
     
     # GPU Optimization
-    "flash-attn>=2.4.0; platform_machine != 'arm64'",
-    "xformers>=0.0.23; platform_machine != 'arm64'",
+    "flash-attn>=2.4.0; sys_platform == 'linux' and platform_machine != 'arm64'",
+    "xformers>=0.0.23; sys_platform != 'darwin' and platform_machine != 'arm64'",
     
     # Scientific Computing
     "numpy>=1.26.0",
@@ -85,12 +85,12 @@ dev = [
     "pre-commit>=3.5.0",
 ]
 gpu = [
-    "cupy>=12.3.0",
+    "cupy>=12.3.0; sys_platform != 'darwin'",
     "numba>=0.59.0",
 ]
 distributed = [
-    "deepspeed>=0.12.0",
-    "fairscale>=0.4.13",
+    "deepspeed>=0.12.0; sys_platform == 'linux'",
+    "fairscale>=0.4.13; sys_platform != 'darwin'",
 ]
 ui = [
     "gradio>=4.7.0",
@@ -110,6 +110,7 @@ Issues = "https://github.com/frontier-model-run/frontier-model-run/issues"
 [project.scripts]
 frontier = "optimization_core.cli:app"
 truth = "truth_cli:app"
+truthgpt = "truth_cli:app"
 
 [tool.setuptools]
 packages = ["optimization_core", "truth_cli", "truthgpt_cloud"]
